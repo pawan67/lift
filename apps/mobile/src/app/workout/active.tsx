@@ -16,11 +16,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { router, Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -47,7 +43,14 @@ import {
 import { haptics } from '@/features/feedback/haptics';
 import { setExerciseUnits } from '@/features/exercises/repository';
 import { clearSessionNotice, prepareLiveNotice } from '@/features/notifications/live';
+import { ExerciseDemoSheet } from '@/features/exercises/exercise-demo-sheet';
 import { ExerciseBlock } from '@/features/workouts/exercise-block';
+import { CollapsedLift, SupersetGroup } from '@/features/workouts/collapsed-lift';
+import {
+  defaultExpandedUnit,
+  groupLiftUnits,
+  unitIsComplete,
+} from '@/features/workouts/lift-units';
 import { ghostFill, pairedPreviousSet } from '@/features/workouts/previous';
 import {
   cancelRestNotification,
@@ -80,7 +83,7 @@ import {
   type SetInput,
   type WorkoutExerciseDetail,
 } from '@/features/workouts/repository';
-import { showSupersetMenu, supersetMap, SupersetTie } from '@/features/workouts/superset';
+import { showSupersetMenu, supersetMap } from '@/features/workouts/superset';
 import type { ProgressionInput } from '@/features/workouts/suggestion';
 import { useWriteGuard } from '@/features/workouts/use-write-guard';
 import { useTicker } from '@/hooks/use-ticker';
@@ -111,6 +114,12 @@ export default function ActiveWorkoutScreen() {
   const settings = useSettings();
   const startRest = useTimer((state) => state.startRest);
   const { guard, lostWrites } = useWriteGuard();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [demo, setDemo] = useState<{
+    name: string;
+    thumbnailUrl: string | null;
+    videoUrl: string | null;
+  } | null>(null);
 
   /*
    * Keeps the screen on mid-set so the phone doesn't lock between reps.
@@ -208,6 +217,30 @@ export default function ActiveWorkoutScreen() {
       return [{ workoutExercise: link, exercise, sets: setsByParent.get(link.id) ?? [] }];
     });
   }, [links, sets, workoutExerciseRows]);
+
+  /*
+   * The rows the superset logic reads: grouping and order, nothing else.
+   *
+   * Keyed by `workoutExercise.id` rather than by the exercise's, because the
+   * same lift can legitimately appear twice in one session and only one of the
+   * two may be in the superset.
+   *
+   * Computed here rather than next to the list so `handleToggleSet` can read
+   * `units` from the callback instead of a ref written during render, which
+   * `react-hooks/refs` rejects.
+   */
+  const supersetRows = useMemo(
+    () =>
+      details.map((detail) => ({
+        id: detail.workoutExercise.id,
+        name: detail.exercise.name,
+        supersetGroup: detail.workoutExercise.supersetGroup,
+      })),
+    [details],
+  );
+
+  const placements = useMemo(() => supersetMap(supersetRows), [supersetRows]);
+  const units = useMemo(() => groupLiftUnits(details, placements), [details, placements]);
 
   // Previous-session values for the ghost column, loaded once per exercise.
   const [previousByExercise, setPreviousByExercise] = useState<Record<string, PreviousPerformance>>(
@@ -522,6 +555,24 @@ export default function ActiveWorkoutScreen() {
       // place: the milestone is still acknowledged, it just no longer interrupts.
       if (finishesExercise) haptics.finished();
 
+      const unit = units.find((entry) =>
+        entry.members.some((member) => member.workoutExercise.id === detail.workoutExercise.id),
+      );
+      if (unit) {
+        const finishesUnit = unit.members.every((member) => {
+          if (member.sets.length === 0) return false;
+          if (member.workoutExercise.id === detail.workoutExercise.id) {
+            return member.sets.every((other) => other.id === set.id || other.isCompleted);
+          }
+          return member.sets.every((other) => other.isCompleted);
+        });
+        if (finishesUnit) {
+          const index = units.findIndex((entry) => entry.id === unit.id);
+          const next = units.slice(index + 1).find((entry) => !unitIsComplete(entry));
+          if (next) setExpandedId(next.id);
+        }
+      }
+
       if (settings.restTimerEnabled && settings.restTimerAutoStart) {
         // Scaled to the set just performed, not to the exercise: a warm-up is
         // capped and a set followed by a drop gets none at all. The kind rides
@@ -571,7 +622,7 @@ export default function ActiveWorkoutScreen() {
 
       return guard(updateSet(set.id, patch, fill));
     },
-    [settings, startRest, previousByExercise, bestsByExercise, guard],
+    [settings, startRest, previousByExercise, bestsByExercise, guard, units],
   );
 
   /*
@@ -584,49 +635,44 @@ export default function ActiveWorkoutScreen() {
    * same one `exercise-block` puts a plate calculation under: the set the user
    * is walking to the rack to do.
    *
-   * The flag is taken before anything else can run, so a re-render mid-write
-   * cannot tick a second set. If nothing is unchecked the flag is still
-   * consumed: the workout is finished, and the request has been answered by
-   * there being nothing to answer it with.
+   * Subscribed rather than read in an effect: answering calls `setState`, and
+   * doing that in the effect body is a cascading render. The flag is taken
+   * before anything else can run, so a re-render mid-write cannot tick a second
+   * set. If nothing is unchecked the flag is still consumed: the workout is
+   * finished, and the request has been answered by there being nothing to
+   * answer it with.
    */
-  const completeSetRequested = useNoticeRequest((state) => state.completeSet);
-
   useEffect(() => {
-    if (!completeSetRequested) return;
-    if (!useNoticeRequest.getState().takeCompleteSet()) return;
+    const answer = () => {
+      if (!useNoticeRequest.getState().takeCompleteSet()) return;
 
-    for (const detail of details) {
-      const next = detail.sets.find((set) => !set.isCompleted);
-      if (next) {
-        void handleToggleSet(next, detail);
-        return;
+      for (const detail of details) {
+        const next = detail.sets.find((set) => !set.isCompleted);
+        if (next) {
+          void handleToggleSet(next, detail);
+          return;
+        }
       }
-    }
-  }, [completeSetRequested, details, handleToggleSet]);
+    };
+
+    // The notification can fire before this screen is mounted. Subscribe only
+    // sees later flips, so a flag already waiting is drained once here.
+    if (useNoticeRequest.getState().completeSet) queueMicrotask(answer);
+
+    return useNoticeRequest.subscribe((state, prev) => {
+      if (state.completeSet && !prev.completeSet) answer();
+    });
+  }, [details, handleToggleSet]);
 
   // Which exercise's rest is being edited, held by `workoutExercises.id` rather
   // than by the row itself so the sheet re-reads the live query's latest copy.
   const [restEditorId, setRestEditorId] = useState<string | null>(null);
   const restEditorDetail = details.find((detail) => detail.workoutExercise.id === restEditorId);
 
-  /*
-   * The rows the superset logic reads: grouping and order, nothing else.
-   *
-   * Keyed by `workoutExercise.id` rather than by the exercise's, because the
-   * same lift can legitimately appear twice in one session and only one of the
-   * two may be in the superset.
-   */
-  const supersetRows = useMemo(
-    () =>
-      details.map((detail) => ({
-        id: detail.workoutExercise.id,
-        name: detail.exercise.name,
-        supersetGroup: detail.workoutExercise.supersetGroup,
-      })),
-    [details],
-  );
-
-  const placements = useMemo(() => supersetMap(supersetRows), [supersetRows]);
+  const openUnitId =
+    expandedId && units.some((unit) => unit.id === expandedId)
+      ? expandedId
+      : (defaultExpandedUnit(units)?.id ?? null);
 
   const applySupersets = useCallback(
     (writes: SupersetAssignment[]) => {
@@ -969,24 +1015,24 @@ export default function ActiveWorkoutScreen() {
             description="Add your first exercise to start logging sets."
           />
         ) : (
-          details.map((detail, index) => (
-            <View key={detail.workoutExercise.id}>
-              {/* A member that is not the first of its run is tied to the block
-                  above rather than separated from it: a run is contiguous, so
-                  "not first" is the whole test. See `SupersetTie`. */}
-              {index > 0 &&
-                (placements.get(detail.workoutExercise.id)?.first === false ? (
-                  <SupersetTie />
-                ) : (
-                  <Divider />
-                ))}
+          units.map((unit, index) => {
+            const open = units.length === 1 || unit.id === openUnitId;
+            const lead = unit.members[0]!.exercise;
+            const tables = unit.members.map((detail) => (
               <ExerciseBlock
+                key={detail.workoutExercise.id}
                 detail={detail}
                 previousSets={previousByExercise[detail.exercise.id]?.sets ?? []}
                 previousNote={previousByExercise[detail.exercise.id]?.note ?? null}
                 recordSetIds={recordSetIds}
                 superset={placements.get(detail.workoutExercise.id)}
-                // Nothing to pair with in a session of one, so no control.
+                onOpenDemo={() =>
+                  setDemo({
+                    name: detail.exercise.name,
+                    thumbnailUrl: detail.exercise.thumbnailUrl,
+                    videoUrl: detail.exercise.videoUrl,
+                  })
+                }
                 onEditSuperset={
                   details.length > 1
                     ? () =>
@@ -1028,10 +1074,6 @@ export default function ActiveWorkoutScreen() {
                   router.push('/exercise/picker');
                 }}
                 onEditNotes={(seed) => {
-                  // The spread, not `seed: undefined`: params are serialised
-                  // into the href, and an explicit undefined can arrive at the
-                  // editor as the literal string "undefined". The plain "Add
-                  // note" paths call this with nothing.
                   router.push({
                     pathname: '/workout/notes/[id]',
                     params: { id: detail.workoutExercise.id, ...(seed ? { seed } : {}) },
@@ -1039,10 +1081,8 @@ export default function ActiveWorkoutScreen() {
                 }}
                 onReorder={() => setReordering(true)}
                 onEditRest={() => setRestEditorId(detail.workoutExercise.id)}
-                onChangeUnits={(units) => {
-                  // No haptic here: the heading fires its own on the tap, and
-                  // the conversion is visible in every figure in the block.
-                  guard(setExerciseUnits(detail.exercise.id, units));
+                onChangeUnits={(next) => {
+                  guard(setExerciseUnits(detail.exercise.id, next));
                 }}
                 onOpenExercise={() => {
                   router.push({
@@ -1051,8 +1091,33 @@ export default function ActiveWorkoutScreen() {
                   });
                 }}
               />
-            </View>
-          ))
+            ));
+
+            return (
+              <View key={unit.id}>
+                {index > 0 && <Divider />}
+                {open ? (
+                  unit.label ? (
+                    <SupersetGroup label={unit.label}>{tables}</SupersetGroup>
+                  ) : (
+                    tables
+                  )
+                ) : (
+                  <CollapsedLift
+                    unit={unit}
+                    onExpand={() => setExpandedId(unit.id)}
+                    onOpenDemo={() =>
+                      setDemo({
+                        name: lead.name,
+                        thumbnailUrl: lead.thumbnailUrl,
+                        videoUrl: lead.videoUrl,
+                      })
+                    }
+                  />
+                )}
+              </View>
+            );
+          })
         )}
 
         <View style={styles.actions}>
@@ -1167,6 +1232,16 @@ export default function ActiveWorkoutScreen() {
         workout={workout}
         details={details}
       />
+
+      {demo && (
+        <ExerciseDemoSheet
+          visible
+          name={demo.name}
+          thumbnailUrl={demo.thumbnailUrl}
+          videoUrl={demo.videoUrl}
+          onClose={() => setDemo(null)}
+        />
+      )}
 
       <ReorderSheet
         visible={reordering}

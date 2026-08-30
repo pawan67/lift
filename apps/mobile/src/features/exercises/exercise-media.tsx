@@ -6,14 +6,23 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui';
-import { radius, spacing, useColors } from '@/theme';
+import { haptics } from '@/features/feedback/haptics';
+import { HIT_SLOP, radius, spacing, useColors } from '@/theme';
 
 import { initialsFor } from './exercise-thumbnail';
+import { openYoutubeHowTo, youtubeHowToQuery } from './youtube';
 
 export interface ExerciseMediaProps {
   name: string;
   thumbnailUrl?: string | null;
   videoUrl?: string | null;
+  /**
+   * Start the clip as soon as this mounts. The demo sheet sets it: the user
+   * already tapped the still, and a second tap on the same picture is one too
+   * many. The exercise page leaves it off so opening the page does not spend
+   * mobile data on a clip nobody asked to watch.
+   */
+  autoplay?: boolean;
 }
 
 /**
@@ -38,10 +47,10 @@ const MAX_RATIO = 2;
 /**
  * The demonstration panel at the top of an exercise's detail screen.
  *
- * The still is shown first and the clip is only fetched once tapped. The
- * catalog's clips are 300–450KB each; autoplaying one on every screen open
- * would spend a few hundred KB of someone's mobile data to answer a question
- * the still usually already answers.
+ * The still is shown first and the clip is only fetched once tapped, unless
+ * `autoplay` is set. The catalog's clips are 300–450KB each; autoplaying one
+ * on every screen open would spend a few hundred KB of someone's mobile data
+ * to answer a question the still usually already answers.
  *
  * The frame takes its shape from whatever it is showing rather than imposing
  * one. It used to be a hard 4:3, which is right for the catalog's own artwork
@@ -51,9 +60,9 @@ const MAX_RATIO = 2;
  * loaded (`onLoad` for the image, `sourceLoad` for the player) and the frame
  * adopts it, clamped to the range above.
  */
-export function ExerciseMedia({ name, thumbnailUrl, videoUrl }: ExerciseMediaProps) {
+export function ExerciseMedia({ name, thumbnailUrl, videoUrl, autoplay = false }: ExerciseMediaProps) {
   const colors = useColors();
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(() => Boolean(autoplay && videoUrl));
   const [ratio, setRatio] = useState<number | null>(null);
 
   // Hooks cannot be conditional, so the player is always created and simply
@@ -76,9 +85,9 @@ export function ExerciseMedia({ name, thumbnailUrl, videoUrl }: ExerciseMediaPro
 
   const frame = [styles.frame, { aspectRatio: ratio ?? FALLBACK_RATIO }];
 
-  if (playing && videoUrl) {
-    return (
-      <View style={[frame, { backgroundColor: colors.mediaPlate }]}>
+  return (
+    <View style={[frame, { backgroundColor: colors.mediaPlate }]}>
+      {playing && videoUrl ? (
         <VideoView
           player={player}
           style={styles.fill}
@@ -86,54 +95,76 @@ export function ExerciseMedia({ name, thumbnailUrl, videoUrl }: ExerciseMediaPro
           // two agree to within a pixel of rounding, and `cover` would spend
           // that pixel cropping the figure's feet.
           contentFit="contain"
-          nativeControls
-          fullscreenOptions={{ enable: true }}
+          nativeControls={false}
         />
-      </View>
-    );
-  }
+      ) : (
+        <Pressable
+          accessibilityRole={videoUrl ? 'button' : 'image'}
+          accessibilityLabel={videoUrl ? `Play ${name} demonstration` : name}
+          disabled={!videoUrl}
+          onPress={() => setPlaying(true)}
+          style={styles.fill}
+        >
+          {thumbnailUrl ? (
+            <Image
+              source={{ uri: thumbnailUrl }}
+              style={styles.fill}
+              contentFit="contain"
+              cachePolicy="disk"
+              transition={160}
+              onLoad={(event) =>
+                setRatio((current) =>
+                  // Never overrides a size the clip has already reported.
+                  current ?? clampRatio(event.source.width / event.source.height),
+                )
+              }
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <View style={styles.fallback}>
+              <Text variant="display" style={{ color: colors.textTertiary }}>
+                {initialsFor(name)}
+              </Text>
+            </View>
+          )}
+
+          {videoUrl && (
+            <View style={styles.playBadge} pointerEvents="none">
+              <View style={[styles.playCircle, { backgroundColor: colors.overlay }]}>
+                <Ionicons name="play" size={26} color="#FFFFFF" style={styles.playGlyph} />
+              </View>
+              <Text variant="caption" style={styles.playLabel}>
+                Watch demo
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      )}
+      <YoutubeHowTo name={name} />
+    </View>
+  );
+}
+
+/** Compact chip on the artwork: YouTube icon and "How to". */
+function YoutubeHowTo({ name }: { name: string }) {
+  const query = youtubeHowToQuery(name);
 
   return (
     <Pressable
-      accessibilityRole={videoUrl ? 'button' : 'image'}
-      accessibilityLabel={videoUrl ? `Play ${name} demonstration` : name}
-      disabled={!videoUrl}
-      onPress={() => setPlaying(true)}
-      style={[frame, { backgroundColor: colors.mediaPlate }]}
+      onPress={() => {
+        haptics.selection();
+        void openYoutubeHowTo(name);
+      }}
+      hitSlop={HIT_SLOP}
+      accessibilityRole="link"
+      accessibilityLabel={`Search YouTube for ${query}`}
+      accessibilityHint="Opens the YouTube app"
+      style={({ pressed }) => [styles.youtube, pressed && styles.youtubePressed]}
     >
-      {thumbnailUrl ? (
-        <Image
-          source={{ uri: thumbnailUrl }}
-          style={styles.fill}
-          contentFit="contain"
-          cachePolicy="disk"
-          transition={160}
-          onLoad={(event) =>
-            setRatio((current) =>
-              // Never overrides a size the clip has already reported.
-              current ?? clampRatio(event.source.width / event.source.height),
-            )
-          }
-          accessibilityIgnoresInvertColors
-        />
-      ) : (
-        <View style={styles.fallback}>
-          <Text variant="display" style={{ color: colors.textTertiary }}>
-            {initialsFor(name)}
-          </Text>
-        </View>
-      )}
-
-      {videoUrl && (
-        <View style={styles.playBadge}>
-          <View style={[styles.playCircle, { backgroundColor: colors.overlay }]}>
-            <Ionicons name="play" size={26} color="#FFFFFF" style={styles.playGlyph} />
-          </View>
-          <Text variant="caption" style={styles.playLabel}>
-            Watch demo
-          </Text>
-        </View>
-      )}
+      <Ionicons name="logo-youtube" size={14} color="#FF0000" />
+      <Text variant="caption" style={styles.youtubeLabel}>
+        How to
+      </Text>
     </Pressable>
   );
 }
@@ -153,8 +184,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fill: { width: '100%', height: '100%' },
-  fallback: { alignItems: 'center', justifyContent: 'center' },
-  playBadge: { position: 'absolute', alignItems: 'center', gap: spacing.sm },
+  fallback: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadge: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
   playCircle: {
     width: 62,
     height: 62,
@@ -172,4 +212,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     overflow: 'hidden',
   },
+  youtube: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    zIndex: 2,
+    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  youtubePressed: { opacity: 0.7 },
+  youtubeLabel: { color: '#FFFFFF' },
 });

@@ -1055,7 +1055,9 @@ const styles = StyleSheet.create({
   // Shrinks before the copy glyph does, so a long previous set truncates rather
   // than pushing the affordance out of the cell.
   previousText: { flexShrink: 1 },
-  input: { flex: 0 },
+  // 62pt to match `unitCell` in the block heading. `flex: 0` alone lets a
+  // wide value grow the field and walk kg/reps out from under their labels.
+  input: { flex: 0, width: 62 },
   // The same 30pt plate as the check cell beside it, so the two read as one
   // pair rather than as a chip that wandered in. `minWidth` rather than a fixed
   // width: "@10" is a character wider than "@8" and the cell may have it.

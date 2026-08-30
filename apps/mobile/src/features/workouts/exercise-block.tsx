@@ -18,7 +18,7 @@ import {
   type WarmupSet,
   type WeightUnit,
 } from '@lift/shared';
-import { useMemo } from 'react';
+import { useMemo, type ComponentProps, Fragment } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
@@ -29,6 +29,8 @@ import { haptics } from '@/features/feedback/haptics';
 import { showConfirm, showDialog } from '@/store/dialog';
 import { useSettings } from '@/store/settings';
 import { radius, spacing, stroke, useColors } from '@/theme';
+
+import { ExerciseThumbnail } from '@/features/exercises/exercise-thumbnail';
 
 import { pairWithPrevious } from './previous';
 import { SetRow } from './set-row';
@@ -76,6 +78,8 @@ export interface ExerciseBlockProps {
    * action, for the same reason.
    */
   onEditSuperset?: () => void;
+  /** Opens the demonstration still/clip without leaving the session. */
+  onOpenDemo?: () => void;
   progression?: ProgressionInput;
   onAddSet: (type?: SetType) => void;
   onUpdateSet: (setId: string, patch: Partial<WorkoutSet>) => void;
@@ -111,11 +115,14 @@ export interface ExerciseBlockProps {
  * Asymmetric on purpose, and never mirrored between horizontal neighbours.
  * Overlapping slop is not shared: the later sibling wins the hit test, so two
  * controls that both reach 8pt toward each other turn the band between them
- * into a silent thief. The rest chip reaches back into the gap it owns and only
- * grazes the menu; the menu takes the whole right margin, where nothing else is.
+ * into a silent thief. Each chip reaches back into the gap it owns; the menu
+ * takes the whole right margin, where nothing else is.
  */
-const REST_SLOP = { top: 12, bottom: 12, left: 6, right: 4 };
-const MENU_SLOP = { top: 12, bottom: 12, left: 4, right: 16 };
+const REST_SLOP = { top: 8, bottom: 8, left: 6, right: 4 };
+const NOTE_SLOP = { top: 8, bottom: 8, left: 6, right: 4 };
+const MENU_SLOP = { top: 8, bottom: 8, left: 4, right: 16 };
+const THUMB_SLOP = { top: 8, bottom: 8, left: 8, right: 4 };
+const THUMBNAIL_SIZE = 40;
 /** The unit headings are 11px type in a 62pt cell; the target is the slop. */
 const UNIT_SLOP = { top: 10, bottom: 10, left: 4, right: 4 };
 const ADD_SET_SLOP = { top: 8, bottom: 8 };
@@ -127,6 +134,7 @@ export function ExerciseBlock({
   recordSetIds,
   superset,
   onEditSuperset,
+  onOpenDemo,
   progression,
   onAddSet,
   onUpdateSet,
@@ -152,6 +160,8 @@ export function ExerciseBlock({
   // A rest the user chose is stated in the accent; one that is merely the app
   // default stays quiet, so the header reads as "set" versus "inherited".
   const restIsExplicit = hasRestOverride(detail);
+  const chipVisible = onEditSuperset != null;
+  const hasSessionNote = Boolean(detail.workoutExercise.notes);
 
   const fields = TRACKING_FIELDS[detail.exercise.trackingType];
 
@@ -291,8 +301,6 @@ export function ExerciseBlock({
     weightUnit,
   ]);
 
-  const warmupLine = warmup?.sets.length ? describeWarmup(warmup.sets, weightUnit) : null;
-
   /**
    * Writes the ramp as `warmup` rows, above the sets already in the block.
    *
@@ -362,17 +370,10 @@ export function ExerciseBlock({
     })();
   };
 
-  // Notes moved here when the title became a link to the exercise page, and
-  // Replace joined them when substitution stopped meaning "delete and re-add".
-  //
-  // All four now reach the screen. Under `Alert.alert` only the first three did
-  // on Android: `Alert.js` slices the array before mapping it onto the
-  // neutral/negative/positive slots, so Cancel, last here, was the button that
-  // silently went missing on the platform this app ships to, on a dialog whose
-  // scrim was also not dismissible by default. The in-app dialog stacks however
-  // many actions it is handed and floats Cancel to the bottom itself, which is
-  // where iOS was already putting it regardless of this order. Rest keeps its
-  // own chip in the header.
+  // Replace joined the menu when substitution stopped meaning "delete and
+  // re-add". Rest, pairing and notes have their own chips on the row below
+  // the name, so they stay out of this list. The in-app dialog stacks however
+  // many actions it is handed and floats Cancel to the bottom itself.
   const openMenu = () => {
     void showDialog({
       title: detail.exercise.name,
@@ -380,7 +381,7 @@ export function ExerciseBlock({
         { label: 'Reorder exercises', onPress: onReorder },
         { label: 'Replace exercise', onPress: onReplaceExercise },
         {
-          label: detail.workoutExercise.notes ? 'Edit note' : 'Add note',
+          label: hasSessionNote ? 'Edit note' : 'Add note',
           onPress: () => onEditNotes(),
         },
         { label: 'Remove exercise', style: 'destructive', onPress: confirmRemove },
@@ -389,103 +390,158 @@ export function ExerciseBlock({
     });
   };
 
+  const openNote = () => {
+    if (hasSessionNote) onEditNotes();
+    else if (previousNote) onEditNotes(previousNote);
+    else onEditNotes();
+  };
+
+  const noteChipColor = hasSessionNote ? colors.textSecondary : colors.textTertiary;
+
   return (
     <View style={styles.block}>
       <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [styles.titleRow, pressed && styles.pressed]}
-          onPress={onOpenExercise}
-          accessibilityRole="link"
-          // The badge is decorative; the state it reports has to reach a screen
-          // reader through the label of the control it sits in.
-          accessibilityLabel={
-            `${detail.exercise.name}.` +
-            `${allComplete ? ' Complete.' : ''} View history and records`
-          }
-        >
-          {/* Subheading, and no accent. This is the only heading on the screen
-              that names what you are doing, and at body size it was lighter
-              than the numbers inside its own set rows, which is why six
-              exercises scrolled as one undifferentiated column. The accent is
-              budgeted at roughly one element per view (`theme/tokens.ts`) and
-              this screen was spending it once per exercise. */}
-          <Text variant="subheading" color="text" numberOfLines={1} style={styles.title}>
-            {detail.exercise.name}
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-
-          {/* The slot is always laid out, so the badge arriving mid-session
-              doesn't shove the rest of the header sideways under the user's
-              thumb. It sits with the name because that is what it is about. */}
-          <View style={styles.doneSlot}>
-            {allComplete && (
-              <Animated.View
-                entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
-                exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
-              >
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              </Animated.View>
-            )}
-          </View>
-        </Pressable>
-
-        {onEditSuperset && (
-          <SupersetChip
-            placement={superset}
-            exerciseName={detail.exercise.name}
-            onPress={onEditSuperset}
-          />
-        )}
-
-        {restTimerEnabled && (
+        <View style={styles.titleBar}>
+          {onOpenDemo ? (
+            <Pressable
+              onPress={onOpenDemo}
+              hitSlop={THUMB_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel={`Show ${detail.exercise.name} demonstration`}
+            >
+              <ExerciseThumbnail
+                name={detail.exercise.name}
+                url={detail.exercise.thumbnailUrl}
+                size={THUMBNAIL_SIZE}
+                style={styles.thumbnail}
+              />
+            </Pressable>
+          ) : (
+            <ExerciseThumbnail
+              name={detail.exercise.name}
+              url={detail.exercise.thumbnailUrl}
+              size={THUMBNAIL_SIZE}
+              style={styles.thumbnail}
+            />
+          )}
           <Pressable
-            onPress={onEditRest}
-            hitSlop={REST_SLOP}
+            style={({ pressed }) => [styles.titlePress, pressed && styles.pressed]}
+            onPress={onOpenExercise}
+            accessibilityRole="link"
+            // The badge is decorative; the state it reports has to reach a screen
+            // reader through the label of the control it sits in.
+            accessibilityLabel={
+              `${detail.exercise.name}.` +
+              `${allComplete ? ' Complete.' : ''} View history and records`
+            }
+          >
+            {/* Subheading, and no accent. This is the only heading on the screen
+                that names what you are doing, and at body size it was lighter
+                than the numbers inside its own set rows, which is why six
+                exercises scrolled as one undifferentiated column. The accent is
+                budgeted at roughly one element per view (`theme/tokens.ts`) and
+                this screen was spending it once per exercise. */}
+            <Text variant="subheading" color="text" numberOfLines={1} style={styles.title}>
+              {detail.exercise.name}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+
+            {/* The slot is always laid out, so the badge arriving mid-session
+                doesn't shove the rest of the header sideways under the user's
+                thumb. It sits with the name because that is what it is about. */}
+            <View style={styles.doneSlot}>
+              {allComplete && (
+                <Animated.View
+                  entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
+                  exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
+                >
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                </Animated.View>
+              )}
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={openMenu}
+            hitSlop={MENU_SLOP}
             accessibilityRole="button"
-            accessibilityLabel={`Rest after ${detail.exercise.name}, ${formatDuration(restSeconds)}. Edit`}
+            accessibilityLabel={`More options for ${detail.exercise.name}`}
+          >
+            <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.chipRow}>
+          {restTimerEnabled && (
+            <Pressable
+              onPress={onEditRest}
+              hitSlop={REST_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel={`Rest after ${detail.exercise.name}, ${formatDuration(restSeconds)}. Edit`}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
+                },
+              ]}
+            >
+              <Ionicons
+                name="timer-outline"
+                size={12}
+                color={restIsExplicit ? colors.accent : colors.textTertiary}
+              />
+              <Text
+                variant="caption"
+                style={{ color: restIsExplicit ? colors.accent : colors.textTertiary }}
+              >
+                {formatDuration(restSeconds)}
+              </Text>
+            </Pressable>
+          )}
+
+          {chipVisible && onEditSuperset && (
+            <SupersetChip
+              placement={superset}
+              exerciseName={detail.exercise.name}
+              onPress={onEditSuperset}
+            />
+          )}
+
+          <Pressable
+            onPress={openNote}
+            hitSlop={NOTE_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel={
+              hasSessionNote
+                ? `Note: ${detail.workoutExercise.notes}. Edit`
+                : previousNote
+                  ? `Note from last time: ${previousNote}. Edit`
+                  : `Add a note for ${detail.exercise.name}`
+            }
             style={({ pressed }) => [
-              styles.rest,
+              styles.chip,
               {
                 backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
               },
             ]}
           >
-            <Ionicons
-              name="timer-outline"
-              size={12}
-              color={restIsExplicit ? colors.accent : colors.textTertiary}
-            />
-            <Text
-              variant="caption"
-              style={{ color: restIsExplicit ? colors.accent : colors.textTertiary }}
-            >
-              {formatDuration(restSeconds)}
+            <Ionicons name="document-text-outline" size={12} color={noteChipColor} />
+            <Text variant="caption" style={{ color: noteChipColor }}>
+              Note
             </Text>
           </Pressable>
-        )}
-
-        <Pressable
-          onPress={openMenu}
-          hitSlop={MENU_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel={`More options for ${detail.exercise.name}`}
-        >
-          <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-        </Pressable>
+        </View>
       </View>
 
-      {detail.workoutExercise.notes ? (
-        <Pressable
+      {hasSessionNote ? (
+        <CueCard
+          icon="document-text-outline"
+          kicker="Note"
+          text={detail.workoutExercise.notes!}
+          tone="secondary"
           onPress={() => onEditNotes()}
-          style={({ pressed }) => [styles.notes, pressed && styles.pressed]}
-          accessibilityRole="button"
           accessibilityLabel={`Note: ${detail.workoutExercise.notes}`}
           accessibilityHint="Edits this note"
-        >
-          <Text variant="label" color="textSecondary">
-            {detail.workoutExercise.notes}
-          </Text>
-        </Pressable>
+        />
       ) : previousNote ? (
         /* A cue is sticky ("pin 4, not 5" stays true until it doesn't) so the
            standing instruction is put back in front of the user instead of
@@ -494,41 +550,42 @@ export function ExerciseBlock({
            rather than writing it onto this session behind their back. Upright,
            not italic; only upright cuts are loaded, so an italic
            style would synthesise or fall back. */
-        <Pressable
+        <CueCard
+          icon="time-outline"
+          kicker="Last time"
+          text={previousNote}
+          tone="tertiary"
           onPress={() => onEditNotes(previousNote)}
-          style={({ pressed }) => [styles.notes, pressed && styles.pressed]}
-          accessibilityRole="button"
           accessibilityLabel={`Note from last time: ${previousNote}`}
           accessibilityHint="Opens the note editor with this text"
-        >
-          <Text variant="label" color="textTertiary" numberOfLines={2}>
-            Last time: {previousNote}
-          </Text>
-        </Pressable>
+        />
       ) : null}
 
       {/* What to lift, and why: under the notes and above the table, which is
           the order the block is read in: what this exercise is, what you told
           yourself about it, what to aim for, then the numbers.
 
-          Tertiary text on the canvas, exactly like the recalled note directly
-          above it. Not a card, not accented and not a button that looks like
-          one: the accent is budgeted at roughly one element per view
-          (`theme/tokens.ts`) and this screen already spends it on the progress
-          rule and the rest countdown. A suggestion is the app having an
-          opinion, and an opinion should be offered at the volume of a note. */}
+          Same muted card as a recalled note, not accented: the accent is
+          budgeted at roughly one element per view (`theme/tokens.ts`) and this
+          screen already spends it on the progress rule and the rest countdown.
+          A suggestion is the app having an opinion, and an opinion should be
+          offered at the volume of a note. */}
       {suggestionLine && (
-        <Pressable
+        <CueCard
+          icon="sparkles-outline"
+          kicker="Target"
+          text={suggestionLine.text}
+          detail={suggestionLine.detail}
+          compact
+          tone="tertiary"
           onPress={applySuggestion}
-          style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
-          accessibilityRole="button"
           accessibilityLabel={suggestionLine.label}
           accessibilityHint="Fills these numbers into the sets you have not logged yet"
-        >
-          <Text variant="label" color="textTertiary" numberOfLines={2}>
-            {suggestionLine.text}
-          </Text>
-        </Pressable>
+        />
+      )}
+
+      {warmup && warmup.sets.length > 0 && (
+        <WarmupCard sets={warmup.sets} unit={weightUnit} onPress={addWarmup} />
       )}
 
       {/* Column headings. `overline` uppercases and adds tracking, so these are
@@ -571,6 +628,10 @@ export function ExerciseBlock({
             Reps
           </Text>
         )}
+        {/* Same width as the RIR chip in `SetRow`. Effort is not a heading —
+            most rows never log one — but the chip still occupies a column, and
+            without this spacer kg/reps sit to the left of the labels above them. */}
+        {fields.reps && <View style={styles.effortSpacer} accessibilityElementsHidden />}
         <View style={styles.checkSpacer} />
       </View>
 
@@ -583,30 +644,6 @@ export function ExerciseBlock({
         >
           {plateLine.text}
         </Text>
-      )}
-
-      {/* Directly under the plate line, because it is the same arithmetic
-          answering the next question along: that line says what to load for the
-          set you are walking to, this one says what to load on the way there.
-          Tertiary and unboxed, at the volume of the recalled note and the
-          suggestion above the headings. The accent is budgeted at roughly one
-          element per view (`theme/tokens.ts`) and this screen has spent it.
-
-          It prints the whole ramp rather than reading "Add warm-up", because
-          one tap writes three rows and taking each one back is a swipe and a
-          confirmation. The weights should be read before the tap, not after. */}
-      {warmupLine && (
-        <Pressable
-          onPress={addWarmup}
-          style={({ pressed }) => [styles.warmup, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel={warmupLine.label}
-          accessibilityHint="Adds these as warm-up sets above the sets below"
-        >
-          <Text variant="numeric" color="textTertiary">
-            {warmupLine.text}
-          </Text>
-        </Pressable>
       )}
 
       {rows.map(({ set, workingIndex, previous }) => (
@@ -658,6 +695,131 @@ export function ExerciseBlock({
         </Pressable>
       </View>
     </View>
+  );
+}
+
+/** A muted callout under the chips: a session note, last time's cue, or a suggestion. */
+function CueCard({
+  icon,
+  kicker,
+  text,
+  detail,
+  compact = false,
+  tone,
+  onPress,
+  accessibilityLabel,
+  accessibilityHint,
+}: {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  kicker: string;
+  text: string;
+  detail?: string;
+  /** One row: icon, the numbers, then the reason truncated. The suggestion. */
+  compact?: boolean;
+  tone: 'secondary' | 'tertiary';
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint: string;
+}) {
+  const colors = useColors();
+  const ink = tone === 'secondary' ? colors.textSecondary : colors.textTertiary;
+  const inkToken = tone === 'secondary' ? 'textSecondary' : 'textTertiary';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      style={({ pressed }) => [
+        compact ? styles.cueChip : styles.cueNote,
+        { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
+      ]}
+    >
+      <Ionicons name={icon} size={14} color={ink} />
+      {compact ? (
+        <>
+          <Text variant="caption" color={inkToken} numberOfLines={1}>
+            {kicker}
+          </Text>
+          <Text variant="label" color={inkToken} numberOfLines={1}>
+            {text}
+          </Text>
+          {detail ? (
+            <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.cueChipDetail}>
+              {detail}
+            </Text>
+          ) : null}
+        </>
+      ) : (
+        <View style={styles.cueCopy}>
+          <Text variant="overline" color={inkToken}>
+            {kicker}
+          </Text>
+          <Text variant="label" color={inkToken} numberOfLines={3}>
+            {text}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/**
+ * The ramp as equal chips across one row.
+ *
+ * `flex: 1` on each rung fills the card; the gaps stay `xs`. Space-between
+ * would park three numbers on a large phone with a desert between them.
+ */
+function WarmupCard({
+  sets,
+  unit,
+  onPress,
+}: {
+  sets: readonly WarmupSet[];
+  unit: WeightUnit;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  const described = describeWarmup(sets, unit);
+  const show = (kg: number) => formatWeight(kg, unit, { withUnit: false });
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={described.label}
+      accessibilityHint="Adds these as warm-up sets above the sets below"
+      style={({ pressed }) => [
+        styles.cue,
+        { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
+      ]}
+    >
+      <View style={styles.cueHead}>
+        <Ionicons name="flame-outline" size={14} color={colors.warning} />
+        <Text variant="overline" color="textSecondary" style={styles.cueHeadLabel}>
+          Warm-up
+        </Text>
+        <Text variant="caption" color="textTertiary">
+          Tap to add
+        </Text>
+        <Ionicons name="add" size={16} color={colors.textTertiary} />
+      </View>
+      <View style={styles.warmupRungs}>
+        {sets.map((set, index) => (
+          <Fragment key={`${set.weightKg}-${set.reps}-${index}`}>
+            {index > 0 && (
+              <Ionicons name="chevron-forward" size={12} color={colors.textTertiary} />
+            )}
+            <View style={[styles.warmupRung, { backgroundColor: colors.surface }]}>
+              <Text variant="numeric" color="textSecondary" align="center" numberOfLines={1}>
+                {show(set.weightKg)} × {set.reps}
+              </Text>
+            </View>
+          </Fragment>
+        ))}
+      </View>
+    </Pressable>
   );
 }
 
@@ -723,10 +885,12 @@ function UnitHeader<T extends string>({
       <Text variant="overline" color="textTertiary">
         {value}
       </Text>
-      {/* Nine pixels of glyph, and the whole reason the heading reads as
-          tappable. Without it this is indistinguishable from the Time and Reps
-          headings beside it, which are not. */}
-      <Ionicons name="swap-horizontal" size={9} color={colors.textTertiary} />
+      {/* Overlay, not a sibling in the row. In-flow it stole ~11pt from the
+          62pt cell and shifted "kg" off the numbers sitting in the same
+          column. The glyph still marks the heading as tappable. */}
+      <View pointerEvents="none" style={styles.unitSwap}>
+        <Ionicons name="swap-horizontal" size={9} color={colors.textTertiary} />
+      </View>
     </Pressable>
   );
 }
@@ -734,10 +898,12 @@ function UnitHeader<T extends string>({
 /**
  * One line for a suggestion: the target, then the sentence that justifies it.
  *
- * `Target 82.5 kg × 8: cleared 12 reps on every set`. The reason is the
- * engine's own words and arrives sentence case with no trailing period, so it
- * is printed as given rather than reworded here: one place decides how the app
- * explains itself.
+ * `82.5 kg × 8`, then the sentence that justifies it.
+ *
+ * The kicker on the card already says this is a suggestion, so the numbers
+ * are not prefixed with "Target". The reason is the engine's own words and
+ * arrives sentence case with no trailing period, so it is printed as given
+ * rather than reworded here: one place decides how the app explains itself.
  *
  * The weight is read in the exercise's unit, never in kilograms, because the
  * whole point of the line is a number the user can walk to the rack and load.
@@ -752,7 +918,7 @@ function describeSuggestion(
   suggestion: Suggestion,
   fields: { weight: boolean; reps: boolean },
   unit: WeightUnit,
-): { text: string; label: string } | null {
+): { text: string; detail: string; label: string } | null {
   // The first working set is the target. The engine may taper the ones after
   // it, and a heading that recited four sets would be the table below it.
   const target = suggestion.sets[0];
@@ -773,7 +939,8 @@ function describeSuggestion(
   if (parts.length === 0) return null;
 
   return {
-    text: `Target ${parts.join(' ')}: ${suggestion.reason}`,
+    text: parts.join(' '),
+    detail: suggestion.reason,
     label: `Suggested target, ${spoken.join(' ')}. ${suggestion.reason}`,
   };
 }
@@ -858,25 +1025,31 @@ function describeWarmup(
 const styles = StyleSheet.create({
   block: { paddingVertical: spacing.md },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
-    // Eight rather than twelve. The chip and the menu each reach 4pt toward the
-    // other, so this is the width that lets their slop meet without overlapping,
-    // and the title needs every point back now that it is set at subheading.
     gap: spacing.sm,
   },
-  titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  titleBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  titlePress: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  thumbnail: { borderRadius: THUMBNAIL_SIZE / 2 },
   doneSlot: { width: 16, alignItems: 'center' },
   // Shrinks before the chevron does, so a long exercise name truncates instead
   // of pushing the affordance off the row. At subheading size a 390pt screen
-  // leaves about 230pt here, which takes "Barbell Bulgarian Split Squat" down
-  // to "Barbell Bulgarian Split…": still enough to tell two variations of the
-  // same lift apart, which is the whole job of the name.
+  // now has the whole width under the name, which takes "Barbell Bulgarian
+  // Split Squat" without clipping two variations of the same lift together.
   title: { flexShrink: 1 },
-  rest: {
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
@@ -884,15 +1057,54 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.pill,
   },
-  notes: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+  cue: {
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
   },
-  // The same box as a note, because it reads as one: a quiet line on the canvas
-  // between the heading and the table.
-  suggestion: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+  cueNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  cueChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  cueChipDetail: { flex: 1 },
+  cueCopy: { flex: 1, gap: 2 },
+  cueHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  cueHeadLabel: { flex: 1 },
+  warmupRungs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  warmupRung: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
   },
   /*
    * One rule, under the headings only.
@@ -922,15 +1134,15 @@ const styles = StyleSheet.create({
   indexCell: { width: 32, textAlign: 'center' },
   previousCell: { flex: 1, minWidth: 60 },
   unitCell: { width: 62, textAlign: 'center' },
-  // The plain headings are `Text` and centre themselves; a `UnitHeader` is a row
-  // of two things, so it has to say so. 2pt rather than a spacing token. The
-  // glyph is an annotation on the word, not a second item beside it.
-  unitHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  // Overlay host for the swap glyph. Width comes from `unitCell` so this row
+  // stays the same 62pt the numeric fields use, and `justifyContent: 'center'`
+  // keeps "kg" on the figures rather than left of the icon.
+  unitHeader: { alignItems: 'center', justifyContent: 'center' },
+  unitSwap: { position: 'absolute', right: 2, top: 0, bottom: 0, justifyContent: 'center' },
+  // `SetRow` `effortCell.minWidth`. Keep them in lockstep.
+  effortSpacer: { minWidth: 36 },
   checkSpacer: { width: 38 },
   plateLine: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
-  // The same box as the plate line it sits under, so the two read as one block
-  // of arithmetic rather than as a line and a control.
-  warmup: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   addSetRow: {
     flexDirection: 'row',
     marginHorizontal: spacing.lg,

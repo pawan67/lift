@@ -57,6 +57,7 @@ export interface RoutineToCreate {
  */
 export async function importIdentifiedRoutines(
   selected: readonly RoutineToCreate[],
+  picks?: ReadonlyMap<string, string>,
 ): Promise<ImportRoutinesSummary> {
   const summary: ImportRoutinesSummary = { created: [], skipped: [] };
   if (selected.length === 0) return summary;
@@ -73,7 +74,7 @@ export async function importIdentifiedRoutines(
       continue;
     }
 
-    const plan = await planExercises([entry.workout]);
+    const plan = await planExercises([entry.workout], { picks });
     await commitExercises(plan);
 
     const exercises: PrescribedExercise[] = [];

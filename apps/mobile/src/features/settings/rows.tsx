@@ -72,6 +72,10 @@ interface RowFaceProps {
   label: string;
   /** The second line. What the setting does, or why the row is dead. */
   description?: string;
+  /** Caps a wrapping description. Unset means the caption can run as long as it needs. */
+  descriptionLines?: number;
+  /** Caps the title. Unset means it can wrap with the description. */
+  labelLines?: number;
   /**
    * Dims the glyph and the label only.
    *
@@ -79,17 +83,32 @@ interface RowFaceProps {
    * inside a dimmed row multiplies the two into near-invisibility.
    */
   dimmed?: boolean;
+  /** Danger paints the glyph and title, for a row that still needs a decision. */
+  tone?: 'danger' | 'neutral';
 }
 
-function RowFace({ icon, label, description, dimmed = false }: RowFaceProps) {
+function RowFace({
+  icon,
+  label,
+  description,
+  descriptionLines,
+  labelLines,
+  dimmed = false,
+  tone = 'neutral',
+}: RowFaceProps) {
   const colors = useColors();
+  const danger = tone === 'danger';
 
   return (
     <>
       <View
-        style={[styles.glyph, { backgroundColor: colors.surfaceMuted }, dimmed && styles.dimmed]}
+        style={[
+          styles.glyph,
+          { backgroundColor: danger ? colors.dangerSurface : colors.surfaceMuted },
+          dimmed && styles.dimmed,
+        ]}
       >
-        <Ionicons name={icon} size={17} color={colors.textSecondary} />
+        <Ionicons name={icon} size={17} color={danger ? colors.danger : colors.textSecondary} />
       </View>
       {/*
         `collapsable={false}` for the same reason `Button`'s label wrapper has
@@ -101,9 +120,19 @@ function RowFace({ icon, label, description, dimmed = false }: RowFaceProps) {
         parent. Pinning it means dimming only ever changes an opacity.
       */}
       <View collapsable={false} style={[styles.body, dimmed && styles.dimmed]}>
-        <Text variant="bodyMedium">{label}</Text>
+        <Text
+          variant="bodyMedium"
+          numberOfLines={labelLines}
+          style={danger ? { color: colors.danger } : undefined}
+        >
+          {label}
+        </Text>
         {description && (
-          <Text variant="caption" color="textTertiary">
+          <Text
+            variant="caption"
+            color={danger ? 'danger' : 'textTertiary'}
+            numberOfLines={descriptionLines}
+          >
             {description}
           </Text>
         )}
@@ -245,6 +274,15 @@ export interface SettingChoiceProps<T extends string> {
   disabled?: boolean;
   /** Why the row is dead. Replaces the description, and is read out with the label. */
   disabledReason?: string;
+  /**
+   * Put the chosen option under the label instead of beside it.
+   *
+   * For a choice whose options are themselves long names: a trailing value of
+   * similar length cramps both onto one line. Underneath, each gets a full row.
+   */
+  valueBelow?: boolean;
+  /** Danger for a choice that is still unresolved. */
+  tone?: 'danger' | 'neutral';
 }
 
 /**
@@ -264,6 +302,8 @@ export function SettingChoice<T extends string>({
   onChange,
   disabled = false,
   disabledReason,
+  valueBelow = false,
+  tone = 'neutral',
 }: SettingChoiceProps<T>) {
   const colors = useColors();
   const [open, setOpen] = useState(false);
@@ -272,7 +312,11 @@ export function SettingChoice<T extends string>({
 
   // Same rule as `SettingToggle`: a dead row is better spent saying which
   // switch above to turn back on than describing behaviour that is not running.
-  const detail = disabled ? disabledReason : description;
+  const detail = disabled
+    ? disabledReason
+    : valueBelow
+      ? current?.label
+      : description;
 
   return (
     <>
@@ -288,16 +332,30 @@ export function SettingChoice<T extends string>({
         disabled={disabled}
         onPress={() => setOpen(true)}
       >
-        <RowFace icon={icon} label={label} description={detail} dimmed={disabled} />
-        <Text
-          variant="label"
-          color="textSecondary"
-          numberOfLines={1}
-          style={[styles.trailing, disabled && styles.dimmed]}
-        >
-          {current?.label}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+        <RowFace
+          icon={icon}
+          label={label}
+          description={detail}
+          descriptionLines={valueBelow ? 2 : undefined}
+          labelLines={valueBelow ? 2 : undefined}
+          dimmed={disabled}
+          tone={tone}
+        />
+        {!valueBelow && (
+          <Text
+            variant="label"
+            color={tone === 'danger' ? 'danger' : 'textSecondary'}
+            numberOfLines={1}
+            style={[styles.trailing, disabled && styles.dimmed]}
+          >
+            {current?.label}
+          </Text>
+        )}
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={tone === 'danger' ? colors.danger : colors.textTertiary}
+        />
       </PressableRow>
 
       <FilterSheet visible={open} label={label} onClose={() => setOpen(false)}>

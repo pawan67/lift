@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import { parseCsv } from './csv.ts';
 import { collapseHeader, detectSource, resolveColumns } from './columns.ts';
 import { exerciseMatchKey, inferEquipment, inferMuscles, inferTrackingType } from './exercises.ts';
+import { buildImportMatchIndex, matchImportedName } from './match.ts';
 import {
   collectExerciseNames,
   countSets,
@@ -1016,6 +1017,78 @@ describe('inferEquipment', () => {
 
   it('prefers the longer match', () => {
     assert.equal(inferEquipment('Smith Machine Row'), 'smith_machine');
+  });
+
+  it('reads Gymvisual machine prefixes', () => {
+    assert.equal(inferEquipment('Lever Seated Calf Raise'), 'machine');
+    assert.equal(inferEquipment('Sled Hack Squat'), 'machine');
+  });
+});
+
+describe('matchImportedName', () => {
+  const library = buildImportMatchIndex([
+    { id: 'bench-press', name: 'Bench Press', equipment: 'barbell' },
+    { id: 'incline-bench-press', name: 'Incline Bench Press', equipment: 'dumbbell' },
+    { id: 'bulgarian-split-squat', name: 'Bulgarian Split Squat', equipment: 'dumbbell' },
+    { id: 'bulgarian-split-squat-bw', name: 'Bulgarian Split Squat', equipment: 'bodyweight' },
+    { id: 'seated-calf-raise', name: 'Seated Calf Raise', equipment: 'machine' },
+    { id: 'seated-shoulder-press', name: 'Seated Shoulder Press', equipment: 'dumbbell' },
+    { id: 'triceps-pressdown', name: 'Triceps Pressdown', equipment: 'machine' },
+    { id: 'front-squat', name: 'Front Squat', equipment: 'barbell' },
+    { id: 'squat', name: 'Squat', equipment: 'barbell' },
+  ]);
+
+  const kind = (name: string) => matchImportedName(name, library);
+
+  it('still matches word order and parenthetical equipment', () => {
+    const hit = kind('Bench Press (Barbell)');
+    assert.equal(hit.kind, 'hit');
+    if (hit.kind === 'hit') assert.equal(hit.id, 'bench-press');
+  });
+
+  it('links a Lyfta equipment prefix when the catalog dropped it', () => {
+    const hit = kind('Dumbbell Incline Bench Press');
+    assert.equal(hit.kind, 'hit');
+    if (hit.kind === 'hit') assert.equal(hit.id, 'incline-bench-press');
+  });
+
+  it('keeps equipment when two catalog rows share the stripped name', () => {
+    const hit = kind('Dumbbell Bulgarian Split Squat');
+    assert.equal(hit.kind, 'hit');
+    if (hit.kind === 'hit') assert.equal(hit.id, 'bulgarian-split-squat');
+  });
+
+  it('maps a lever prefix onto the machine catalog row', () => {
+    const hit = kind('Lever Seated Calf Raise');
+    assert.equal(hit.kind, 'hit');
+    if (hit.kind === 'hit') assert.equal(hit.id, 'seated-calf-raise');
+  });
+
+  it('does not silently file a machine press under a dumbbell one', () => {
+    const decision = kind('Lever Seated Shoulder Press');
+    assert.notEqual(decision.kind, 'hit');
+    if (decision.kind === 'ask') {
+      assert.ok(decision.suggestions.some((row) => row.id === 'seated-shoulder-press'));
+    }
+  });
+
+  it('offers a pushdown against a pressdown rather than inventing a custom row', () => {
+    const decision = kind('Cable Pushdown');
+    assert.notEqual(decision.kind, 'miss');
+    if (decision.kind === 'ask') {
+      assert.ok(decision.suggestions.some((row) => row.id === 'triceps-pressdown'));
+    }
+    if (decision.kind === 'hit') assert.equal(decision.id, 'triceps-pressdown');
+  });
+
+  it('does not collapse a front squat into a squat', () => {
+    const hit = kind('Front Squat (Barbell)');
+    assert.equal(hit.kind, 'hit');
+    if (hit.kind === 'hit') assert.equal(hit.id, 'front-squat');
+  });
+
+  it('misses a name the library does not have', () => {
+    assert.equal(kind('Jefferson Curl').kind, 'miss');
   });
 });
 

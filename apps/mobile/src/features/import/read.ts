@@ -27,7 +27,7 @@ import {
   type SharedFile,
 } from '@/features/share';
 
-import { planExercises } from './exercise-resolver';
+import { planExercises, type UnresolvedImportName } from './exercise-resolver';
 import { countAlreadyPresent } from './repository';
 
 /** A Lift backup: everything, restored by the backup module rather than here. */
@@ -56,6 +56,13 @@ export interface WorkoutsPreview {
    * `newExercisesIn`, which needs no database at all.
    */
   newExercises: string[];
+  /**
+   * Names that missed an exact match but have catalog rows the user can pick.
+   *
+   * The whole file, same as `newExercises`. The range filter is
+   * `unresolvedExercisesIn`.
+   */
+  unresolved: UnresolvedImportName[];
 }
 
 /** One routine or one session, sent by another person. See `features/share`. */
@@ -71,6 +78,7 @@ export interface SharePreview {
    * user commits to either.
    */
   newExercises: string[];
+  unresolved: UnresolvedImportName[];
 }
 
 export type ImportPreview = BackupPreview | WorkoutsPreview | SharePreview;
@@ -98,7 +106,7 @@ export async function readImportFile(
         file.kind === 'routine' ? routineAsImportedWorkout(file.routine) : file.session;
       const plan = await planExercises([workout]);
 
-      return { kind: 'share', file, newExercises: plan.created };
+      return { kind: 'share', file, newExercises: plan.created, unresolved: plan.unresolved };
     }
 
     const file = inspectBackup(text);
@@ -115,6 +123,7 @@ export async function readImportFile(
     alreadyPresent: await countAlreadyPresent(parsed.workouts),
     span: spanOf(parsed.workouts),
     newExercises: plan.created,
+    unresolved: plan.unresolved,
   };
 }
 
@@ -156,6 +165,17 @@ export function newExercisesIn(
   );
 
   return preview.newExercises.filter((name) => present.has(name.toLowerCase()));
+}
+
+export function unresolvedExercisesIn(
+  preview: WorkoutsPreview,
+  workouts: readonly ImportedWorkout[],
+): UnresolvedImportName[] {
+  const present = new Set(
+    collectExerciseNames(workouts).map((name) => name.toLowerCase()),
+  );
+
+  return preview.unresolved.filter((entry) => present.has(entry.name.toLowerCase()));
 }
 
 /**

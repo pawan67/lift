@@ -251,6 +251,8 @@ const EQUIPMENT_WORDS: [string, Equipment][] = [
   ['suspension', 'suspension'],
   ['dumbbell', 'dumbbell'],
   ['barbell', 'barbell'],
+  ['lever', 'machine'],
+  ['sled', 'machine'],
   ['machine', 'machine'],
   ['med ball', 'medicine_ball'],
   ['smith', 'smith_machine'],

@@ -37,11 +37,19 @@ import {
   type TrackingType,
 } from '@lift/shared';
 import { type ImportedWorkout } from '@lift/shared/import';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { db } from '@/db/client';
-import { trackDelete, trackUpsertMany } from '@/db/mutations';
-import { personalRecords, workoutExercises, workoutSets, workouts } from '@/db/schema';
+import { touch, trackDelete, trackUpsertMany } from '@/db/mutations';
+import {
+  exercises,
+  personalRecords,
+  routineExercises,
+  workoutExercises,
+  workoutSets,
+  workouts,
+} from '@/db/schema';
+import { deleteExercise } from '@/features/exercises/repository';
 import { authClient } from '@/features/sync/auth-client';
 import { defaultWorkoutName } from '@/features/workouts/repository';
 import { useSettings } from '@/store/settings';
@@ -94,7 +102,10 @@ const CHUNK_SIZE = 50;
  */
 export async function importWorkouts(
   imported: readonly ImportedWorkout[],
-  options: { onProgress?: (progress: ImportProgress) => void } = {},
+  options: {
+    onProgress?: (progress: ImportProgress) => void;
+    picks?: ReadonlyMap<string, string>;
+  } = {},
 ): Promise<ImportSummary> {
   const summary: ImportSummary = {
     workouts: 0,
@@ -112,7 +123,7 @@ export async function importWorkouts(
   // them, so the order rows are written in *is* the order they are earned in.
   const ordered = [...imported].sort((a, b) => a.startedAt - b.startedAt);
 
-  const plan = await planExercises(ordered);
+  const plan = await planExercises(ordered, { picks: options.picks });
   await commitExercises(plan);
   summary.exercisesCreated = plan.created;
 
@@ -174,6 +185,125 @@ export async function importWorkouts(
 
   summary.queued = signedIn ? queued : 0;
   return summary;
+}
+
+/**
+ * Moves this import's history from custom exercises onto catalog rows the
+ * user picked afterwards.
+ *
+ * The log is written before the routine picker, so a rematch otherwise splits:
+ * sessions stay on the custom, routines take the catalog. Only workouts whose
+ * start sits in this file are rewritten. Sessions the user logged themselves
+ * keep their exercise ids. Customs that nothing else references are removed.
+ */
+export async function relinkImportedHistory(
+  imported: readonly ImportedWorkout[],
+  picks: ReadonlyMap<string, string>,
+): Promise<void> {
+  if (imported.length === 0 || picks.size === 0) return;
+
+  const sessions = await db
+    .select({ id: workouts.id, startedAt: workouts.startedAt })
+    .from(workouts)
+    .where(isNull(workouts.deletedAt));
+
+  const importedStarts = imported.map((workout) => workout.startedAt).sort((a, b) => a - b);
+  const workoutIds = sessions
+    .filter((session) => hasNearby(importedStarts, session.startedAt.getTime()))
+    .map((session) => session.id);
+
+  if (workoutIds.length === 0) return;
+
+  const customs = await db
+    .select({ id: exercises.id, name: exercises.name })
+    .from(exercises)
+    .where(and(eq(exercises.isCustom, true), isNull(exercises.deletedAt)));
+
+  const customByName = new Map(
+    customs.map((row) => [row.name.trim().toLowerCase(), row.id] as const),
+  );
+
+  for (const [name, catalogId] of picks) {
+    const customId = customByName.get(name);
+    if (!customId || customId === catalogId) continue;
+
+    await reassignExercise(workoutIds, customId, catalogId);
+
+    const stillUsed = await exerciseStillUsed(customId);
+    if (!stillUsed) await deleteExercise(customId);
+  }
+}
+
+async function reassignExercise(
+  workoutIds: readonly string[],
+  fromId: string,
+  toId: string,
+): Promise<void> {
+  const stamp = touch();
+
+  const links = await db
+    .select()
+    .from(workoutExercises)
+    .where(
+      and(
+        inArray(workoutExercises.workoutId, [...workoutIds]),
+        eq(workoutExercises.exerciseId, fromId),
+        isNull(workoutExercises.deletedAt),
+      ),
+    );
+
+  if (links.length > 0) {
+    const next = links.map((row) => ({ ...row, exerciseId: toId, ...stamp }));
+    for (const row of next) {
+      await db
+        .update(workoutExercises)
+        .set({ exerciseId: toId, ...stamp })
+        .where(eq(workoutExercises.id, row.id));
+    }
+    await trackUpsertMany('workout_exercises', next);
+  }
+
+  const records = await db
+    .select()
+    .from(personalRecords)
+    .where(
+      and(
+        inArray(personalRecords.workoutId, [...workoutIds]),
+        eq(personalRecords.exerciseId, fromId),
+        isNull(personalRecords.deletedAt),
+      ),
+    );
+
+  if (records.length > 0) {
+    const next = records.map((row) => ({ ...row, exerciseId: toId, ...stamp }));
+    for (const row of next) {
+      await db
+        .update(personalRecords)
+        .set({ exerciseId: toId, ...stamp })
+        .where(eq(personalRecords.id, row.id));
+    }
+    await trackUpsertMany(
+      'personal_records',
+      next.map((row) => ({ ...row, achievedAt: row.achievedAt.getTime() })),
+    );
+  }
+}
+
+async function exerciseStillUsed(exerciseId: string): Promise<boolean> {
+  const [link] = await db
+    .select({ id: workoutExercises.id })
+    .from(workoutExercises)
+    .where(and(eq(workoutExercises.exerciseId, exerciseId), isNull(workoutExercises.deletedAt)))
+    .limit(1);
+  if (link) return true;
+
+  const [routine] = await db
+    .select({ id: routineExercises.id })
+    .from(routineExercises)
+    .where(and(eq(routineExercises.exerciseId, exerciseId), isNull(routineExercises.deletedAt)))
+    .limit(1);
+
+  return routine !== undefined;
 }
 
 // ---------------------------------------------------------------------------

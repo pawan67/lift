@@ -162,8 +162,11 @@ export interface SharedRoutineResult {
  * only after the plan is known: `planExercises` writes nothing, so a file that
  * fails to resolve leaves the library exactly as it found it.
  */
-export async function importSharedRoutine(routine: SharedRoutine): Promise<SharedRoutineResult> {
-  const plan = await planExercises([routineAsImportedWorkout(routine)]);
+export async function importSharedRoutine(
+  routine: SharedRoutine,
+  picks?: ReadonlyMap<string, string>,
+): Promise<SharedRoutineResult> {
+  const plan = await planExercises([routineAsImportedWorkout(routine)], { picks });
   await commitExercises(plan);
 
   const exercises: PrescribedExercise[] = [];

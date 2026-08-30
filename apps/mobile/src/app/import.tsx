@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { formatWeight, type WeightUnit } from '@lift/shared';
+import { EQUIPMENT_LABELS, formatWeight, type WeightUnit } from '@lift/shared';
 import {
   IMPORT_RANGES,
   identifyRoutines,
   importCutoff,
   type IdentifiedRoutine,
+  type ImportMatchCandidate,
   type ImportRange,
   type ImportedWorkout,
 } from '@lift/shared/import';
@@ -26,8 +27,9 @@ import {
   Text,
   useScrollEdge,
 } from '@/components/ui';
+import { getExercisesByIds } from '@/features/exercises/repository';
 import { restoreBackup } from '@/features/backup';
-import { SettingToggle } from '@/features/settings/rows';
+import { SettingChoice, SettingToggle } from '@/features/settings/rows';
 import { importSharedRoutine, type SharedRoutineResult } from '@/features/share';
 import {
   EXPORT_GUIDES,
@@ -37,17 +39,35 @@ import {
   loadExistingRoutineKeys,
   newExercisesIn,
   readImportFile,
+  relinkImportedHistory,
   selectRange,
+  unresolvedExercisesIn,
   type ImportApp,
   type ImportPreview,
   type ImportRoutinesSummary,
   type ImportSummary,
   type RangeSelection,
+  type UnresolvedImportName,
   type WorkoutsPreview,
 } from '@/features/import';
 import { showAlert } from '@/store/dialog';
+import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
 import { useSettings } from '@/store/settings';
 import { MIN_TOUCH_SIZE, spacing, useColors } from '@/theme';
+
+/** Sentinel for "invent a custom row". Exercise ids are uuidv7, so this cannot collide. */
+const KEEP_CUSTOM = 'custom';
+/** Opens the catalog picker; never stored as a pick. */
+const SEARCH_LIBRARY = 'search';
+const MATCH_PICKER = 'import-match';
+
+function picksFromLinks(links: Record<string, string>): Map<string, string> {
+  const picks = new Map<string, string>();
+  for (const [name, id] of Object.entries(links)) {
+    if (id !== KEEP_CUSTOM) picks.set(name, id);
+  }
+  return picks;
+}
 
 /**
  * Bringing training history in from another app.
@@ -92,6 +112,26 @@ export default function ImportScreen() {
   const [importedWorkouts, setImportedWorkouts] = useState<ImportedWorkout[] | null>(null);
   const [pickingRoutines, setPickingRoutines] = useState(false);
   const [routinesSummary, setRoutinesSummary] = useState<ImportRoutinesSummary | null>(null);
+  /**
+   * Library ids chosen for names the matcher would not take on its own.
+   *
+   * Keyed by the lower-cased spelling in the file. Absent or `KEEP_CUSTOM`
+   * means invent a custom exercise, the same outcome as skipping the picker.
+   * Held past the workout write so "save as routines" can reuse the same
+   * answers instead of planning those names a second time and creating twins.
+   */
+  const [links, setLinks] = useState<Record<string, string>>({});
+  /**
+   * Names of library rows chosen from search, keyed by id.
+   *
+   * Suggestions already carry a name. A search pick does not, and the choice
+   * row has to say what was chosen, so this is filled when the picker returns.
+   */
+  const [pickedExtras, setPickedExtras] = useState<Record<string, ImportMatchCandidate>>({});
+  const searchingFor = useRef<string | null>(null);
+  const pendingPicks = usePickedExercises(MATCH_PICKER);
+  const openPicker = useExercisePicker((state) => state.open);
+  const clearPendingPicks = useExercisePicker((state) => state.clear);
 
   /**
    * Discards the answer to a read that has since been superseded.
@@ -142,6 +182,8 @@ export default function ImportScreen() {
       setSummary(null);
       setRestored(null);
       setAddedRoutine(null);
+      setLinks({});
+      setPickedExtras({});
       setFile({ name: picked.result.name, text });
       await loadPreview(text, unit);
     } catch (cause) {
@@ -162,10 +204,53 @@ export default function ImportScreen() {
     return selectRange(preview.parsed, importCutoff(range));
   }, [preview, range]);
 
+  const unresolved = useMemo(() => {
+    if (preview?.kind === 'share') return preview.unresolved;
+    if (preview?.kind !== 'workouts') return [];
+    const workouts = importedWorkouts ?? selection?.workouts;
+    if (!workouts?.length) return [];
+    return unresolvedExercisesIn(preview, workouts);
+  }, [preview, selection, importedWorkouts]);
+
   const newExercises = useMemo(() => {
     if (preview?.kind !== 'workouts' || !selection) return [];
     return newExercisesIn(preview, selection.workouts);
   }, [preview, selection]);
+
+  const picks = useMemo(() => picksFromLinks(links), [links]);
+
+  const linkName = useCallback((name: string, id: string) => {
+    setLinks((current) => ({ ...current, [name.toLowerCase()]: id }));
+  }, []);
+
+  const searchLibrary = useCallback(
+    (name: string) => {
+      searchingFor.current = name;
+      openPicker(MATCH_PICKER);
+      router.push('/exercise/picker');
+    },
+    [openPicker],
+  );
+
+  useEffect(() => {
+    if (pendingPicks.length === 0) return;
+
+    const name = searchingFor.current;
+    const id = pendingPicks[pendingPicks.length - 1];
+    searchingFor.current = null;
+    clearPendingPicks(MATCH_PICKER);
+    if (!name || !id) return;
+
+    linkName(name, id);
+    void getExercisesByIds([id]).then((rows) => {
+      const row = rows.get(id);
+      if (!row) return;
+      setPickedExtras((current) => ({
+        ...current,
+        [id]: { id: row.id, name: row.name, equipment: row.equipment },
+      }));
+    });
+  }, [pendingPicks, clearPendingPicks, linkName]);
 
   const runImport = async () => {
     if (!selection || selection.workouts.length === 0) return;
@@ -175,6 +260,7 @@ export default function ImportScreen() {
 
     try {
       const result = await importWorkouts(selection.workouts, {
+        picks,
         // Throttled: a per-workout render on a thousand-session import spends
         // more time laying out a number than writing rows.
         onProgress: (next) => {
@@ -221,9 +307,9 @@ export default function ImportScreen() {
     setBusy(true);
     try {
       if (preview.file.kind === 'routine') {
-        setAddedRoutine(await importSharedRoutine(preview.file.routine));
+        setAddedRoutine(await importSharedRoutine(preview.file.routine, picks));
       } else {
-        setSummary(await importWorkouts([preview.file.session]));
+        setSummary(await importWorkouts([preview.file.session], { picks }));
       }
     } catch (cause) {
       void showAlert('Nothing was added', describe(cause));
@@ -248,6 +334,8 @@ export default function ImportScreen() {
     setError(null);
     setReading(false);
     setRange('all');
+    setLinks({});
+    setPickedExtras({});
   };
 
   const identified = useMemo(
@@ -275,12 +363,20 @@ export default function ImportScreen() {
         ) : pickingRoutines ? (
           <SaveRoutinesStep
             identified={identified}
+            unresolved={unresolved}
+            links={links}
+            onLink={linkName}
+            extras={pickedExtras}
+            onSearch={searchLibrary}
             busy={busy}
             onBack={() => setPickingRoutines(false)}
-            onCreate={async (selected) => {
+            onCreate={async (selected, relinkHistory) => {
               setBusy(true);
               try {
-                const result = await importIdentifiedRoutines(selected);
+                const result = await importIdentifiedRoutines(selected, picks);
+                if (relinkHistory && importedWorkouts) {
+                  await relinkImportedHistory(importedWorkouts, picks);
+                }
                 setRoutinesSummary(result);
                 setPickingRoutines(false);
               } catch (cause) {
@@ -325,7 +421,15 @@ export default function ImportScreen() {
             )}
 
             {preview?.kind === 'share' && (
-              <ShareStep preview={preview} busy={busy} onImport={() => void runShare()} />
+              <ShareStep
+                preview={preview}
+                links={links}
+                onLink={linkName}
+                extras={pickedExtras}
+                onSearch={searchLibrary}
+                busy={busy}
+                onImport={() => void runShare()}
+              />
             )}
 
             {preview?.kind === 'workouts' && selection && (
@@ -547,14 +651,27 @@ function BackupStep({
 
 function ShareStep({
   preview,
+  links,
+  onLink,
+  extras,
+  onSearch,
   busy,
   onImport,
 }: {
   preview: Extract<ImportPreview, { kind: 'share' }>;
+  links: Record<string, string>;
+  onLink: (name: string, id: string) => void;
+  extras: Record<string, ImportMatchCandidate>;
+  onSearch: (name: string) => void;
   busy: boolean;
   onImport: () => void;
 }) {
-  const { file, newExercises } = preview;
+  const { file, newExercises, unresolved } = preview;
+  const asked = new Set(unresolved.map((entry) => entry.name.toLowerCase()));
+  const trueMisses = newExercises.filter((name) => !asked.has(name.toLowerCase()));
+  const stillCustom = newExercises.filter(
+    (name) => (links[name.toLowerCase()] ?? KEEP_CUSTOM) === KEEP_CUSTOM,
+  );
 
   const isRoutine = file.kind === 'routine';
   const name = isRoutine ? file.routine.name : file.session.name;
@@ -568,8 +685,8 @@ function ShareStep({
         <Row label="Name" value={name} />
         <Figure label="Exercises" value={exercises.length} />
         <Figure label="Sets" value={sets} />
-        {newExercises.length > 0 && (
-          <Figure label="New to your library" value={newExercises.length} />
+        {stillCustom.length > 0 && (
+          <Figure label="New to your library" value={stillCustom.length} />
         )}
       </Card>
 
@@ -583,10 +700,27 @@ function ShareStep({
         {isRoutine
           ? 'This is added as a new routine of your own. Your existing routines are left alone, including one of the same name.'
           : 'This is added to your log as a completed workout, with any personal records it earns. Importing it twice adds nothing the second time.'}
-        {newExercises.length > 0
-          ? ` ${newExercises.length === 1 ? 'One exercise is' : `${newExercises.length} exercises are`} not in your library yet and will be added: ${newExercises.join(', ')}.`
+        {trueMisses.length > 0
+          ? ` ${trueMisses.length === 1 ? 'One exercise is' : `${trueMisses.length} exercises are`} not in your library yet and will be added: ${trueMisses.join(', ')}.`
           : ''}
       </Text>
+
+      {unresolved.length > 0 && (
+        <Card padded={false} style={styles.section}>
+          {unresolved.map((entry, index) => (
+            <View key={entry.name}>
+              {index > 0 && <Divider inset={spacing.lg} />}
+              <MatchChoice
+                entry={entry}
+                value={links[entry.name.toLowerCase()] ?? KEEP_CUSTOM}
+                extra={pickedExtra(links[entry.name.toLowerCase()] ?? KEEP_CUSTOM, extras)}
+                onChange={(id) => onLink(entry.name, id)}
+                onSearch={() => onSearch(entry.name)}
+              />
+            </View>
+          ))}
+        </Card>
+      )}
 
       <Button
         title={isRoutine ? 'Add to my routines' : 'Add to my log'}
@@ -828,15 +962,26 @@ function routineDescription(routine: IdentifiedRoutine): string {
 
 function SaveRoutinesStep({
   identified,
+  unresolved,
+  links,
+  onLink,
+  extras,
+  onSearch,
   busy,
   onBack,
   onCreate,
 }: {
   identified: IdentifiedRoutine[];
+  unresolved: UnresolvedImportName[];
+  links: Record<string, string>;
+  onLink: (name: string, id: string) => void;
+  extras: Record<string, ImportMatchCandidate>;
+  onSearch: (name: string) => void;
   busy: boolean;
   onBack: () => void;
   onCreate: (
     selected: { name: string; workout: ImportedWorkout }[],
+    relinkHistory: boolean,
   ) => void | Promise<void>;
 }) {
   const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
@@ -846,6 +991,13 @@ function SaveRoutinesStep({
   );
   const [expanded, setExpanded] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<IdentifiedRoutine | null>(null);
+  const [relinkHistory, setRelinkHistory] = useState(false);
+
+  const unresolvedByName = useMemo(() => {
+    const map = new Map<string, UnresolvedImportName>();
+    for (const entry of unresolved) map.set(entry.name.toLowerCase(), entry);
+    return map;
+  }, [unresolved]);
 
   useEffect(() => {
     let cancelled = false;
@@ -867,13 +1019,27 @@ function SaveRoutinesStep({
     (routine) => selected?.has(routine.key) && !existingKeys.has(routine.key),
   );
 
+  const replacements = unresolved.filter((entry) => {
+    const picked = links[entry.name.toLowerCase()];
+    return picked !== undefined && picked !== KEEP_CUSTOM;
+  });
+
+  const anyQuestions = identified.some(
+    (routine) =>
+      !existingKeys.has(routine.key) && questionsIn(routine, unresolvedByName).length > 0,
+  );
+
   return (
     <>
       <Text variant="body" color="textSecondary" style={styles.intro}>
-        Named sessions in this file are grouped into routines. The most recent session for each is
-        the template, including the weights and reps. You can edit them and add supersets from
-        Routines after this.
+        Named sessions in this file are grouped into routines.
       </Text>
+      {anyQuestions && (
+        <Text variant="caption" color="textTertiary" style={styles.hint}>
+          A name in red did not match the catalog. Keep it as custom (limited
+          features) or pick a catalog exercise.
+        </Text>
+      )}
 
       <Card padded={false} style={styles.section}>
         {identified.map((routine, index) => {
@@ -881,6 +1047,7 @@ function SaveRoutinesStep({
           const on = selected?.has(routine.key) ?? false;
           const label = names[routine.key] ?? routine.name;
           const open = expanded === routine.key;
+          const questions = taken ? [] : questionsIn(routine, unresolvedByName);
 
           return (
             <View key={routine.key}>
@@ -888,7 +1055,13 @@ function SaveRoutinesStep({
               <SettingToggle
                 icon="albums-outline"
                 label={label}
-                description={taken ? undefined : routineDescription(routine)}
+                description={
+                  taken
+                    ? undefined
+                    : questions.length > 0
+                      ? `${routineDescription(routine)} · ${questions.length} unmatched`
+                      : routineDescription(routine)
+                }
                 value={taken ? false : on}
                 disabled={taken || selected === null}
                 disabledReason={taken ? 'Already in your routines' : undefined}
@@ -927,24 +1100,71 @@ function SaveRoutinesStep({
                   </Pressable>
                 </View>
               )}
-              {open && (
-                <View style={styles.exercisePreview}>
-                  {routine.latest.exercises.map((exercise, exerciseIndex) => (
-                    <View key={`${exercise.name}:${exerciseIndex}`} style={styles.exerciseRow}>
-                      <Text variant="bodyMedium" style={styles.exerciseName} numberOfLines={1}>
-                        {exercise.name}
-                      </Text>
-                      <Text variant="caption" color="textTertiary">
-                        {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+              {!taken && !open &&
+                questions.map((entry) => (
+                  <MatchChoice
+                    key={entry.name}
+                    entry={entry}
+                    value={links[entry.name.toLowerCase()] ?? KEEP_CUSTOM}
+                    extra={pickedExtra(links[entry.name.toLowerCase()] ?? KEEP_CUSTOM, extras)}
+                    onChange={(id) => onLink(entry.name, id)}
+                    onSearch={() => onSearch(entry.name)}
+                  />
+                ))}
+              {open &&
+                routine.latest.exercises.map((exercise, exerciseIndex) => {
+                  const entry = unresolvedByName.get(exercise.name.toLowerCase());
+                  if (entry) {
+                    return (
+                      <MatchChoice
+                        key={`${exercise.name}:${exerciseIndex}`}
+                        entry={entry}
+                        value={links[entry.name.toLowerCase()] ?? KEEP_CUSTOM}
+                        extra={pickedExtra(links[entry.name.toLowerCase()] ?? KEEP_CUSTOM, extras)}
+                        onChange={(id) => onLink(entry.name, id)}
+                        onSearch={() => onSearch(entry.name)}
+                      />
+                    );
+                  }
+
+                  return (
+                    <ListRow
+                      key={`${exercise.name}:${exerciseIndex}`}
+                      icon="barbell-outline"
+                      title={exercise.name}
+                      showChevron={false}
+                      accessory={
+                        <Text variant="caption" color="textTertiary">
+                          {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'}
+                        </Text>
+                      }
+                    />
+                  );
+                })}
             </View>
           );
         })}
       </Card>
+
+      {replacements.length > 0 && (
+        <>
+          <SectionHeader title="Imported history" />
+          <Text variant="caption" color="textTertiary" style={styles.hint}>
+            These names were saved as custom exercises when you imported. Turn this on to move the
+            sets from this file onto the catalog exercises you picked, so the log and the routines
+            match. Sessions you logged yourself are not changed.
+          </Text>
+          <Card padded={false} style={styles.section}>
+            <SettingToggle
+              icon="swap-horizontal-outline"
+              label="Move this import onto the catalog"
+              description={list(replacements.map((entry) => entry.name))}
+              value={relinkHistory}
+              onChange={setRelinkHistory}
+            />
+          </Card>
+        </>
+      )}
 
       <Button
         title={
@@ -964,6 +1184,7 @@ function SaveRoutinesStep({
               name: (names[routine.key] ?? routine.name).trim() || routine.name,
               workout: routine.latest,
             })),
+            relinkHistory && replacements.length > 0,
           )
         }
       />
@@ -1181,6 +1402,93 @@ function Figure({ label, value }: { label: string; value: number }) {
   return <Row label={label} value={value.toLocaleString()} />;
 }
 
+function questionsIn(
+  routine: IdentifiedRoutine,
+  unresolvedByName: ReadonlyMap<string, UnresolvedImportName>,
+): UnresolvedImportName[] {
+  const seen = new Set<string>();
+  const questions: UnresolvedImportName[] = [];
+  for (const exercise of routine.latest.exercises) {
+    const key = exercise.name.toLowerCase();
+    if (seen.has(key)) continue;
+    const entry = unresolvedByName.get(key);
+    if (!entry) continue;
+    seen.add(key);
+    questions.push(entry);
+  }
+  return questions;
+}
+
+function matchOptions(
+  entry: UnresolvedImportName,
+  extra: ImportMatchCandidate | undefined,
+) {
+  const suggestions = [...entry.suggestions];
+  if (extra && !suggestions.some((row) => row.id === extra.id)) {
+    suggestions.unshift(extra);
+  }
+
+  return [
+    {
+      value: KEEP_CUSTOM,
+      label: 'Keep as custom',
+      description: 'Limited features until you edit it',
+    },
+    ...suggestions.map((row) => ({
+      value: row.id,
+      label: row.name,
+      description: EQUIPMENT_LABELS[row.equipment],
+    })),
+    {
+      value: SEARCH_LIBRARY,
+      label: 'Search catalog',
+      description: 'Browse every exercise',
+    },
+  ];
+}
+
+function pickedExtra(
+  value: string,
+  extras: Record<string, ImportMatchCandidate>,
+): ImportMatchCandidate | undefined {
+  if (value === KEEP_CUSTOM) return undefined;
+  return extras[value];
+}
+
+function MatchChoice({
+  entry,
+  value,
+  extra,
+  onChange,
+  onSearch,
+}: {
+  entry: UnresolvedImportName;
+  value: string;
+  extra?: ImportMatchCandidate;
+  onChange: (id: string) => void;
+  onSearch: () => void;
+}) {
+  const unmatched = value === KEEP_CUSTOM;
+
+  return (
+    <SettingChoice
+      icon={unmatched ? 'alert-circle-outline' : 'barbell-outline'}
+      label={entry.name}
+      options={matchOptions(entry, extra)}
+      value={value}
+      onChange={(next) => {
+        if (next === SEARCH_LIBRARY) {
+          onSearch();
+          return;
+        }
+        onChange(next);
+      }}
+      valueBelow
+      tone={unmatched ? 'danger' : 'neutral'}
+    />
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.row}>
@@ -1260,16 +1568,4 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   candidateAction: { minHeight: MIN_TOUCH_SIZE, justifyContent: 'center' },
-  exercisePreview: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  exerciseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  exerciseName: { flex: 1, flexShrink: 1 },
 });

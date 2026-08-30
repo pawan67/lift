@@ -7,7 +7,7 @@
  * across the progress chart, the records list and every muscle rollup: with
  * nothing on screen to explain why. So the matching runs in one pass over the
  * whole file rather than per row, and it is exact-then-normalised rather than
- * fuzzy: a near miss the user can see and merge beats a confident wrong answer.
+ * fuzzy: a near miss the user can pick from beats a confident wrong answer.
  */
 
 import { uuidv7, type Equipment, type MuscleGroup, type TrackingType } from '@lift/shared';
@@ -17,6 +17,9 @@ import {
   inferEquipment,
   inferMuscles,
   inferTrackingType,
+  matchImportedName,
+  buildImportMatchIndex,
+  type ImportMatchCandidate,
   type ImportedSet,
   type ImportedWorkout,
 } from '@lift/shared/import';
@@ -25,6 +28,11 @@ import { isNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { trackUpsertMany } from '@/db/mutations';
 import { exercises } from '@/db/schema';
+
+export interface UnresolvedImportName {
+  name: string;
+  suggestions: ImportMatchCandidate[];
+}
 
 export interface ExercisePlan {
   /** Keyed by the lower-cased name as the file spelled it. */
@@ -41,6 +49,14 @@ export interface ExercisePlan {
   matched: string[];
   /** Names that did not. Rows for these are built but not yet written. */
   created: string[];
+  /**
+   * Names that missed an exact match but have catalog rows worth offering.
+   *
+   * Still in `created` until the user picks one of `suggestions`. Saving the
+   * import as routines is what turns a pick into a library id, via `picks` on
+   * the next `planExercises` call.
+   */
+  unresolved: UnresolvedImportName[];
   pending: NewCustomExercise[];
 }
 
@@ -55,29 +71,40 @@ export interface ExercisePlan {
  */
 export async function planExercises(
   workouts: readonly ImportedWorkout[],
+  options: { picks?: ReadonlyMap<string, string> } = {},
 ): Promise<ExercisePlan> {
   const names = collectExerciseNames(workouts);
   const idByName = new Map<string, string>();
   const matched: string[] = [];
   const created: string[] = [];
+  const unresolved: UnresolvedImportName[] = [];
   const pending: NewCustomExercise[] = [];
 
   if (names.length === 0) {
-    return { idByName, trackingTypeById: new Map(), matched, created, pending };
+    return { idByName, trackingTypeById: new Map(), matched, created, unresolved, pending };
   }
 
-  const { exact, loose, trackingTypeById } = await loadLibraryIndex();
+  const { index, trackingTypeById } = await loadLibraryIndex();
   const setsByName = groupSetsByName(workouts);
 
   for (const name of names) {
     const key = name.toLowerCase();
-    const hit = exact.get(key) ?? loose.get(exerciseMatchKey(name));
-
-    if (hit) {
-      idByName.set(key, hit);
+    const picked = options.picks?.get(key);
+    if (picked && trackingTypeById.has(picked)) {
+      idByName.set(key, picked);
       matched.push(name);
       continue;
     }
+
+    const decision = matchImportedName(name, index);
+
+    if (decision.kind === 'hit') {
+      idByName.set(key, decision.id);
+      matched.push(name);
+      continue;
+    }
+
+    if (decision.kind === 'ask') unresolved.push({ name, suggestions: decision.suggestions });
 
     const row = buildCustomExercise(name, setsByName.get(key) ?? []);
     pending.push(row);
@@ -89,11 +116,15 @@ export async function planExercises(
     // and both miss the catalog. Registering the new row against its own
     // normalised key means the second spelling finds the first rather than
     // creating a twin.
-    loose.set(exerciseMatchKey(name), row.id);
-    exact.set(key, row.id);
+    index.byKey.set(exerciseMatchKey(name), {
+      id: row.id,
+      name: row.name,
+      equipment: row.equipment,
+    });
+    index.byExact.set(key, { id: row.id, name: row.name, equipment: row.equipment });
   }
 
-  return { idByName, trackingTypeById, matched, created, pending };
+  return { idByName, trackingTypeById, matched, created, unresolved, pending };
 }
 
 /** Writes the exercises a plan invented. Safe to call with nothing pending. */
@@ -154,36 +185,28 @@ function buildCustomExercise(name: string, sets: ImportedSet[]) {
  * the whole reason the resolver takes the file rather than a name.
  */
 async function loadLibraryIndex(): Promise<{
-  exact: Map<string, string>;
-  loose: Map<string, string>;
+  index: ReturnType<typeof buildImportMatchIndex>;
   trackingTypeById: Map<string, TrackingType>;
 }> {
   const rows = await db
-    .select({ id: exercises.id, name: exercises.name, trackingType: exercises.trackingType })
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+      equipment: exercises.equipment,
+      trackingType: exercises.trackingType,
+    })
     .from(exercises)
     .where(isNull(exercises.deletedAt));
 
-  const exact = new Map<string, string>();
-  const loose = new Map<string, string>();
   const trackingTypeById = new Map<string, TrackingType>();
+  const candidates: ImportMatchCandidate[] = [];
 
   for (const row of rows) {
     trackingTypeById.set(row.id, row.trackingType);
-
-    const lower = row.name.toLowerCase();
-    if (!exact.has(lower)) exact.set(lower, row.id);
-
-    // Normalised keys collide by design: "Row (Cable)" and "Cable Row" reduce
-    // to the same thing, which is the point. First writer wins, and the read
-    // above is ordered by nothing in particular, so this is settled by the id:
-    // stable across imports, which is what stops the same file resolving to
-    // different exercises on two devices.
-    const key = exerciseMatchKey(row.name);
-    const existing = loose.get(key);
-    if (existing === undefined || row.id < existing) loose.set(key, row.id);
+    candidates.push({ id: row.id, name: row.name, equipment: row.equipment });
   }
 
-  return { exact, loose, trackingTypeById };
+  return { index: buildImportMatchIndex(candidates), trackingTypeById };
 }
 
 /** Every set logged against each name, so a created exercise can be typed from its data. */

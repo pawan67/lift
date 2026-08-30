@@ -8,6 +8,22 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.19.0](https://github.com/pawan67/lift/compare/v0.18.1...v0.19.0) - 2026-08-30
+
+### Features
+
+- reorder folders and routines on the Workout tab ([4edd3da](https://github.com/pawan67/lift/commit/4edd3dabd72aefdde31e39afad33a29920e790ce))
+- redesign the routine editor ([84b3acd](https://github.com/pawan67/lift/commit/84b3acda24bed364e33bd477b0ea9bac61b43784))
+- match imported names to the catalog ([0fe75cd](https://github.com/pawan67/lift/commit/0fe75cdf02cf63a09fa193d647a131b756708a87))
+- accordion the active workout and align set columns ([d56e6b0](https://github.com/pawan67/lift/commit/d56e6b0b09925d0bc9bd89f35161a5e0d5e593b7))
+
+### Fixes
+
+- reword the import history caption for lint ([eb320fb](https://github.com/pawan67/lift/commit/eb320fb1fca2c787d22dafe17cefe1523163bdd8))
+- answer complete-set from a store subscribe ([229ccfb](https://github.com/pawan67/lift/commit/229ccfb7d87a64c923efa462db129a9a35b59d41))
+- stop accordion rows overlapping on expand ([c563c76](https://github.com/pawan67/lift/commit/c563c764d6ee1a09915512cee9f81258f56fd4ce))
+- stop writing the lift-unit ref during render ([e61ef41](https://github.com/pawan67/lift/commit/e61ef41ddcc2f172a2373ee9cd9b81161825f409))
+
 ## [0.18.1](https://github.com/pawan67/lift/compare/v0.18.0...v0.18.1) - 2026-08-29
 
 ### Features

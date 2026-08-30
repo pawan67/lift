@@ -1,14 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
   View,
   type PressableProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import {
   controlHeight,
+  duration,
   font,
   fontSize,
   hoverFill,
@@ -47,6 +60,14 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
   iconPosition?: 'left' | 'right';
   loading?: boolean;
   fullWidth?: boolean;
+  /**
+   * Scroll a label that does not fit, instead of ellipsising it.
+   *
+   * Dialog actions that name an exercise are the reason: the name is the
+   * choice, and a truncated verb is worse than watching it travel. Short
+   * labels do not move. Reduce Motion keeps the ellipsis.
+   */
+  marquee?: boolean;
   style?: ViewStyle;
 }
 
@@ -214,6 +235,7 @@ export function Button({
   iconPosition = 'left',
   loading = false,
   fullWidth = false,
+  marquee = false,
   disabled,
   style,
   ...rest
@@ -223,6 +245,7 @@ export function Button({
   const { bg, bgHover, bgPressed, fg, border, borderPressed } = useVariantSpecs(colors)[variant];
 
   const isDisabled = disabled || loading;
+  const labelStyle = { color: fg, fontSize: dimensions.fontSize, ...font('semibold') };
 
   return (
     <PressableScale
@@ -252,6 +275,7 @@ export function Button({
           borderWidth: border ? stroke.outline : 0,
         },
         fullWidth && styles.fullWidth,
+        marquee && styles.marqueeHost,
         isDisabled && styles.disabled,
         style,
       ]}
@@ -280,16 +304,20 @@ export function Button({
         the wrapper is always there and only its opacity moves, which is what
         the comment above always claimed was happening.
       */}
-      <View collapsable={false} style={[styles.content, loading && styles.hidden]}>
+      <View
+        collapsable={false}
+        style={[styles.content, marquee && styles.marqueeContent, loading && styles.hidden]}
+      >
         {icon && iconPosition === 'left' && (
           <Ionicons name={icon} size={dimensions.iconSize} color={fg} />
         )}
-        <Text
-          numberOfLines={1}
-          style={{ color: fg, fontSize: dimensions.fontSize, ...font('semibold') }}
-        >
-          {title}
-        </Text>
+        {marquee ? (
+          <MarqueeLabel title={title} style={labelStyle} />
+        ) : (
+          <Text numberOfLines={1} style={labelStyle}>
+            {title}
+          </Text>
+        )}
         {icon && iconPosition === 'right' && (
           <Ionicons name={icon} size={dimensions.iconSize} color={fg} />
         )}
@@ -301,6 +329,88 @@ export function Button({
         </View>
       )}
     </PressableScale>
+  );
+}
+
+/**
+ * A label that travels when it cannot fit, and sits still when it can.
+ *
+ * The copy is measured in a 10000pt lane. Measuring with `onLayout` inside
+ * the clip reports the clip's width, which is already the truncated size,
+ * so overflow never trips and `numberOfLines={1}` keeps drawing an ellipsis.
+ * `onTextLayout` in a lane wider than any label is the actual string.
+ * Reduce Motion keeps the ellipsis: a name sliding past is decoration.
+ */
+function MarqueeLabel({ title, style }: { title: string; style: TextStyle }) {
+  const reduceMotion = useReduceMotion();
+  const offset = useSharedValue(0);
+  const [box, setBox] = useState(0);
+  const [copy, setCopy] = useState(0);
+
+  const overflow = box > 0 && copy > box + 1;
+  const run = overflow && !reduceMotion;
+
+  useEffect(() => {
+    cancelAnimation(offset);
+    offset.value = 0;
+    if (!run) return;
+
+    const travel = copy - box;
+    const scrollMs = Math.max(duration.slow, Math.round(travel / 0.04));
+
+    offset.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: duration.count }),
+        withTiming(-travel, { duration: scrollMs, easing: Easing.linear }),
+        withTiming(-travel, { duration: duration.base }),
+        withTiming(0, { duration: 0 }),
+      ),
+      -1,
+    );
+
+    return () => {
+      cancelAnimation(offset);
+    };
+  }, [run, copy, box, offset, title]);
+
+  const animated = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value }],
+  }));
+
+  if (reduceMotion) {
+    return (
+      <Text numberOfLines={1} style={[style, styles.marqueeReduced]}>
+        {title}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      collapsable={false}
+      style={[styles.marqueeClip, overflow || box === 0 ? styles.marqueeStart : styles.marqueeCenter]}
+      onLayout={(event) => setBox(event.nativeEvent.layout.width)}
+    >
+      <Text
+        pointerEvents="none"
+        style={[style, styles.marqueeMeasure]}
+        onTextLayout={(event) => {
+          const line = event.nativeEvent.lines[0];
+          if (line) setCopy(line.width);
+        }}
+      >
+        {title}
+      </Text>
+      <Animated.View style={[styles.marqueeTrack, animated]}>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="clip"
+          style={[style, styles.marqueeLabel, copy > 0 ? { width: copy } : null]}
+        >
+          {title}
+        </Text>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -328,4 +438,13 @@ const styles = StyleSheet.create({
   },
   fullWidth: { alignSelf: 'stretch' },
   disabled: { opacity: 0.4 },
+  marqueeHost: { overflow: 'hidden', minWidth: 0 },
+  marqueeContent: { flex: 1, alignSelf: 'stretch', minWidth: 0, width: '100%' },
+  marqueeClip: { flex: 1, minWidth: 0, overflow: 'hidden' },
+  marqueeTrack: { flexDirection: 'row' },
+  marqueeLabel: { flexShrink: 0 },
+  marqueeReduced: { flex: 1, minWidth: 0 },
+  marqueeMeasure: { position: 'absolute', opacity: 0, width: 10000 },
+  marqueeStart: { alignItems: 'flex-start' },
+  marqueeCenter: { alignItems: 'center' },
 });

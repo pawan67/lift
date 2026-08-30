@@ -118,6 +118,10 @@ export function DialogHost() {
                 // different dialogs. Naming the title is what separates them.
                 accessibilityLabel={`${action.label}, ${shown?.title ?? ''}`}
                 variant={variantFor(action, ordinary)}
+                // Stacked actions are the ones that name something longer than
+                // a verb. Inline pairs are already capped at twelve characters.
+                marquee={!inline}
+                fullWidth={!inline}
                 // `current`, not `shown`: the two agree whenever the dialog is
                 // actually open, and during the fade-out `current` is already
                 // null, which is what makes the closing card inert to a second

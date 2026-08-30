@@ -1,16 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
-  formatDuration,
-  fromDisplayDistance,
-  fromDisplayWeight,
   normalizeSupersets,
-  parseDuration,
   reorder,
-  toDisplayDistance,
-  toDisplayWeight,
-  TRACKING_FIELDS,
-  trimZeros,
-  type DistanceUnit,
   type PositionedRow,
   type SupersetAssignment,
 } from '@lift/shared';
@@ -22,14 +13,17 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   Button,
+  Card,
   Divider,
   EmptyState,
+  FilterSheet,
   HeaderAction,
-  ListPicker,
-  NumericField,
+  ListRow,
+  OptionList,
   PromptModal,
   ReorderSheet,
   Screen,
+  SectionHeader,
   Text,
   useScrollEdge,
   type ReorderItem,
@@ -37,68 +31,29 @@ import {
 import { db } from '@/db/client';
 import { routineFolders, workouts } from '@/db/schema';
 import { useRows } from '@/db/use-rows';
+import { RoutineExerciseBlock } from '@/features/routines/exercise-block';
 import {
   addExerciseToRoutine,
-  addRoutineSet,
   applyRoutineExerciseOrder,
   applyRoutineSupersetGroups,
   deleteRoutine,
-  deleteRoutineSet,
   getRoutineDetail,
-  removeExerciseFromRoutine,
   updateRoutine,
   updateRoutineExercise,
-  updateRoutineSet,
   type RoutineDetail,
   type RoutineExerciseDetail,
 } from '@/features/routines/repository';
-import { resolveExerciseUnits, useAppUnits } from '@/features/exercises/units';
 import { startWorkout } from '@/features/workouts/repository';
-import {
-  showSupersetMenu,
-  SupersetChip,
-  supersetMap,
-  SupersetTie,
-} from '@/features/workouts/superset';
 import { startSession } from '@/features/workouts/start-session';
-import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
-import { useLaunchAction } from '@/hooks/use-launch-action';
+import { showSupersetMenu, supersetMap, supersetColor } from '@/features/workouts/superset';
 import { haptics } from '@/features/feedback/haptics';
-import { showConfirm } from '@/store/dialog';
-import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
-import { MIN_TOUCH_SIZE, radius, spacing, useColors } from '@/theme';
 import { buildRoutineShare } from '@/features/share';
 import { useShare } from '@/features/share/use-share';
-
-/**
- * Matches the identical control in `exercise-block.tsx`: 34pt of row plus 8pt
- * above and below is 50pt of target. No horizontal slop. The row is full
- * width, so there is nothing either side of it to reach into or steal from.
- */
-const ADD_SET_SLOP = { top: 8, bottom: 8 };
-
-/**
- * How a stored distance and a stored time are spelled back into their fields.
- *
- * Both mirror the pair `set-row.tsx` keeps module-private, and they have to: a
- * target typed here and the number typed against it in the gym are the same
- * number, so a routine that rendered 2000 m differently from the logging screen
- * would be prescribing something the logger cannot agree it did.
- *
- * Two decimals and trimmed zeros absorb the float noise a unit round trip
- * leaves behind, since a mile-entered 3 comes back 2.999999999999 and an
- * untrimmed "3.00" reappears as characters to delete before typing.
- * `normalizeDuration` exists because seconds are always re-spelled as M:SS, so
- * a typed "4" returns as "0:04" and a field without it would match none of its
- * own echoes and go inert.
- */
-const asDistanceField = (km: number, unit: DistanceUnit) =>
-  trimZeros(toDisplayDistance(km, unit).toFixed(2));
-
-const normalizeDuration = (text: string) => {
-  const seconds = parseDuration(text);
-  return seconds == null ? '' : formatDuration(seconds);
-};
+import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
+import { useLaunchAction } from '@/hooks/use-launch-action';
+import { showConfirm } from '@/store/dialog';
+import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
+import { HIT_SLOP, spacing, useColors } from '@/theme';
 
 export default function RoutineEditorScreen() {
   const scrollEdge = useScrollEdge();
@@ -115,34 +70,12 @@ export default function RoutineEditorScreen() {
   const openPicker = useExercisePicker((state) => state.open);
 
   const colors = useColors();
-  const appUnits = useAppUnits();
-
-  /*
-   * The units one prescribed row is written in.
-   *
-   * Per exercise rather than per routine: a target typed here and the number
-   * typed against it in a session have to be the same number, and reading in
-   * kilos what will be entered in pounds is how a routine ends up prescribing a
-   * 100 kg dumbbell press. A function rather than a value computed in the map,
-   * because it is wanted at several points inside one JSX block and lifting the
-   * block into a body to hold a `const` would re-indent a hundred lines to say
-   * the same thing.
-   */
-  const unitsFor = (entry: RoutineExerciseDetail) => resolveExerciseUnits(entry.exercise, appUnits);
-
-  /**
-   * Which numeric columns this exercise prescribes in.
-   *
-   * The same switch the logging screen performs, for the same reason and off the
-   * same table: a plank has no weight to prescribe and a row has no reps. A
-   * function rather than a `const`, for the reason above it.
-   */
-  const fieldsFor = (entry: RoutineExerciseDetail) => TRACKING_FIELDS[entry.exercise.trackingType];
 
   const [detail, setDetail] = useState<RoutineDetail | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [editingRoutineNotes, setEditingRoutineNotes] = useState(false);
   const [editingExerciseNotesFor, setEditingExerciseNotesFor] = useState<string | null>(null);
+  const [pickingFolder, setPickingFolder] = useState(false);
   const [starting, setStarting] = useState(false);
   const inFlight = useRef(false);
 
@@ -163,7 +96,7 @@ export default function RoutineEditorScreen() {
       .select()
       .from(routineFolders)
       .where(isNull(routineFolders.deletedAt))
-      .orderBy(asc(routineFolders.position))
+      .orderBy(asc(routineFolders.position)),
   );
 
   const resuming = openRows[0]?.routineId === id;
@@ -190,6 +123,26 @@ export default function RoutineEditorScreen() {
   );
 
   const placements = useMemo(() => supersetMap(supersetRows), [supersetRows]);
+
+  const clusters = useMemo(() => {
+    const exercises = detail?.exercises ?? [];
+    const result: { label: string | null; entries: RoutineExerciseDetail[] }[] = [];
+
+    for (const entry of exercises) {
+      const placement = placements.get(entry.routineExercise.id);
+      const last = result[result.length - 1];
+      if (placement && placement.first === false && last) {
+        last.entries.push(entry);
+        continue;
+      }
+      result.push({
+        label: placement?.first ? placement.label : null,
+        entries: [entry],
+      });
+    }
+
+    return result;
+  }, [detail, placements]);
 
   // A reload rather than an optimistic edit, for the same reason `handleReorder`
   // reloads: nothing on this screen is a live query, so storage is the only
@@ -380,6 +333,10 @@ export default function RoutineEditorScreen() {
     );
   }
 
+  const folderName =
+    folders.find((folder) => folder.id === detail.routine.folderId)?.name ?? 'No folder';
+  const canPinNotes = Boolean(detail.routine.notes || detail.routine.isNotesPinned);
+
   return (
     <Screen scrolled={scrollEdge.progress}>
       <Stack.Screen
@@ -420,78 +377,80 @@ export default function RoutineEditorScreen() {
 
       <ScrollView
         {...scrollEdge.list}
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
-        <View style={styles.nameField}>
-          <View style={styles.notesHeader}>
-            <Text variant="overline" color="textTertiary">
-              Routine name
-            </Text>
-            {folders.length > 0 && (
-              <ListPicker
-                label="Folder"
-                value={detail.routine.folderId ?? 'none'}
-                options={[
-                  { value: 'none', label: 'No folder' },
-                  ...folders.map((f) => ({ value: f.id, label: f.name })),
-                ]}
-                onChange={(value) => {
-                  void updateRoutine(id, { folderId: value === 'none' ? null : value }).then(reload);
-                }}
-              />
-            )}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={detail.routine.name}
-            accessibilityHint="Renames this routine"
+        {/* The facts about the routine that live on the row rather than on its
+            sets. Same card the session editor uses for name / duration / started,
+            so the two editors open on the same kind of object. */}
+        <Card padded={false} style={styles.meta}>
+          <ListRow
+            icon="text-outline"
+            title={detail.routine.name}
+            subtitle="Name"
             onPress={() => setRenaming(true)}
-            style={styles.nameButton}
-          >
-            <Text variant="subheading" numberOfLines={1} style={styles.nameText}>
-              {detail.routine.name}
-            </Text>
-            <Ionicons name="pencil" size={14} color={colors.textTertiary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.nameField}>
-          <View style={styles.notesHeader}>
-            <Text variant="overline" color="textTertiary">
-              Notes
-            </Text>
-            {(detail.routine.notes || detail.routine.isNotesPinned) ? (
-              <Pressable
-                onPress={() => {
-                  haptics.selection();
-                  void updateRoutine(id, { isNotesPinned: !detail.routine.isNotesPinned }).then(reload);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel={detail.routine.isNotesPinned ? "Unpin notes" : "Pin notes"}
-              >
-                <Ionicons
-                  name={detail.routine.isNotesPinned ? "pin" : "pin-outline"}
-                  size={16}
-                  color={detail.routine.isNotesPinned ? colors.accent : colors.textTertiary}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={detail.routine.notes || "Add note"}
-            accessibilityHint="Edits routine notes"
+          />
+          {folders.length > 0 && (
+            <>
+              <Divider inset={spacing.lg} />
+              <ListRow
+                icon="folder-outline"
+                title={folderName}
+                subtitle="Folder"
+                onPress={() => setPickingFolder(true)}
+              />
+            </>
+          )}
+          <Divider inset={spacing.lg} />
+          <ListRow
+            icon="document-text-outline"
+            title={detail.routine.notes || 'Add a note'}
+            subtitle="Notes"
             onPress={() => setEditingRoutineNotes(true)}
-            style={styles.nameButton}
-          >
-            <Text variant="bodyMedium" numberOfLines={1} color={detail.routine.notes ? 'textSecondary' : 'textTertiary'} style={styles.nameText}>
-              {detail.routine.notes || "Add a note..."}
-            </Text>
-            <Ionicons name="pencil" size={14} color={colors.textTertiary} />
-          </Pressable>
-        </View>
+            accessory={
+              canPinNotes ? (
+                <Pressable
+                  onPress={() => {
+                    haptics.selection();
+                    void updateRoutine(id, {
+                      isNotesPinned: !detail.routine.isNotesPinned,
+                    }).then(reload);
+                  }}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    detail.routine.isNotesPinned ? 'Unpin notes' : 'Pin notes'
+                  }
+                >
+                  <Ionicons
+                    name={detail.routine.isNotesPinned ? 'pin' : 'pin-outline'}
+                    size={18}
+                    color={detail.routine.isNotesPinned ? colors.accent : colors.textTertiary}
+                  />
+                </Pressable>
+              ) : undefined
+            }
+            accessibilityActions={
+              canPinNotes
+                ? [
+                    {
+                      name: 'pin',
+                      label: detail.routine.isNotesPinned ? 'Unpin notes' : 'Pin notes',
+                    },
+                  ]
+                : undefined
+            }
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName !== 'pin') return;
+              haptics.selection();
+              void updateRoutine(id, {
+                isNotesPinned: !detail.routine.isNotesPinned,
+              }).then(reload);
+            }}
+          />
+        </Card>
 
         {detail.exercises.length === 0 ? (
           <EmptyState
@@ -500,308 +459,55 @@ export default function RoutineEditorScreen() {
             description="Add exercises and prescribe their target sets."
           />
         ) : (
-          detail.exercises.map((entry, index) => (
-            <View key={entry.routineExercise.id}>
-              {/* A member that is not the first of its run is tied to the block
-                  above rather than separated from it: a run is contiguous, so
-                  "not first" is the whole test. See `SupersetTie`. */}
-              {index > 0 &&
-                (placements.get(entry.routineExercise.id)?.first === false ? (
-                  <SupersetTie />
-                ) : (
-                  <Divider />
-                ))}
+          <>
+            <SectionHeader title="Exercises" />
+            {clusters.map((cluster, clusterIndex) => {
+              const blocks = cluster.entries.map((entry) => (
+                <RoutineExerciseBlock
+                  key={entry.routineExercise.id}
+                  entry={entry}
+                  superset={placements.get(entry.routineExercise.id)}
+                  onEditSuperset={
+                    detail.exercises.length > 1
+                      ? () =>
+                          showSupersetMenu(
+                            supersetRows,
+                            entry.routineExercise.id,
+                            applySupersets,
+                          )
+                      : undefined
+                  }
+                  onReorder={
+                    detail.exercises.length > 1 ? () => setReordering(true) : undefined
+                  }
+                  onEditNotes={() => setEditingExerciseNotesFor(entry.routineExercise.id)}
+                  onReload={reload}
+                />
+              ));
 
-              <View style={styles.exerciseHeader}>
-                {/* No accent, and a heavier variant to carry the row instead.
-                    The accent is budgeted at roughly one element per view
-                    (`theme/tokens.ts`) and this list was spending it once per
-                    exercise; at body size the name then reads lighter than the
-                    numbers stacked under it, which is what left the column
-                    undifferentiated. No chevron either: unlike the workout
-                    screens this name is not a link, and a chevron would promise
-                    navigation that never happens. */}
-                <Text variant="subheading" color="text" numberOfLines={1} style={styles.flex}>
-                  {entry.exercise.name}
-                </Text>
-                {/* Nothing to pair with in a routine of one, so no control: the
-                    same rule the reorder action in the header follows. */}
-                {detail.exercises.length > 1 && (
-                  <SupersetChip
-                    placement={placements.get(entry.routineExercise.id)}
-                    exerciseName={entry.exercise.name}
-                    onPress={() =>
-                      showSupersetMenu(supersetRows, entry.routineExercise.id, applySupersets)
-                    }
-                  />
-                )}
-                <Pressable
-                  hitSlop={8}
-                  accessibilityLabel={`Remove ${entry.exercise.name}`}
-                  onPress={() => {
-                    void removeExerciseFromRoutine(entry.routineExercise.id).then(reload);
-                  }}
-                >
-                  <Ionicons name="close" size={20} color={colors.textSecondary} />
-                </Pressable>
-              </View>
+              if (cluster.label) {
+                const tone = supersetColor(colors, cluster.label);
+                return (
+                  <View key={cluster.entries[0]!.routineExercise.id} style={styles.supersetRun}>
+                    <View style={[styles.supersetRail, { backgroundColor: tone }]} />
+                    <View style={styles.supersetBody}>
+                      <Text variant="overline" style={{ color: tone, paddingHorizontal: spacing.lg }}>
+                        {`Superset ${cluster.label}`}
+                      </Text>
+                      {blocks}
+                    </View>
+                  </View>
+                );
+              }
 
-              <View style={styles.exerciseNotesField}>
-                <View style={styles.notesHeader}>
-                  <Text variant="overline" color="textTertiary">
-                    Notes
-                  </Text>
-                  {(entry.routineExercise.notes || entry.routineExercise.isNotesPinned) ? (
-                    <Pressable
-                      onPress={() => {
-                        haptics.selection();
-                        void updateRoutineExercise(entry.routineExercise.id, { 
-                          isNotesPinned: !entry.routineExercise.isNotesPinned 
-                        }).then(reload);
-                      }}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={entry.routineExercise.isNotesPinned ? "Unpin notes" : "Pin notes"}
-                    >
-                      <Ionicons
-                        name={entry.routineExercise.isNotesPinned ? "pin" : "pin-outline"}
-                        size={16}
-                        color={entry.routineExercise.isNotesPinned ? colors.accent : colors.textTertiary}
-                      />
-                    </Pressable>
-                  ) : null}
+              return (
+                <View key={cluster.entries[0]!.routineExercise.id}>
+                  {clusterIndex > 0 && <Divider />}
+                  {blocks}
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={entry.routineExercise.notes || "Add note"}
-                  accessibilityHint="Edits exercise notes"
-                  onPress={() => setEditingExerciseNotesFor(entry.routineExercise.id)}
-                  style={styles.nameButton}
-                >
-                  <Text variant="bodyMedium" numberOfLines={1} color={entry.routineExercise.notes ? 'textSecondary' : 'textTertiary'} style={styles.nameText}>
-                    {entry.routineExercise.notes || "Add a note..."}
-                  </Text>
-                  <Ionicons name="pencil" size={14} color={colors.textTertiary} />
-                </Pressable>
-              </View>
-
-              {/* The columns an exercise is prescribed in are the exercise's
-                  own, not the editor's. This used to be a fixed weight-and-reps
-                  pair whatever the movement, so a plank was prescribed a rep
-                  count it has no use for, had nowhere to say "60 seconds", and
-                  then started its session as a blank weight-and-reps row. */}
-              <View style={styles.columnHeader}>
-                <Text variant="overline" color="textTertiary" style={styles.setCell}>
-                  Set
-                </Text>
-                {fieldsFor(entry).weight && (
-                  <Text variant="overline" color="textTertiary" style={styles.targetCell}>
-                    {unitsFor(entry).weightUnit}
-                  </Text>
-                )}
-                {fieldsFor(entry).duration && (
-                  <Text variant="overline" color="textTertiary" style={styles.targetCell}>
-                    Time
-                  </Text>
-                )}
-                {fieldsFor(entry).distance && (
-                  <Text variant="overline" color="textTertiary" style={styles.targetCell}>
-                    {unitsFor(entry).distanceUnit}
-                  </Text>
-                )}
-                {fieldsFor(entry).reps && (
-                  <Text variant="overline" color="textTertiary" style={styles.targetCell}>
-                    Reps
-                  </Text>
-                )}
-                {/* Outside the switch, because effort is prescribable for every
-                    movement: "ten at RPE 8" and "hold it until there are two
-                    left in the tank" are the same instruction, and no tracking
-                    type excludes having one. Never more than three columns
-                    beside it either, since no tracking type asks for weight,
-                    reps and distance at once. */}
-                <Text variant="overline" color="textTertiary" style={styles.targetCell}>
-                  RPE
-                </Text>
-                <View style={styles.removeSpacer} />
-              </View>
-
-              {entry.sets.map((set, setIndex) => (
-                <View key={set.id} style={styles.setRow}>
-                  <Text variant="numeric" color="textSecondary" style={styles.setCell}>
-                    {setIndex + 1}
-                  </Text>
-                  {fieldsFor(entry).weight && (
-                    <NumericField
-                      value={
-                        set.targetWeightKg == null
-                          ? ''
-                          : String(
-                              Math.round(
-                                toDisplayWeight(set.targetWeightKg, unitsFor(entry).weightUnit) * 10,
-                              ) / 10,
-                            )
-                      }
-                      placeholder="—"
-                      accessibilityLabel={`Set ${setIndex + 1}, target weight in ${unitsFor(entry).weightUnit}`}
-                      onChangeText={(text) => {
-                        const parsed = text === '' ? null : Number(text.replace(',', '.'));
-                        if (parsed !== null && !Number.isFinite(parsed)) return;
-                        void updateRoutineSet(set.id, {
-                          targetWeightKg:
-                            parsed === null
-                              ? null
-                              : fromDisplayWeight(parsed, unitsFor(entry).weightUnit),
-                        }).then(reload);
-                      }}
-                    />
-                  )}
-                  {fieldsFor(entry).duration && (
-                    <NumericField
-                      value={
-                        set.targetDurationSeconds == null
-                          ? ''
-                          : formatDuration(set.targetDurationSeconds)
-                      }
-                      placeholder="—"
-                      normalize={normalizeDuration}
-                      keyboardType="numbers-and-punctuation"
-                      accessibilityLabel={`Set ${setIndex + 1}, target time`}
-                      onChangeText={(text) => {
-                        if (text === '') {
-                          void updateRoutineSet(set.id, { targetDurationSeconds: null }).then(
-                            reload,
-                          );
-                          return;
-                        }
-                        // A stray "." or a fourth colon is a keystroke on the
-                        // way somewhere, not an instruction to forget the time
-                        // already prescribed. The logging field reads it the
-                        // same way, through the same parser.
-                        const parsed = parseDuration(text);
-                        if (parsed == null) return;
-                        void updateRoutineSet(set.id, { targetDurationSeconds: parsed }).then(
-                          reload,
-                        );
-                      }}
-                    />
-                  )}
-                  {fieldsFor(entry).distance && (
-                    <NumericField
-                      value={
-                        set.targetDistanceKm == null
-                          ? ''
-                          : asDistanceField(set.targetDistanceKm, unitsFor(entry).distanceUnit)
-                      }
-                      placeholder="—"
-                      accessibilityLabel={`Set ${setIndex + 1}, target distance in ${unitsFor(entry).distanceUnit}`}
-                      onChangeText={(text) => {
-                        const parsed = text === '' ? null : Number(text.replace(',', '.'));
-                        if (parsed !== null && !Number.isFinite(parsed)) return;
-                        // Stored in kilometres whatever the column is headed,
-                        // which is the rule everywhere: a miles user typing
-                        // 2000 m worth of rowing has to get the same target
-                        // back that a kilometres user typing 2 does.
-                        void updateRoutineSet(set.id, {
-                          targetDistanceKm:
-                            parsed === null
-                              ? null
-                              : fromDisplayDistance(parsed, unitsFor(entry).distanceUnit),
-                        }).then(reload);
-                      }}
-                    />
-                  )}
-                  {fieldsFor(entry).reps && (
-                    <NumericField
-                      value={set.targetReps == null ? '' : String(set.targetReps)}
-                      placeholder="—"
-                      keyboardType="number-pad"
-                      accessibilityLabel={`Set ${setIndex + 1}, target reps`}
-                      onChangeText={(text) => {
-                        const parsed = text === '' ? null : Number.parseInt(text, 10);
-                        if (parsed !== null && !Number.isFinite(parsed)) return;
-                        void updateRoutineSet(set.id, { targetReps: parsed }).then(reload);
-                      }}
-                    />
-                  )}
-                  <NumericField
-                    value={set.targetRpe == null ? '' : trimZeros(set.targetRpe.toFixed(1))}
-                    placeholder="—"
-                    accessibilityLabel={`Set ${setIndex + 1}, target RPE`}
-                    onChangeText={(text) => {
-                      const parsed = text === '' ? null : Number(text.replace(',', '.'));
-                      if (parsed !== null && !Number.isFinite(parsed)) return;
-                      // Off the scale is ignored rather than clamped, the way
-                      // the time field ignores an unparseable string: an 88 on
-                      // the way to 8.8 is a keystroke, and clamping it would
-                      // store a 10 nobody typed and prescribe it in the gym.
-                      if (parsed !== null && (parsed < 1 || parsed > 10)) return;
-                      void updateRoutineSet(set.id, { targetRpe: parsed }).then(reload);
-                    }}
-                  />
-                  <Pressable
-                    hitSlop={8}
-                    accessibilityLabel={`Delete set ${setIndex + 1}`}
-                    onPress={() => void deleteRoutineSet(set.id).then(reload)}
-                    style={styles.removeSpacer}
-                  >
-                    <Ionicons name="remove-circle-outline" size={20} color={colors.textTertiary} />
-                  </Pressable>
-                </View>
-              ))}
-
-              <View style={styles.addSetRow}>
-                <Pressable
-                  hitSlop={ADD_SET_SLOP}
-                  onPress={() => {
-                    haptics.selection();
-                    const last = entry.sets[entry.sets.length - 1];
-                    void addRoutineSet(entry.routineExercise.id, {
-                      setType: 'warmup',
-                      targetReps: last?.targetReps ?? null,
-                      targetWeightKg: last?.targetWeightKg ?? null,
-                      targetDurationSeconds: last?.targetDurationSeconds ?? null,
-                      targetDistanceKm: last?.targetDistanceKm ?? null,
-                      targetRpe: last?.targetRpe ?? null,
-                    }).then(reload);
-                  }}
-                  style={({ pressed }) => [
-                    styles.addSet,
-                    { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-                  ]}
-                >
-                  <Ionicons name="add" size={16} color={colors.warning} />
-                  <Text variant="label" color="textSecondary">
-                    Add warm-up
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  hitSlop={ADD_SET_SLOP}
-                  onPress={() => {
-                    haptics.selection();
-                    const last = entry.sets[entry.sets.length - 1];
-                    void addRoutineSet(entry.routineExercise.id, {
-                      targetReps: last?.targetReps ?? null,
-                      targetWeightKg: last?.targetWeightKg ?? null,
-                      targetDurationSeconds: last?.targetDurationSeconds ?? null,
-                      targetDistanceKm: last?.targetDistanceKm ?? null,
-                      targetRpe: last?.targetRpe ?? null,
-                    }).then(reload);
-                  }}
-                  style={({ pressed }) => [
-                    styles.addSet,
-                    { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-                  ]}
-                >
-                  <Ionicons name="add" size={16} color={colors.textSecondary} />
-                  <Text variant="label" color="textSecondary">
-                    Add set
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
+              );
+            })}
+          </>
         )}
 
         <View style={styles.actions}>
@@ -862,21 +568,40 @@ export default function RoutineEditorScreen() {
       <PromptModal
         visible={!!editingExerciseNotesFor}
         title="Exercise notes"
-        initialValue={detail.exercises.find(e => e.routineExercise.id === editingExerciseNotesFor)?.routineExercise.notes ?? ''}
+        initialValue={
+          detail.exercises.find((e) => e.routineExercise.id === editingExerciseNotesFor)
+            ?.routineExercise.notes ?? ''
+        }
         placeholder="Add a note..."
         maxLength={500}
         multiline
         onCancel={() => setEditingExerciseNotesFor(null)}
         onConfirm={(value) => {
           if (editingExerciseNotesFor) {
-            const id = editingExerciseNotesFor;
+            const notesId = editingExerciseNotesFor;
             setEditingExerciseNotesFor(null);
-            void updateRoutineExercise(id, { notes: value || null }).then(reload);
+            void updateRoutineExercise(notesId, { notes: value || null }).then(reload);
           } else {
             setEditingExerciseNotesFor(null);
           }
         }}
       />
+
+      {pickingFolder ? (
+        <FilterSheet visible label="Folder" onClose={() => setPickingFolder(false)}>
+          <OptionList
+            options={[
+              { value: 'none', label: 'No folder' },
+              ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
+            ]}
+            value={detail.routine.folderId ?? 'none'}
+            onChange={(value) => {
+              setPickingFolder(false);
+              void updateRoutine(id, { folderId: value === 'none' ? null : value }).then(reload);
+            }}
+          />
+        </FilterSheet>
+      ) : null}
 
       <ReorderSheet
         visible={reordering}
@@ -891,59 +616,23 @@ export default function RoutineEditorScreen() {
 
 const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  scroll: { flex: 1 },
+  // No horizontal padding: the exercise blocks carry the screen margin
+  // themselves and their dividers run edge to edge, so everything else here
+  // takes its own margin. Same contract as the logging screen.
   content: { paddingBottom: spacing.huge },
-  nameField: { padding: spacing.lg, gap: spacing.xs },
-  notesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nameButton: {
+  meta: { margin: spacing.lg, marginBottom: spacing.md },
+  supersetRun: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: MIN_TOUCH_SIZE,
+    marginVertical: spacing.sm,
+    paddingRight: 0,
   },
-  // Shrinks rather than grows, so the pencil stays beside the name instead of
-  // being pushed to the far margin where it stops reading as part of it.
-  nameText: { flexShrink: 1 },
-  flex: { flex: 1 },
-  exerciseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+  supersetRail: {
+    width: 3,
+    borderRadius: 2,
+    marginLeft: spacing.lg,
+    marginVertical: spacing.xs,
   },
-  exerciseNotesField: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.xs },
-  columnHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  setRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-  },
-  setCell: { width: 32, textAlign: 'center' },
-  targetCell: { width: 62, textAlign: 'center' },
-  removeSpacer: { width: 32, alignItems: 'center' },
-  addSetRow: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  addSet: {
-    flex: 1,
-    height: 34,
-    borderRadius: radius.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
+  supersetBody: { flex: 1, minWidth: 0 },
   actions: { padding: spacing.lg, gap: spacing.sm, marginTop: spacing.lg },
 });

@@ -26,7 +26,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui';
 import { haptics } from '@/features/feedback/haptics';
 import { showDialog } from '@/store/dialog';
-import { radius, spacing, useColors } from '@/theme';
+import { hexToRgb, radius, spacing, useColors, type Palette } from '@/theme';
 
 /** An exercise as the superset menu needs it: its grouping, and what to call it. */
 export interface SupersetCandidate extends SupersetRow {
@@ -51,6 +51,62 @@ const CHIP_SLOP = { top: 12, bottom: 12, left: 6, right: 4 };
  */
 export function supersetMap(rows: readonly SupersetRow[]): Map<string, SupersetPlacement> {
   return supersetPlacements(rows);
+}
+
+/**
+ * Which hue this superset is drawn in.
+ *
+ * Keyed on the letter, not on how many supersets are on screen right now: A is
+ * always the first stop, B the second, so dismantling A does not recolour B.
+ * Same reason body parts are a fixed map rather than "first bar gets the
+ * accent".
+ *
+ * `data` is the right ramp when it is actually six hues — Fitness, Spotify,
+ * the rest. On the default light and dark themes it is six limes, which is
+ * why two rails used to look like one line. Those two palettes only have
+ * distinct hues in the role colours, so the letter indexes those instead.
+ */
+export function supersetColor(colors: Palette, label: string): string {
+  const index =
+    label.length === 1 && label >= 'A' && label <= 'Z'
+      ? label.charCodeAt(0) - 65
+      : Math.max(0, (Number.parseInt(label, 10) || 1) - 1);
+
+  const ramp = categoricalRamp(colors);
+  return ramp[index % ramp.length]!;
+}
+
+/**
+ * The palette's own test: six hues at least 20° apart, or a single-hue scale.
+ *
+ * See `Palette.data` in `theme/tokens.ts`. Adjacent limes at 1.19:1 are a
+ * real separation on a bar chart and none at all on a 3pt rail.
+ */
+function categoricalRamp(colors: Palette): readonly string[] {
+  if (hueGap(colors.data[0], colors.data[1]) >= 20) return colors.data;
+  return [colors.accent, colors.warning, colors.danger, colors.record];
+}
+
+function hueGap(a: string, b: string): number {
+  const delta = Math.abs(hueDegrees(a) - hueDegrees(b));
+  return Math.min(delta, 360 - delta);
+}
+
+function hueDegrees(hex: string): number {
+  const [red, green, blue] = hexToRgb(hex);
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const span = max - min;
+  if (span === 0) return 0;
+
+  let hue = 0;
+  if (max === r) hue = (g - b) / span;
+  else if (max === g) hue = 2 + (b - r) / span;
+  else hue = 4 + (r - g) / span;
+  return ((hue * 60) + 360) % 360;
 }
 
 /**
@@ -85,7 +141,7 @@ export function SupersetChip({
   onPress: () => void;
 }) {
   const colors = useColors();
-  const active = placement !== undefined;
+  const tone = placement ? supersetColor(colors, placement.label) : colors.textTertiary;
 
   return (
     <Pressable
@@ -101,21 +157,17 @@ export function SupersetChip({
       style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: pressed
-            ? colors.surfacePressed
-            : active
-              ? colors.accentSurface
-              : colors.surfaceMuted,
+          backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
         },
       ]}
     >
       <Ionicons
         name="git-merge-outline"
         size={12}
-        color={active ? colors.accent : colors.textTertiary}
+        color={tone}
       />
       {placement && (
-        <Text variant="caption" style={{ color: colors.accent }}>
+        <Text variant="caption" style={{ color: tone }}>
           {placement.label}
         </Text>
       )}
@@ -201,7 +253,12 @@ export function showSupersetMenu(
     // list and every member that is not at an end of its own run, and an
     // action that writes nothing is an action that appears to have failed.
     const writes = joinSuperset(rows, id, direction);
-    if (writes.length > 0) offers.push({ label: `Superset with ${neighbour.name}`, writes });
+    if (writes.length > 0) {
+      offers.push({
+        label: `Superset with ${neighbour.name}`,
+        writes,
+      });
+    }
   }
 
   const commit = (writes: SupersetAssignment[]) => {

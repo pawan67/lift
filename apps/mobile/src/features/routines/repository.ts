@@ -96,6 +96,30 @@ export async function createRoutineFolder(name: string) {
   return row;
 }
 
+/**
+ * Puts live routines into a folder. Already-filed ones move; nothing else
+ * in the folder is touched. Empty `routineIds` is a no-op rather than a
+ * clear: clearing is delete-folder's job.
+ */
+export async function assignRoutinesToFolder(folderId: string, routineIds: string[]): Promise<void> {
+  const ids = [...new Set(routineIds)];
+  if (ids.length === 0) return;
+
+  const now = Date.now();
+  await db
+    .update(routines)
+    .set({ folderId, updatedAt: now, syncState: 'pending' })
+    .where(and(inArray(routines.id, ids), isNull(routines.deletedAt)));
+
+  const rows = await db.select().from(routines).where(inArray(routines.id, ids));
+  for (const row of rows) {
+    await trackUpsertCoalesced('routines', {
+      ...row,
+      lastPerformedAt: row.lastPerformedAt?.getTime() ?? null,
+    });
+  }
+}
+
 export async function updateRoutine(
   routineId: string,
   patch: { name?: string; notes?: string | null; isNotesPinned?: boolean; folderId?: string | null },
@@ -164,6 +188,51 @@ export async function getRoutineDetail(routineId: string): Promise<RoutineDetail
       return [{ routineExercise: link, exercise, sets: setsByParent.get(link.id) ?? [] }];
     }),
   };
+}
+
+/**
+ * Applies the writes a routines-list reorder produced.
+ *
+ * Same contract as `applyRoutineExerciseOrder`: the caller has already run
+ * `reorder()`, and this writes the rows it named. The Workout tab's list is
+ * ordered by `routines.position`, including inside a folder, so this is what
+ * a drag on that list has to land in storage.
+ */
+export async function applyRoutineOrder(updates: PositionedRow[]): Promise<void> {
+  if (updates.length === 0) return;
+
+  for (const { id, position } of updates) {
+    await db
+      .update(routines)
+      .set({ position, ...touch() })
+      .where(eq(routines.id, id));
+
+    const [updated] = await db.select().from(routines).where(eq(routines.id, id)).limit(1);
+    if (updated) {
+      await trackUpsertCoalesced('routines', {
+        ...updated,
+        lastPerformedAt: updated.lastPerformedAt?.getTime() ?? null,
+      });
+    }
+  }
+}
+
+/**
+ * Same contract as `applyRoutineOrder`, for the folder list the Workout tab
+ * draws above unfiled routines.
+ */
+export async function applyFolderOrder(updates: PositionedRow[]): Promise<void> {
+  if (updates.length === 0) return;
+
+  for (const { id, position } of updates) {
+    await db
+      .update(routineFolders)
+      .set({ position, ...touch() })
+      .where(eq(routineFolders.id, id));
+
+    const [updated] = await db.select().from(routineFolders).where(eq(routineFolders.id, id)).limit(1);
+    if (updated) await trackUpsertCoalesced('routine_folders', updated);
+  }
 }
 
 /**

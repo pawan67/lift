@@ -12,12 +12,12 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@better-auth/expo": "^1.6.28",
+    "@better-auth/expo": "^1.7.2",
     "@lift/shared": "workspace:*",
     "@nestjs/common": "^11.1.29",
     "@nestjs/core": "^11.1.29",
     "@nestjs/platform-express": "^11.1.29",
-    "better-auth": "^1.6.28",
+    "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.5",
     "reflect-metadata": "^0.2.2",

@@ -68,6 +68,6 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.1",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }

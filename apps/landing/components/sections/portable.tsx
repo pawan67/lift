@@ -1,4 +1,4 @@
-import { KineticHeading } from "@/components/site/kinetic";
+import { ChapterHeading } from "@/components/site/chapter";
 import { Reveal } from "@/components/site/reveal";
 
 /*
@@ -24,16 +24,19 @@ const HALVES = [
 ];
 
 export function Portable() {
+  /*
+   * `close`. Getting the data out is the same argument as keeping it on the
+   * phone, carried one step further, so it sits tight under it.
+   */
   return (
-    <section className="overflow-x-clip py-24 sm:py-36 lg:py-44">
+    <section className="overflow-x-clip pt-close">
       <div className="shell">
-        <KineticHeading
-          top="Out the"
-          bottom="door"
+        <ChapterHeading
+          title="Out the door"
           lede="Years of training history is not a thing to hand over on the assumption it stays available. Both doors are open, and they were built at the same time."
         />
 
-        <div className="mt-16 grid gap-12 sm:mt-24 md:grid-cols-2 md:gap-12 lg:gap-20">
+        <div className="mt-14 grid gap-12 sm:mt-16 md:grid-cols-2 md:gap-12 lg:gap-20">
           {HALVES.map((half, i) => (
             <Reveal
               key={half.title}

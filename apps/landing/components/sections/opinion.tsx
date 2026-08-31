@@ -1,4 +1,4 @@
-import { KineticHeading } from "@/components/site/kinetic";
+import { ChapterHeading } from "@/components/site/chapter";
 import { Reveal } from "@/components/site/reveal";
 
 /*
@@ -56,23 +56,26 @@ const OUTLINE = [
 ];
 
 export function Opinion() {
+  /*
+   * `turn`. Everything above this section is the app writing things down and
+   * everything in it is the app reading them back, which is the largest
+   * change of subject on the page and the first of the three that get one.
+   */
   return (
-    <section
-      id="coach"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="coach" className="overflow-x-clip pt-turn">
       <div className="shell">
-        {/* The one standfirst on the page that sits above a kinetic title
-            rather than under it. It is dated rather than argued, so it belongs
-            with the section's label, not in its lede. */}
-        <p className="label text-fg-3">
-          New in this release
-        </p>
-
-        <KineticHeading
-          top="Two parts"
-          bottom="read back"
-          className="mt-6"
+        {/*
+          The one standfirst on the page, and the only `label` any chapter
+          takes. It is dated rather than argued, so it sits on the rule with
+          the section's title rather than inside its lede, where a reader
+          would have to get past it to reach the argument.
+        */}
+        <ChapterHeading
+          label="New in this release"
+          /* Not "Two parts that read back": the heading track is 355px at the
+             measure and every other chapter title sets to two lines in it, so
+             the extra word tipped this one to three and broke the run. */
+          title="Two parts read back"
           lede="Most of the app writes down what you did. These two read it back: one works out the next set from your own history, the other hands the whole log to whichever model you already talk to."
         />
 
@@ -88,7 +91,7 @@ export function Opinion() {
           The pairing is still made, by the gap and by the two headings. It is
           just made down the page rather than across it.
         */}
-        <div className="mt-16 grid gap-20 sm:mt-20 sm:gap-24">
+        <div className="mt-14 grid gap-20 sm:mt-16 sm:gap-24">
           <Reveal>
             <h3 className="display-tight text-[clamp(1.75rem,3.2vw,2.5rem)]">
               What to lift next.

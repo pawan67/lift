@@ -42,11 +42,13 @@ const GUARANTEES = [
 ];
 
 export function Offline() {
+  /*
+   * `turn`, and a kinetic title. This is the page's thesis: everything above
+   * it is what the app does and everything below it follows from where the
+   * app keeps things.
+   */
   return (
-    <section
-      id="offline"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="offline" className="overflow-x-clip pt-turn">
       <div className="shell">
         <KineticHeading
           top="Local"

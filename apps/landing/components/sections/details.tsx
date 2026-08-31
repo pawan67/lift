@@ -6,7 +6,7 @@ import recordsArt from "@/assets/details/records.png";
 import restTimerArt from "@/assets/details/rest-timer.png";
 import supersetArt from "@/assets/details/superset.png";
 import widgetsArt from "@/assets/details/widgets.png";
-import { KineticHeading } from "@/components/site/kinetic";
+import { ChapterHeading } from "@/components/site/chapter";
 import { cn } from "@/lib/utils";
 
 /*
@@ -107,12 +107,15 @@ const DETAILS: Detail[] = [
 ];
 
 export function Details() {
+  /*
+   * `close`, because the hero hands straight to this and the two are one
+   * movement: the first screen of the app, then six things about it.
+   */
   return (
-    <section id="details" className="overflow-x-clip py-24 sm:py-36 lg:py-44">
+    <section id="details" className="overflow-x-clip pt-close">
       <div className="shell">
-        <KineticHeading
-          top="The small"
-          bottom="stuff"
+        <ChapterHeading
+          title="The small stuff"
           lede="None of these sells an app on its own. They are the six that decide whether one survives contact with a gym: a timer that outlives being force-quit, a bell that reaches you, and a bar you do not have to do arithmetic on."
         />
 
@@ -128,7 +131,7 @@ export function Details() {
         */}
         <div
           data-stagger
-          className="mt-16 grid gap-4 sm:mt-20 sm:grid-cols-2 lg:grid-cols-6"
+          className="mt-14 grid gap-4 sm:mt-16 sm:grid-cols-2 lg:grid-cols-6"
         >
           {DETAILS.map((detail) => (
             <article

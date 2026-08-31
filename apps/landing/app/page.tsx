@@ -20,6 +20,33 @@ import { latestRelease } from "@/lib/release";
  * but one call site is one thing to reason about, and it makes it obvious that
  * the hero's version badge and the download button cannot disagree.
  */
+
+/*
+ * **The order below is an argument, and the spacing is now how it is made.**
+ *
+ * Every section used to open on the same `py-24 sm:py-36 lg:py-44` and the
+ * same two-word kinetic title, so the comments in this file were the only
+ * place the structure existed. A reader scrolling it got nine identical
+ * headings separated by nine identical gaps, which says the nine sections are
+ * a list. They are not a list, they are five movements.
+ *
+ * Both of those are carried now. Each section declares one of three gaps,
+ * `pt-close`, `pt-step` or `pt-turn` (see `app/globals.css`), and opens on one
+ * of two headings: `KineticHeading` for the four that are load bearing, and
+ * `ChapterHeading` for the five that support them. Where a comment here claims
+ * two sections belong together, the gap between them is `close` and the second
+ * one opens quietly; where it claims the subject changes, the gap is `turn`.
+ *
+ *   hero -> details        close   the first screen, then six things about it
+ *   details -> appearance  close   the same screens, in eight palettes
+ *   appearance -> screens  step    the tour                        [kinetic]
+ *   screens -> opinion     turn    writing down -> reading back
+ *   opinion -> offline     turn    the thesis                      [kinetic]
+ *   offline -> portable    close   what follows from it
+ *   portable -> privacy    close   the ledger the two above build to [kinetic]
+ *   privacy -> sync        turn    the phone -> the machine behind it
+ *   sync -> self-host      close   the answer sync leaves you holding [kinetic]
+ */
 export default async function Home() {
   const release = await latestRelease();
 

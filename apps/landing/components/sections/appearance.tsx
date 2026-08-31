@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { KineticHeading } from "@/components/site/kinetic";
+import { ChapterHeading } from "@/components/site/chapter";
 import { PhoneFrame } from "@/components/site/phone";
 import { DEFAULT_PALETTE, palettes } from "@/lib/palettes";
 import { cn } from "@/lib/utils";
@@ -27,15 +27,16 @@ import { cn } from "@/lib/utils";
  * that are not selected.
  */
 export function Appearance() {
+  /*
+   * `close`. This reopens one of the screens the tour above just showed, in
+   * eight palettes, so it is the same movement continuing rather than a new
+   * one starting.
+   */
   return (
-    <section
-      id="appearance"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="appearance" className="overflow-x-clip pt-close">
       <div className="shell">
-        <KineticHeading
-          top="Nine ways"
-          bottom="to look"
+        <ChapterHeading
+          title="Nine ways to look"
           lede="Pick one and the screen changes. Every one of these is a photograph of the same home tab taken in that palette, not a picture with a filter over it."
         />
 
@@ -45,7 +46,7 @@ export function Appearance() {
           switching mechanism, so a wrapper added between it and either column
           is fine but moving the class off it turns the picker off.
         */}
-        <div className="group mt-16 grid items-center gap-14 sm:mt-20 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-20">
+        <div className="group mt-14 grid items-center gap-14 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-20">
           {/*
             A real fieldset of real radios. It could have been eight buttons and
             a piece of state, and then it would need a client component, a

@@ -3,6 +3,15 @@ import { cn } from "@/lib/utils";
 /*
  * The page's display headings, and the one place its motion is spent.
  *
+ * **This is the loud one of two, and it is rationed to four sections.** It ran
+ * on all nine once, which is what made a page of deliberate sections read as a
+ * page of slots: nine 108px titles at nine identical intervals stop announcing
+ * anything, because a signal every reader sees nine times is not a signal.
+ * `components/site/chapter.tsx` is the quiet setting the other five use, and
+ * the note at the top of it carries the rest of the argument. The four kept
+ * here are `screens`, `offline`, `privacy` and `self-host`: the tour, and the
+ * three claims the page exists to make.
+ *
  * A section opens on two words arriving from opposite sides as you scroll into
  * them. The pull in opposite directions is the whole effect: two lines sliding
  * the same way is a block of type settling, two lines closing on each other

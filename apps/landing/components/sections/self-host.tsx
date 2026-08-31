@@ -28,11 +28,20 @@ const SERVICES = [
 ];
 
 export function SelfHost() {
+  /*
+   * `close` above, because this answers the question the sync section leaves
+   * a reader holding and the comment at the top of this file already says
+   * so; the gap is where that gets said in the layout rather than only in
+   * the source.
+   *
+   * `pb-step` below, and it is the one section that declares its own bottom
+   * edge. Every other gap on this page belongs to the section underneath it,
+   * and the section underneath this one is the download slab, which is a
+   * full bleed of lime with its own padding and no business carrying the
+   * distance from the paragraph above it.
+   */
   return (
-    <section
-      id="self-host"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="self-host" className="overflow-x-clip pt-close pb-step">
       <div className="shell">
         <KineticHeading
           top="Be the"

@@ -56,8 +56,10 @@ const SCREEN = {
 const frameBox = cva("relative shrink-0 aspect-[984/2053]", {
   variants: {
     size: {
-      /* `xl` has one caller, the hero, and exists because the hero is the one
-         place a device is not standing beside anything. See `--phone-xl`. */
+      /* `xl` has one caller, the hero, and it is the only size that is two
+         figures rather than one: a large fraction of the viewport while the
+         device is stacked under the headline, and a fixed 272px once there is
+         a column of type beside it. Both live on `--phone-xl`. */
       xl: "w-(--phone-xl)",
       lg: "w-(--phone-lg)",
       md: "w-(--phone-md)",

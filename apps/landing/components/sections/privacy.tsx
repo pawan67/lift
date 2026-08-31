@@ -55,11 +55,15 @@ const EGRESS = [
 ];
 
 export function Privacy() {
+  /*
+   * `close`, and a kinetic title. `app/page.tsx` argues that the ledger
+   * belongs directly after the two doors rather than up beside the offline
+   * guarantees, and the gap is where that argument is actually made: set at
+   * `turn` it would read as a new subject instead of as the list the two
+   * sections above have been building toward.
+   */
   return (
-    <section
-      id="privacy"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="privacy" className="overflow-x-clip pt-close">
       <div className="shell">
         <KineticHeading
           top="Nothing"

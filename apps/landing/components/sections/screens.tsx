@@ -121,11 +121,12 @@ const RAIL: Screen[] = [
  * which is why only this one ever escaped.
  */
 export function Screens() {
+  /*
+   * `step`, and one of the four sections that still opens on a kinetic
+   * title. This is the tour, and the tour is what the page is for.
+   */
   return (
-    <section
-      id="screens"
-      className="overflow-x-clip py-24 sm:py-36 lg:py-44"
-    >
+    <section id="screens" className="overflow-x-clip pt-step">
       <div className="shell">
         <KineticHeading
           top="Built for"
@@ -236,7 +237,7 @@ export function Screens() {
           ))}
         </div>
 
-        <Reveal className="mt-28 sm:mt-32">
+        <Reveal className="mt-24 sm:mt-28">
           <p className="max-w-[46ch] text-fg-3">
             The rest of it: routines, history, bodyweight and measurements.
           </p>

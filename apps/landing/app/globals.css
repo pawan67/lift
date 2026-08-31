@@ -93,16 +93,36 @@
   /*
    * The hero device, and the only one with a width of its own.
    *
-   * It stands under the headline rather than beside it now, in a row as wide
-   * as the page with nothing else on it, so it is not competing with a column
-   * of copy for the same track and can be the size the picture wants to be.
-   * 352 against a 940 measure is a little over a third of it, which is what
-   * stops the whole first screen reading as type with a thumbnail under it.
+   * This is the stacked figure: below `lg` the device stands under the
+   * headline, in a row as wide as the page with nothing else on it, so it is
+   * not competing with a column of copy for the same track and can be the size
+   * the picture wants to be. See the override below `:root` for what it
+   * becomes once there is a second column beside it.
    */
   --phone-xl: clamp(15rem, 72vw, 22rem);
   --phone-lg: clamp(13rem, 62vw, 18.5rem);
   --phone-md: clamp(11rem, 52vw, 15rem);
   --phone-sm: 8.75rem;
+}
+
+/*
+ * At `lg` the hero device stops being a picture with a page to itself and
+ * becomes the second track of a two-column row, so it takes the width the row
+ * has left rather than the width it would like.
+ *
+ * 272px is derived rather than chosen. The measure is 940 with 844 inside the
+ * gutters; the headline needs 481 of that to set `Log the set.` at its ceiling
+ * and the gap between the two tracks is 64, which leaves 272 for the glass.
+ * Widening it here means lowering the clamp in `components/sections/hero.tsx`
+ * by the same amount, and the two are the only numbers in that arithmetic.
+ *
+ * At 272 the frame draws 567px tall, against roughly 580 of type beside it.
+ * That near-match is why the row is `items-center` and reads as one object.
+ */
+@media (width >= 64rem) {
+  :root {
+    --phone-xl: 17rem;
+  }
 }
 
 @theme inline {
@@ -149,6 +169,37 @@
   --font-sans: var(--font-eina);
   --font-mono: var(--font-jetbrains-mono);
   --font-heading: var(--font-eina);
+
+  /*
+   * The page's vertical rhythm, and there are three of these rather than one.
+   *
+   * Every section on this page used to open on the same `py-24 sm:py-36
+   * lg:py-44`, which put an identical 352px of black between all nine of them.
+   * Nine equal gaps is not spacing, it is a metronome: the reader gets no
+   * signal about which boundaries are a change of subject and which are the
+   * same argument carrying on, because every one of them is the same distance.
+   *
+   * So the gap is now the punctuation. `close` is a comma, for the boundaries
+   * where a section picks up the one above it and `app/page.tsx` already says
+   * so in a comment: the hero handing to the tour, the palettes reopening a
+   * screen from it, the self-hosting section answering the sync section.
+   * `step` is a full stop, the ordinary distance between two sections.
+   * `turn` is a paragraph break, spent three times, where the page changes
+   * what it is arguing about.
+   *
+   * They are the gaps, not the padding. Each section declares only its own
+   * `pt-*`, so every boundary is one figure in one place rather than the sum
+   * of a `pb` above it and a `pt` below it, which is the arrangement that made
+   * the old rhythm impossible to tune without counting in two files at once.
+   * The one exception is the last section before the download slab, which has
+   * nothing under it to declare a gap on its behalf.
+   *
+   * 1 : 1.5 : 2 at the ceiling. Anything flatter and three steps read as one
+   * step measured carelessly.
+   */
+  --spacing-close: clamp(4.5rem, 8vw, 7rem);
+  --spacing-step: clamp(6rem, 11vw, 10.5rem);
+  --spacing-turn: clamp(8rem, 15vw, 14rem);
 
   --radius-sm: calc(var(--radius) * 0.45);
   --radius-md: calc(var(--radius) * 0.72);

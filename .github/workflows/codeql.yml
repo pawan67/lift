@@ -44,9 +44,9 @@ jobs:
       # Pinned to a commit SHA with the version in the trailing comment, the
       # same as every other workflow here. See the full note in android.yml;
       # .github/dependabot.yml is what keeps the pins current.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: github/codeql-action/init@42947a340483f03ba47bb1a039b2c519aab3df85 # v3.37.8
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           languages: javascript-typescript
           # `security-and-quality` over the default `security-extended`. The
@@ -58,6 +58,6 @@ jobs:
       # compiled artefacts here are Android's, which CodeQL is not being asked
       # to look at. Autobuild would try `gradlew` and spend ten minutes finding
       # that out.
-      - uses: github/codeql-action/analyze@42947a340483f03ba47bb1a039b2c519aab3df85 # v3.37.8
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: "/language:javascript-typescript"

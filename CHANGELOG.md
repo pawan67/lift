@@ -8,6 +8,17 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.20.0](https://github.com/pawan67/lift/compare/v0.19.0...v0.20.0) - 2026-09-05
+
+### Features
+
+- hold the frame, then draw the dashboard's shape ([ae30553](https://github.com/pawan67/lift/commit/ae30553cbdcc10897b988437a3bb38a7b44e8c12))
+- hand the session over to the next lift ([d2e1929](https://github.com/pawan67/lift/commit/d2e1929eea00cf61ccf21f2d0b352c294949fa67))
+- leave one way back into an open session ([5ff3a67](https://github.com/pawan67/lift/commit/5ff3a67b7694f095fe54d8c2d435cef396f9a006))
+- answer every press in a session with motion ([8307037](https://github.com/pawan67/lift/commit/830703759cb9878aad7179cfef1618b5459d555a))
+- draw the data in ink and keep colour for state ([fa19aa4](https://github.com/pawan67/lift/commit/fa19aa47cf3f789518c63a17cdb7071be9f5d63c))
+- **landing:** put the app back above the fold, and give the page a rhythm ([ed96e4c](https://github.com/pawan67/lift/commit/ed96e4c1fe04744cb72a6cf45d8f8b78260989a3))
+
 ## [0.19.0](https://github.com/pawan67/lift/compare/v0.18.1...v0.19.0) - 2026-08-30
 
 ### Features

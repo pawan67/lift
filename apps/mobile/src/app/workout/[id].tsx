@@ -140,14 +140,13 @@ export default function WorkoutDetailScreen() {
   const split = useMemo<BarDatum[]>(() => {
     if (!detail) return [];
 
-    // The same hue per body part as Home's 30-day chart and the stats screens.
-    // A session's split is the case the fixed map is *for*: this chart is
-    // sorted by share, so under a positional scheme the colours would be a
-    // different assignment in every workout and would say nothing at all.
-    return workoutMuscleSplit(detail.exercises).map((slice) => ({
+    // The same ink as Home's 30-day chart, and sorted by share, so the largest
+    // slice takes the marked weight and the rest sit a step behind it. See
+    // `tones.ts` for what this used to be and why it is not a hue any more.
+    return workoutMuscleSplit(detail.exercises).map((slice, index) => ({
       label: BODY_PART_LABELS[slice.bodyPart],
       value: slice.share * 100,
-      color: bodyPartColor(slice.bodyPart, colors),
+      color: bodyPartColor(slice.bodyPart, colors, index === 0),
     }));
   }, [detail, colors]);
 

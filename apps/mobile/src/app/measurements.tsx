@@ -238,7 +238,7 @@ export default function MeasurementsScreen() {
             pressed && { backgroundColor: colors.surfacePressed },
           ]}
         >
-          <Text variant="overline" color="accent">
+          <Text variant="overline" color="textSecondary">
             Bodyweight
           </Text>
           <Masthead summary={bodyweight} prefs={prefs} />

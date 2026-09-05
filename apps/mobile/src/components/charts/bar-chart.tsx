@@ -161,7 +161,11 @@ export function BarChart({ data, formatValue = (value) => String(Math.round(valu
    * base, so a muscle with the most sets ended up with the faintest tip on the
    * chart. Length already says everything this chart has to say.
    */
-  const paint = (item: BarDatum) => ({ frontColor: item.color ?? colors.accent });
+  // `textSecondary` rather than the accent, and a step quieter than the other
+  // charts' default: a bar chart here is always several bars, so the default is
+  // the weight the *rest* take while a caller marks its leading one. See
+  // `bodyPartColor` in `features/analytics/tones.ts`.
+  const paint = (item: BarDatum) => ({ frontColor: item.color ?? colors.textSecondary });
 
   const plotLength = width - PLOT_INSET - VALUE_HEADROOM;
   const bars: barDataItem[] = data.map((item) => ({

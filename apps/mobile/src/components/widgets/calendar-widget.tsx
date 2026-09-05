@@ -7,33 +7,31 @@
  * shape, sizes itself to whatever width the grid gives it, and hands the whole
  * thing to the calendar on a tap.
  *
- * ## The accent ramp, and the argument it overrules
+ * ## The ramp, and the argument that finally won
  *
- * `dayFill` shades a trained day from `surfaceMuted` towards `accent`, and this
+ * `dayFill` shades a trained day from `surfaceMuted` towards `text`, and this
  * tile draws it, the same as Calendar and History. `intensityStep` decides what
  * counts as a heavy day on all three, so a square that is nearly full here is
  * nearly full there.
  *
- * It spent a release on `dayShade`, the neutral ramp, and the reasoning is
- * worth keeping because it is not wrong: Home budgets its accent at roughly one
- * element per view, spent on the masthead's kicker and on the one column of
- * twelve that figure belongs to (see `trendData` in `(tabs)/index.tsx`), and a
- * hundred accented squares under that figure can make the tile the loudest
- * thing on the page and the headline the second.
+ * That ramp ran to the *accent* for two releases, and the case against it was
+ * recorded here at the time: Home budgets its emphasis at roughly one element
+ * per view, spent on the masthead's kicker and on the one column of twelve that
+ * figure belongs to (see `trendData` in `(tabs)/index.tsx`), and a hundred
+ * accented squares under that figure can make the tile the loudest thing on the
+ * page and the headline the second. It was overruled on two grounds. The ramp's
+ * top stop is only reached by a *heavy* day, so a typical strip is mostly its
+ * quiet end; and the neutral ramp it replaced had been chosen to match "the
+ * volume run and the body-part bars on this screen", which had by then stopped
+ * being true of the bars, since those had become a hue per body part.
  *
- * Two things answer it. The ramp's top stop is the only one that is anywhere
- * near the accent at full strength, and it is reached by a *heavy* day rather
- * than by any trained day, so a typical strip is mostly the ramp's quiet end:
- * what the accent buys is that a trained day reads as trained at a glance,
- * which a grid of greys does not give you at 9pt a square. And the neutral ramp
- * was chosen partly to match "the volume run and the body-part bars on this
- * screen", which is no longer true of the bars: those are a hue per body part
- * now, so the grey was matching one neighbour instead of two.
- *
- * If Home ever does start reading as busy, this is a real suspect. The neutral
- * ramp is not kept around waiting for that: it had no other caller, so it was
- * removed with this change rather than left in `day-shading` as an unused
- * second reading of the scale. Git has it.
+ * Both grounds are gone. The bars are ink again, and so is every other chart in
+ * the app, so matching its neighbours is once more the reason it was the first
+ * time. The remaining half of the argument, that grey squares at 9pt do not
+ * read as trained at a glance, is the real cost of this and it is paid: what
+ * answers it is that the ramp's floor is `surfaceMuted` and its ceiling is
+ * `text`, which is the widest range the palette has, wider than the muted-to-
+ * accent one it replaced on every dark theme.
  */
 
 import { dayKey } from '@lift/shared';

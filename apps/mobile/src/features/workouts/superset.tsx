@@ -21,12 +21,12 @@ import {
   type SupersetPlacement,
   type SupersetRow,
 } from '@lift/shared';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { PressableScale, Text } from '@/components/ui';
 import { haptics } from '@/features/feedback/haptics';
 import { showDialog } from '@/store/dialog';
-import { hexToRgb, radius, spacing, useColors, type Palette } from '@/theme';
+import { radius, spacing, useColors, type Palette } from '@/theme';
 
 /** An exercise as the superset menu needs it: its grouping, and what to call it. */
 export interface SupersetCandidate extends SupersetRow {
@@ -54,59 +54,33 @@ export function supersetMap(rows: readonly SupersetRow[]): Map<string, SupersetP
 }
 
 /**
- * Which hue this superset is drawn in.
+ * The ink a superset is drawn in, which is one ink for all of them.
  *
- * Keyed on the letter, not on how many supersets are on screen right now: A is
- * always the first stop, B the second, so dismantling A does not recolour B.
- * Same reason body parts are a fixed map rather than "first bar gets the
- * accent".
+ * This used to be a hue per letter, keyed on the letter rather than on how many
+ * supersets happened to be on screen, so dismantling A did not recolour B. It
+ * had a second layer under it too: `data` is only a genuine six-hue ramp on the
+ * ported themes, and on the default light and dark palettes it is six limes,
+ * which is why two rails there once looked like one line, so the letter indexed
+ * the role colours instead on those two.
  *
- * `data` is the right ramp when it is actually six hues — Fitness, Spotify,
- * the rest. On the default light and dark themes it is six limes, which is
- * why two rails used to look like one line. Those two palettes only have
- * distinct hues in the role colours, so the letter indexes those instead.
+ * All of it is gone with the rest of the app's categorical colour (see
+ * `toneColors` in `components/ui/surfaces.tsx`), and this is the call site
+ * where losing it costs least. The identity of a superset is a *letter*, drawn
+ * at the head of every block in the group and in the chip on each one. Naming
+ * it a second time in hue was the most redundant colour in the app: A was
+ * already A.
+ *
+ * What is left, and this is the part to preserve if anyone revisits it, is that
+ * a grouped block still has to look grouped. That is carried by the upright
+ * rail between members and by the chip, both of which are still drawn, just in
+ * ink. The one thing this no longer does is tell *two adjacent groups* apart at
+ * a glance, and the letters do that.
+ *
+ * The signature keeps `label` so the call sites do not churn and so the hue can
+ * come back in one function if it is ever wanted.
  */
-export function supersetColor(colors: Palette, label: string): string {
-  const index =
-    label.length === 1 && label >= 'A' && label <= 'Z'
-      ? label.charCodeAt(0) - 65
-      : Math.max(0, (Number.parseInt(label, 10) || 1) - 1);
-
-  const ramp = categoricalRamp(colors);
-  return ramp[index % ramp.length]!;
-}
-
-/**
- * The palette's own test: six hues at least 20° apart, or a single-hue scale.
- *
- * See `Palette.data` in `theme/tokens.ts`. Adjacent limes at 1.19:1 are a
- * real separation on a bar chart and none at all on a 3pt rail.
- */
-function categoricalRamp(colors: Palette): readonly string[] {
-  if (hueGap(colors.data[0], colors.data[1]) >= 20) return colors.data;
-  return [colors.accent, colors.warning, colors.danger, colors.record];
-}
-
-function hueGap(a: string, b: string): number {
-  const delta = Math.abs(hueDegrees(a) - hueDegrees(b));
-  return Math.min(delta, 360 - delta);
-}
-
-function hueDegrees(hex: string): number {
-  const [red, green, blue] = hexToRgb(hex);
-  const r = red / 255;
-  const g = green / 255;
-  const b = blue / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const span = max - min;
-  if (span === 0) return 0;
-
-  let hue = 0;
-  if (max === r) hue = (g - b) / span;
-  else if (max === g) hue = 2 + (b - r) / span;
-  else hue = 4 + (r - g) / span;
-  return ((hue * 60) + 360) % 360;
+export function supersetColor(colors: Palette, _label: string): string {
+  return colors.textSecondary;
 }
 
 /**
@@ -144,7 +118,7 @@ export function SupersetChip({
   const tone = placement ? supersetColor(colors, placement.label) : colors.textTertiary;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       hitSlop={CHIP_SLOP}
       accessibilityRole="button"
@@ -154,12 +128,9 @@ export function SupersetChip({
           : `${exerciseName} is not in a superset`
       }
       accessibilityHint="Pairs this exercise with the one above or below it"
-      style={({ pressed }) => [
-        styles.chip,
-        {
-          backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
-        },
-      ]}
+      fill={colors.surfaceMuted}
+      fillPressed={colors.surfacePressed}
+      style={[styles.chip, { backgroundColor: colors.surfaceMuted }]}
     >
       <Ionicons
         name="git-merge-outline"
@@ -171,7 +142,7 @@ export function SupersetChip({
           {placement.label}
         </Text>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 

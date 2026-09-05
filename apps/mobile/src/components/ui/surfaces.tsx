@@ -23,7 +23,6 @@ import {
   radius,
   spacing,
   stroke,
-  translucent,
   useColors,
   type Palette,
 } from '@/theme';
@@ -110,38 +109,38 @@ function toneColors(c: Palette, tone: Tone): { fg: string; bg: string } {
       return { fg: c.record, bg: c.recordSurface };
     case 'neutral':
       return { fg: c.textSecondary, bg: c.surfaceMuted };
-    default: {
+    default:
       /*
-       * A category, whose tint is derived rather than looked up.
+       * A category, drawn in ink.
        *
-       * The five roles each ship a `*Surface` beside them, solved against the
-       * colour that prints on top of it and re-measured on every audit run.
-       * The ramp does not: six more tokens per palette across eight palettes is
-       * forty-eight values to hand-solve, for tints that are only ever drawn
-       * *behind* their own colour rather than behind arbitrary text.
+       * This is the one line that makes the app monochrome, so it is worth
+       * being exact about what it gives up and why.
        *
-       * 0.16 is the alpha the roles use, and it is the number to change if a
-       * category chip ever looks heavier or lighter than a role chip beside it.
-       * It is checked: `audit-palette.mjs` measures every entry on the tint
-       * this line builds, because a derived colour is still a colour something
-       * prints a glyph on.
+       * Each of the six used to resolve to its own hue out of `Palette['data']`
+       * over a tint derived from it at 0.16 alpha. That is a real key: it lets
+       * someone learn once that back is the blue one and then read a sorted
+       * chart without reading its labels. What it costs is that a screen
+       * showing six categories shows six hues, and this app shows categories
+       * on Home, on the workout summary, on four stats screens and down the
+       * side of the statistics list, which is how a palette budgeted at
+       * roughly one accent element per view ends up with twenty on screen at
+       * once.
+       *
+       * Colour is now spent on *state* alone: the five roles above, which say
+       * what something is doing rather than which of six things it is. A
+       * category is told apart by the thing every one of these call sites
+       * already draws beside it, which is its name. In a sorted chart the bar
+       * length says the rest.
+       *
+       * The type is deliberately left standing rather than deleted. A call
+       * site saying `tone="category3"` is still making a true statement about
+       * its content, and keeping the six names means the decision lives in one
+       * `return` that can be reversed in one edit, rather than being spread
+       * back out over the fifteen places that used to read the ramp. The
+       * palettes keep their `data` ramps too, for the same reason and because
+       * `audit-palette.mjs` still measures them.
        */
-      const index = CATEGORY_TONES.indexOf(tone);
-
-      /*
-       * Index 0 is the accent, and it takes the accent's own tint.
-       *
-       * Not a shortcut. `accentSurface` is a solved value rather than the
-       * accent at a round alpha, and on Fitness it is 0.15 precisely because
-       * 0.16 puts the Move ring under AA on its own tint. Deriving here would
-       * have quietly reintroduced that, on the first row of the stats list and
-       * the first bar of every body-part chart.
-       */
-      if (index === 0) return { fg: c.accent, bg: c.accentSurface };
-
-      const color = c.data[index];
-      return { fg: color, bg: translucent(color, 0.16) };
-    }
+      return { fg: c.textSecondary, bg: c.surfaceMuted };
   }
 }
 

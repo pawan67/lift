@@ -92,15 +92,16 @@ export default function ProfileScreen() {
          * safe: a seven-figure volume in pounds on a phone set to a large
          * system text size shrinks rather than truncating or wrapping.
          *
-         * The accent goes on the kicker, not on the figure. In the light
-         * palette the accent is a dark olive chosen to be legible as text, so
-         * accenting the number made the loudest thing on the screen quieter
-         * than the label above it. Colouring the small word instead holds in
-         * both schemes with no branching on the colour scheme. Do not swap
-         * these back.
+         * The kicker used to carry the accent while the figure stayed plain,
+         * and the reason was worth recording: in the light palette the accent
+         * is a dark olive chosen to be legible as text, so accenting the number
+         * made the loudest thing on the screen quieter than the label above it.
+         * Both are ink now (see `toneColors` in `components/ui/surfaces.tsx`),
+         * which retires the problem rather than solving it: 28px over 11px is
+         * the hierarchy, and it does not depend on the palette at all.
          */}
         <View style={styles.masthead}>
-          <Text variant="overline" color="accent">
+          <Text variant="overline" color="textSecondary">
             Lifetime volume
           </Text>
           <Text variant="title" color="text" numberOfLines={1} adjustsFontSizeToFit>

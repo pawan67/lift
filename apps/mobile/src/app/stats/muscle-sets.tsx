@@ -109,7 +109,7 @@ export default function MuscleSetsScreen() {
 
         <Card style={styles.chartCard}>
           <View style={styles.readout}>
-            <Text variant="overline" color="accent">
+            <Text variant="overline" color="textSecondary">
               {selected ? MUSCLE_GROUP_LABELS[selected.muscle] : 'All muscles'}
             </Text>
             <Text variant="numericLarge" numberOfLines={1} adjustsFontSizeToFit>

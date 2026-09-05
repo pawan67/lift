@@ -231,7 +231,10 @@ function Row({
       >
         {label}
       </Text>
-      <Text variant="numeric" color={muted ? 'textTertiary' : emphasised ? 'accent' : 'text'}>
+      {/* Emphasis is carried by the label's `bodyMedium` beside it, not by a
+          hue on the figure. There is nothing above `text` to emphasise *with*
+          now, which is the honest constraint: weight is the channel. */}
+      <Text variant="numeric" color={muted ? 'textTertiary' : 'text'}>
         {value}
       </Text>
     </View>

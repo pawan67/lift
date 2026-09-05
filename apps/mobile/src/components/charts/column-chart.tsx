@@ -125,7 +125,8 @@ export function ColumnChart({
   emptyLabel = 'No data in this range',
 }: ColumnChartProps) {
   const colors = useColors();
-  const fill = color ?? colors.accent;
+  // Ink rather than the accent: see `lineColor` in `line-chart.tsx`.
+  const fill = color ?? colors.text;
 
   // The library prints the y-axis ticks itself, so the `caption` variant has to
   // be restated as a style rather than rendered as a `Text`.

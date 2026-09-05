@@ -87,7 +87,16 @@ export function LineChart({
   highlight,
 }: LineChartProps) {
   const colors = useColors();
-  const lineColor = color ?? colors.accent;
+  /*
+   * Ink by default, not the accent.
+   *
+   * Every chart in the app draws its data in ink now and keeps the accent for
+   * things you can touch: see `toneColors` in `components/ui/surfaces.tsx`.
+   * A line is the case where that reads most clearly, because a chart with one
+   * series has nothing to tell apart, so the colour was only ever saying "this
+   * is a chart".
+   */
+  const lineColor = color ?? colors.text;
 
   const geometry = useMemo(() => {
     if (data.length === 0) return null;

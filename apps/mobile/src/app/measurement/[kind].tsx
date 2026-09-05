@@ -305,7 +305,7 @@ export default function MeasurementDetailScreen() {
 
       <ScrollView {...scrollEdge.list} contentContainerStyle={styles.content}>
         <View style={styles.masthead}>
-          <Text variant="overline" color="accent">
+          <Text variant="overline" color="textSecondary">
             Latest
           </Text>
           <Text variant="heading" numberOfLines={1} adjustsFontSizeToFit>

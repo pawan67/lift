@@ -267,7 +267,7 @@ export function RoutineExerciseBlock({
             { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
           ]}
         >
-          <Ionicons name="add" size={16} color={colors.warning} />
+          <Ionicons name="add" size={16} color={colors.textSecondary} />
           <Text variant="label" color="textSecondary">
             Add warm-up
           </Text>
@@ -344,14 +344,10 @@ function SetRow({
   const colors = useColors();
   const badge = SET_TYPE_BADGE[set.setType];
   const ordinal = index + 1;
-  const badgeColor =
-    set.setType === 'warmup'
-      ? colors.warning
-      : set.setType === 'drop'
-        ? colors.accent
-        : set.setType === 'failure'
-          ? colors.danger
-          : colors.textSecondary;
+  // One ink for every set type; `SET_TYPE_BADGE` prints the letter that names
+  // it. The same change as the logging screen's own row, for the same reason:
+  // see `badgeColor` in `features/workouts/set-row.tsx`.
+  const badgeColor = colors.textSecondary;
 
   return (
     <View style={styles.setRow}>

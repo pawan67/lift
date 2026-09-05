@@ -172,9 +172,13 @@ export function SessionBodyMap({ sets, width, maxHeight = 240 }: SessionBodyMapP
       fillFor={(region) => {
         const value = regionSets[region] ?? 0;
         if (value <= 0 || peak <= 0) return colors.surfaceMuted;
+        // Ramped toward the ink rather than toward the accent. One session's
+        // map is a single quantity shaded by how much of it landed where,
+        // which is the sequential case, and it now runs the same muted-to-ink
+        // scale the training-days grid does.
         return mix(
           colors.surfaceMuted,
-          colors.accent,
+          colors.text,
           SESSION_FLOOR + (1 - SESSION_FLOOR) * (value / peak),
         );
       }}

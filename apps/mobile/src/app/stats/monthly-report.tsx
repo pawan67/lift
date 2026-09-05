@@ -303,7 +303,7 @@ function Highlights({ report, weightUnit }: { report: MonthlyReport; weightUnit:
         <View style={styles.factLine}>
           <Text variant="body" style={styles.flex}>
             Trained on{' '}
-            <Text variant="bodyMedium" color="accent">
+            <Text variant="bodyMedium">
               {report.activeDays}
             </Text>{' '}
             of {report.daysInMonth} days

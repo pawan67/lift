@@ -64,8 +64,18 @@ export function intensityStep(volumeKg: number, typicalVolumeKg: number): number
 }
 
 /** The ramp every day grid in the app draws. */
+/**
+ * The four steps of a trained day, ramped toward the ink.
+ *
+ * This mixed toward the accent, which made the training-days grid the largest
+ * block of colour in the app: eight to twelve weeks of squares, most of them
+ * carrying some fraction of it. A contribution grid is a sequential scale over
+ * one quantity, so it reads exactly as well on a single ink ramp, and it is now
+ * the same ramp the body map and every chart use. See `toneColors` in
+ * `components/ui/surfaces.tsx` for the rule.
+ */
 export function dayFill(step: number, colors: Palette): string {
-  return mix(colors.surfaceMuted, colors.accent, RAMP[step] ?? RAMP[0]);
+  return mix(colors.surfaceMuted, colors.text, RAMP[step] ?? RAMP[0]);
 }
 
 /** The accent ramp's four stops, for the legend under a grid. */

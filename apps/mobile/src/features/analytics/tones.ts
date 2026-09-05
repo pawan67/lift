@@ -1,42 +1,45 @@
 /**
- * Which of the palette's six category hues each body part is drawn in.
+ * Which ink each body part is drawn in, and which one of them is marked.
  *
- * `Palette['data']` holds six colours for telling one *category* from another,
- * and `BODY_PARTS` holds seven body parts, six of which are real muscle groups
- * and one of which is "other". The fit is exact and it is not a coincidence:
- * body part is the category this app charts more than any other, so it is what
- * the ramp was sized against.
+ * This file used to hand out a hue: `Palette['data']` holds six colours for
+ * telling one category from another, `BODY_PARTS` holds seven, six of which are
+ * real muscle groups and one of which is "other", and the fit was exact because
+ * body part is the category this app charts more than any other.
  *
- * ## Why a fixed map rather than an index into whatever came back
+ * ## Why that is not what it does any more
  *
- * The obvious implementation is to colour the first bar `data[0]`, the second
- * `data[1]` and so on. It is wrong here, and visibly so, because every chart of
- * body parts in this app is **sorted by volume**. Under a positional scheme
- * chest takes the accent in a week you trained it hardest and the orange in a
- * week you did not, and the colour then encodes rank, which the bar's own
- * length already encodes, instead of encoding which muscle it is. Two screens
- * showing the same week would still agree; the same screen a week later would
- * not.
+ * The argument for a fixed hue per part was a good one and it is worth keeping
+ * written down, because it is the thing being given up. Every chart of body
+ * parts in this app is *sorted by volume*, so colouring the first bar `data[0]`
+ * and the second `data[1]` would encode rank, which the bar's own length
+ * already encodes, rather than encoding which muscle it is. A fixed map avoided
+ * that: back was `data[1]` on Home, on the workout summary and on the stats
+ * screens, in every week, forever, which let someone learn the key once instead
+ * of reading the labels every time.
  *
- * With this map, back is `data[1]` on Home, on the workout summary and on the
- * stats screens, in every week, forever. That is the property that makes a
- * colour worth spending: it lets someone learn the key once instead of reading
- * the labels every time.
+ * What it cost is that a body-part chart is six hues, and this app draws one on
+ * Home, on the workout summary and on four stats screens. A palette budgeted at
+ * roughly one accent element per view was spending twenty. The same decision is
+ * made in one place for the whole app and argued in full there: see
+ * `toneColors` in `components/ui/surfaces.tsx`.
  *
- * ## The order
+ * The key is not gone, it is drawn by the thing every one of these call sites
+ * already renders beside the bar, which is its name. What replaces the hue is a
+ * three-step ink ramp that says something the labels cannot: `text` for the bar
+ * the caller marks, `textSecondary` for the rest, `textTertiary` for the bucket
+ * that is not a muscle group. In a sorted chart the marked bar is the leading
+ * one, so the ramp restates the sort at the top and stays quiet below it, which
+ * is a peak the six equal hues never had.
  *
- * `BODY_PARTS` order, straight down the ramp, which puts the accent on chest
- * rather than on anything chosen. There is no meaning to defend in the pairing
- * and inventing one ("legs are the heavy blue") would be a story rather than a
- * reason. What matters is only that it is fixed and that adjacent body parts,
- * which are the ones that appear next to each other in a sorted chart, get
- * adjacent ramp entries, which are the furthest apart in hue.
+ * ## Why the map below is still here
  *
- * `other` is the exception and takes no hue at all. It is not a muscle group,
- * it is the bucket for exercises that did not map to one, and giving the
- * leftovers a colour of their own puts them on equal footing with the six
- * things the chart is actually about. Callers draw it in a neutral: see
- * `bodyPartColor`.
+ * `BODY_PART_TONE`'s indices are unread now. It stays because it is still the
+ * one statement of which parts are muscle groups and which one is the
+ * leftovers bucket, which is the distinction `bodyPartColor` turns into the
+ * tertiary step, and because keeping it means the decision above is one
+ * `return` to reverse rather than a ramp to reconstruct. The palettes keep
+ * their `data` entries for the same reason, and because `audit-palette.mjs`
+ * still measures them.
  */
 
 import { BODY_PARTS, type BodyPart } from '@lift/shared';
@@ -55,22 +58,30 @@ export const BODY_PART_TONE: Record<BodyPart, 0 | 1 | 2 | 3 | 4 | 5 | null> = {
 };
 
 /**
- * The colour a body part is drawn in, with the neutral for `other` folded in.
+ * The ink a body part is drawn in, with the neutral for `other` folded in.
  *
- * A function rather than a second map because the neutral is a palette lookup
- * and the six hues are a ramp lookup, and every caller would otherwise write
- * the same three-line conditional. Unknown strings fall through to the neutral
- * as well: `bodyPart` arrives from the database as text, and a row written by
- * an older build with a body part this one has dropped should render as an
- * uncategorised bar rather than crash on an undefined index.
+ * `marked` is the caller saying "this is the one the chart is about", which in
+ * every chart here means the largest, since all of them are sorted. It is the
+ * caller's call rather than this function's because the sort happens up there:
+ * a slice does not know its own rank.
+ *
+ * `other` ignores `marked` and stays tertiary. A chart whose largest slice is
+ * the uncategorised bucket has no marked bar, which is the honest rendering of
+ * a chart whose biggest finding is that it could not categorise anything.
+ *
+ * Unknown strings fall through to the neutral as well: `bodyPart` arrives from
+ * the database as text, and a row written by an older build with a body part
+ * this one has dropped should render as an uncategorised bar rather than crash
+ * on an undefined index.
  */
-export function bodyPartColor(bodyPart: string, colors: Palette): string {
+export function bodyPartColor(bodyPart: string, colors: Palette, marked = false): string {
   const tone = BODY_PART_TONE[bodyPart as BodyPart];
-  return tone === null || tone === undefined ? colors.textTertiary : colors.data[tone];
+  if (tone === null || tone === undefined) return colors.textTertiary;
+  return marked ? colors.text : colors.textSecondary;
 }
 
 /**
- * Every body part in ramp order, for a legend.
+ * Every body part that is a muscle group, in `BODY_PARTS` order, for a legend.
  *
  * Derived from `BODY_PARTS` rather than from the map's own key order, because
  * an object's key order is a fact about how the literal above was typed and

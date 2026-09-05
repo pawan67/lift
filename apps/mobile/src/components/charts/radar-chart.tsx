@@ -154,7 +154,17 @@ export function RadarChart({
   const hasPrevious = showPrevious && axes.some((axis) => (axis.previous ?? 0) > 0);
 
   const web = { stroke: colors.border, fill: 'none', showGradient: false };
-  const current = { fill: translucent(colors.accent, 0.22), stroke: colors.accent, strokeWidth: 2 };
+  /*
+   * The current shape in ink, the previous one already in `textTertiary`.
+   *
+   * This was the accent against tertiary grey, which read as two different
+   * kinds of thing rather than as the same measurement at two times. On one
+   * scale the pairing says what it means: this week is the dark shape, last
+   * week is the faint one behind it, and no legend is needed to work out which
+   * is which. The legend is still drawn, because the two labels carry the
+   * dates.
+   */
+  const current = { fill: translucent(colors.text, 0.16), stroke: colors.text, strokeWidth: 2 };
   const values = axes.map((axis) => axis.value);
 
   // Previous first, so the current shape is never hidden behind it.
@@ -225,7 +235,7 @@ export function RadarChart({
               {
                 left: spoke.vertex.x - VERTEX_SIZE / 2,
                 top: spoke.vertex.y - VERTEX_SIZE / 2,
-                backgroundColor: colors.accent,
+                backgroundColor: colors.text,
               },
             ]}
           />
@@ -276,7 +286,7 @@ export function RadarLegend({ currentLabel, previousLabel }: {
   return (
     <View style={styles.legend}>
       <View style={styles.legendItem}>
-        <View style={[styles.dot, { backgroundColor: colors.accent }]} />
+        <View style={[styles.dot, { backgroundColor: colors.text }]} />
         <Text variant="caption" color="textSecondary">
           {currentLabel}
         </Text>

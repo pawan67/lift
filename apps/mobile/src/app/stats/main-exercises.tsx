@@ -145,10 +145,14 @@ function ExerciseStatRow({
         Numbering all forty rows turns a ranked list into a numbered one: the
         badge stops meaning "this is what you train" and starts meaning "this is
         row 27". Three is what a person remembers about their own programme.
+
+        Neutral rather than the accent tint it was: three accented pills down
+        one list is three times the budget, and the badge already prints the
+        rank as a digit.
       */}
       {rank !== null && (
-        <View style={[styles.rank, { backgroundColor: colors.accentSurface }]}>
-          <Text variant="caption" color="accent">
+        <View style={[styles.rank, { backgroundColor: colors.surfaceMuted }]}>
+          <Text variant="caption" color="textSecondary">
             {rank}
           </Text>
         </View>

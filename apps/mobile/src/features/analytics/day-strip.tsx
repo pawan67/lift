@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui';
-import { radius, spacing, useColors } from '@/theme';
+import { radius, readableOn, spacing, useColors } from '@/theme';
 
 import type { DayActivity } from './muscle-stats';
 
@@ -38,15 +38,21 @@ export function DayStrip({ days }: DayStripProps) {
             <Text variant="caption" color="textTertiary">
               {day.date.toLocaleDateString(undefined, { weekday: 'narrow' })}
             </Text>
+            {/* A trained day fills in ink, the same as a square in the
+                training-days grid and the month view. It was the accent, which
+                made a full week of training the brightest object on whatever
+                screen this strip appeared on. `readableOn` picks the foreground
+                rather than a fixed token, because `text` is near-white on the
+                dark palettes and near-black on the light ones. */}
             <View
               style={[
                 styles.date,
-                trained ? { backgroundColor: colors.accent } : null,
+                trained ? { backgroundColor: colors.text } : null,
               ]}
             >
               <Text
                 variant="label"
-                style={{ color: trained ? colors.textOnAccent : colors.textSecondary }}
+                style={{ color: trained ? readableOn(colors.text, colors) : colors.textSecondary }}
               >
                 {day.date.getDate()}
               </Text>

@@ -413,17 +413,19 @@ export default function HistoryScreen() {
                     />
 
                     {/*
-                      Drawn in the metric's own hue rather than the accent, so
-                      the tabs above it are three questions rather than three
-                      renderings of one. Home colours the same three the same
-                      way and both read `tone` out of `METRIC`, which is what
-                      stops duration from being one colour on this screen and
-                      another on Home.
+                      One ink, the same one Home's run of twelve marks a week
+                      with. This was the metric's own hue out of the six-colour
+                      ramp, so the tabs above it read as three questions rather
+                      than three renderings of one, and Home drew the same three
+                      the same way off the same `tone` field. Both are ink now:
+                      see `toneColors` in `components/ui/surfaces.tsx`. The
+                      tabs still say which metric is showing, in words, which is
+                      what the hue was reinforcing rather than replacing.
                     */}
                     <ColumnChart
                       data={columns}
                       width={chartWidth}
-                      color={colors.data[METRIC[metric].tone]}
+                      color={colors.text}
                       selectedKey={selectedBucket}
                       onSelect={(datum) => setSelectedBucket(datum?.key ?? null)}
                       formatValue={(value) => METRIC[metric].axis(value, weightUnit)}

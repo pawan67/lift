@@ -40,7 +40,14 @@ import { haptics } from '@/features/feedback/haptics';
 import { useLaunchAction } from '@/hooks/use-launch-action';
 import { useTicker } from '@/hooks/use-ticker';
 import { showDialog } from '@/store/dialog';
-import { controlHeight, radius, spacing, stroke, useColors } from '@/theme';
+import {
+  controlHeight,
+  HIT_SLOP,
+  PRESS_SCALE_SMALL,
+  radius,
+  spacing,
+  useColors,
+} from '@/theme';
 
 /** Latch key for the ad-hoc Start, which has no routine id to be keyed by. */
 const EMPTY_START = 'empty';
@@ -329,7 +336,7 @@ export default function WorkoutScreen() {
     <Screen scrolled={scrollEdge.progress}>
       <ScrollView {...scrollEdge.list} contentContainerStyle={styles.content}>
         {active && (
-          <Pressable
+          <PressableScale
             onPress={openActive}
             accessibilityRole="button"
             // The label replaces the merged child text, which is the point: the
@@ -337,13 +344,15 @@ export default function WorkoutScreen() {
             // announcement built from the children would never settle.
             accessibilityLabel={`Resume ${active.name}`}
             accessibilityHint="Opens the workout in progress"
-            style={({ pressed }) => [
-              styles.resume,
-              {
-                backgroundColor: colors.accentSurface,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
+            /*
+             * The one card on this screen that is a card, so it presses like
+             * one. It was dimming to 0.85 on the frame the finger landed and
+             * back on the frame it lifted, with nothing in between: the fastest
+             * possible way to say nothing. The scale is the standard object
+             * press, and the tint holds, because a card that both shrinks and
+             * fades is doing the same job twice.
+             */
+            style={[styles.resume, { backgroundColor: colors.accentSurface }]}
           >
             <View style={styles.resumeBody}>
               {/* The tint and the running clock are one accent object; the
@@ -359,60 +368,126 @@ export default function WorkoutScreen() {
                 {formatDuration(Math.floor((now - active.startedAt.getTime()) / 1000))}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.textTertiary} />
-          </Pressable>
+            {/*
+             * A play glyph rather than the chevron it was.
+             *
+             * The chevron said "this opens something", which is all it needed
+             * to say while a labelled Resume button sat underneath naming the
+             * action. Now that this card is the only way back into the
+             * session, the glyph is carrying the verb and has to be the verb.
+             *
+             * Still `textTertiary`. The accent budget on this card is spent on
+             * the tint and the running clock, which are one object, and a third
+             * accented mark would only spread it thinner.
+             */}
+            <Ionicons name="play" size={22} color={colors.textTertiary} />
+          </PressableScale>
         )}
 
-        <View style={styles.quickStart}>
-          <Button
-            title={active ? 'Resume workout' : 'Start empty workout'}
-            icon={active ? 'play' : 'add'}
-            size="lg"
-            fullWidth
-            loading={starting === EMPTY_START}
-            onPress={() => (active ? openActive() : void begin())}
-          />
-        </View>
+        {/*
+         * The empty start, and only when there is nothing to return to.
+         *
+         * This button used to relabel itself to "Resume workout" while a
+         * session was live, which put two controls with one destination
+         * against each other in the same viewport: the card above it and a
+         * full-width button an `lg` below, both opening the same screen. Two
+         * ways to do one thing is not twice as easy to do, it is one question
+         * about whether they differ.
+         *
+         * The card wins the pairing because it is the one that can answer
+         * that question: it names the session and prints its running clock, so
+         * it says what resuming would resume. A button can only say the verb.
+         * Nothing is lost by dropping it here either, because a second empty
+         * session cannot exist while this one is open: `startSession` resolves
+         * that into a resume, which is what the card already offers.
+         */}
+        {!active && (
+          <View style={styles.quickStart}>
+            <Button
+              title="Start empty workout"
+              icon="add"
+              size="lg"
+              fullWidth
+              loading={starting === EMPTY_START}
+              onPress={() => void begin()}
+            />
+          </View>
+        )}
 
         <SectionHeader
           title="Routines"
           action={
             <View style={styles.headerActions}>
-              <View style={[styles.createPair, { backgroundColor: colors.surfaceMuted }]}>
-                <PressableScale
-                  accessibilityRole="button"
-                  accessibilityLabel="New routine"
-                  onPress={() => router.push('/routine/new')}
-                  style={styles.createHalf}
-                >
-                  <Ionicons name="add" size={16} color={colors.accent} />
-                  <Text variant="label" color="accent">
-                    Routine
-                  </Text>
-                </PressableScale>
-                <View style={[styles.createRule, { backgroundColor: colors.border }]} />
-                <PressableScale
-                  accessibilityRole="button"
-                  accessibilityLabel="New folder"
-                  onPress={() => setCreatingFolder(true)}
-                  style={styles.createHalf}
-                >
-                  <Ionicons name="folder-outline" size={16} color={colors.accent} />
-                  <Text variant="label" color="accent">
-                    Folder
-                  </Text>
-                </PressableScale>
-              </View>
+              {/*
+               * Two accent labels, not two filled controls.
+               *
+               * These were one 36pt pill split down the middle by a hairline:
+               * a `surfaceMuted` container, an internal rule, and two halves
+               * inside it. Three pieces of chrome to hold two words, in the
+               * one place on the screen that is already a heading. It also
+               * made this the only `SectionHeader` in the app carrying a
+               * filled control, so the section that opens the Routines list
+               * announced itself louder than the routines under it.
+               *
+               * The colour is the affordance. An accent word beside a
+               * `textSecondary` heading is unambiguously a thing to tap, which
+               * is the same bargain the rest of the app already makes for its
+               * header actions, and it is one element instead of four.
+               *
+               * The glyphs stay because they are what distinguishes the pair
+               * without a rule between them: a plus and a folder read as two
+               * actions where "Routine Folder" in one accent would read as one
+               * phrase. `HIT_SLOP` is what a 16pt label needs to be a target
+               * once the pill that used to give it 36pt of height is gone.
+               */}
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="New routine"
+                onPress={() => router.push('/routine/new')}
+                hitSlop={HIT_SLOP}
+                // Dim, not scale: a `label` at 0.97 is a change nobody can
+                // see. The reorder glyph beside it can take a scale because it
+                // is a glyph; these two cannot because they are type.
+                dimTo={0.5}
+                scaleTo={1}
+                style={styles.createAction}
+              >
+                <Ionicons name="add" size={16} color={colors.accent} />
+                <Text variant="label" color="accent">
+                  Routine
+                </Text>
+              </PressableScale>
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="New folder"
+                onPress={() => setCreatingFolder(true)}
+                hitSlop={HIT_SLOP}
+                dimTo={0.5}
+                scaleTo={1}
+                style={styles.createAction}
+              >
+                <Ionicons name="folder-outline" size={16} color={colors.accent} />
+                <Text variant="label" color="accent">
+                  Folder
+                </Text>
+              </PressableScale>
               {folders.length + routines.length > 1 && (
-                <Pressable
+                <PressableScale
                   onPress={() => setReordering(true)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={HIT_SLOP}
                   accessibilityRole="button"
                   accessibilityLabel="Reorder"
-                  style={({ pressed }) => pressed && styles.pressed}
+                  // A bare glyph, so it takes the deeper press: the standard 3%
+                  // on a 20pt icon is not a state anyone can see.
+                  scaleTo={PRESS_SCALE_SMALL}
+                  dimTo={0.6}
+                  // The same box the two labels carry, so all three sit on one
+                  // row rather than three different heights centred against
+                  // each other. See `createAction`.
+                  style={styles.headerGlyph}
                 >
                   <Ionicons name="swap-vertical-outline" size={20} color={colors.textSecondary} />
-                </Pressable>
+                </PressableScale>
               )}
             </View>
           }
@@ -687,15 +762,17 @@ function FolderCard({
             color={colors.textTertiary}
           />
         </PressableScale>
-        <Pressable
+        <PressableScale
           onPress={onMenu}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel={`More options for ${folder.name}`}
-          style={({ pressed }) => [styles.folderMore, pressed && styles.pressed]}
+          scaleTo={PRESS_SCALE_SMALL}
+          dimTo={0.6}
+          style={styles.folderMore}
         >
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableScale>
       </View>
       {expanded && (
         <>
@@ -819,23 +896,40 @@ const styles = StyleSheet.create({
   },
   resumeBody: { flex: 1, gap: 2 },
   quickStart: { padding: spacing.lg },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  createPair: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: controlHeight.sm,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-  },
-  createHalf: {
+  /*
+   * `lg` between the three actions, up from the `md` it was.
+   *
+   * The pill used to supply the separation: two halves inside one box, with a
+   * rule between them and its own edge holding the reorder glyph off. Bare
+   * labels have none of that, and at `md` a plus, two words and a glyph run
+   * together into one strip of accent. `lg` is the smallest step that reads as
+   * three things.
+   */
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+
+  /*
+   * The strip is a row, not a line of type, and the padding is what makes it
+   * one.
+   *
+   * `SectionHeader` closes with `paddingBottom: sm`, and that number was set
+   * against a header whose action was a 36pt pill: the gap under the accent
+   * labels was the 8 plus the eleven-odd points of pill that hung below the
+   * text inside it. Taking the pill away took the eleven with it and left the
+   * words sitting almost on the first routine card. The padding puts the box
+   * back without putting the fill back, so the header's own `paddingBottom`
+   * measures from a row again rather than from a baseline.
+   *
+   * It is also the target. `hitSlop` covers native and is ignored by React
+   * Native Web, so on the desktop layout these were 16pt tall things to hit;
+   * real padding is the half of that fix which works everywhere.
+   */
+  createAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    height: '100%',
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  createRule: { width: stroke.rule, alignSelf: 'stretch', marginVertical: spacing.sm },
-  pressed: { opacity: 0.6 },
+  headerGlyph: { paddingVertical: spacing.sm },
   routineCard: { marginHorizontal: spacing.lg },
   folderHeader: {
     flexDirection: 'row',

@@ -27,7 +27,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.15.0",
+    "@types/node": "^26.4.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "~6.0.3"
   }

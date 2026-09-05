@@ -34,8 +34,18 @@ import { listCompletedWorkouts } from '@/features/workouts/repository';
 import type { Workout } from '@/db/schema';
 import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
+import { useSlowLoad } from '@/hooks/use-slow-load';
 import { useSettings } from '@/store/settings';
-import { duration, easing, mix, spacing, useColors, useContentWidth } from '@/theme';
+import {
+  controlHeight,
+  duration,
+  easing,
+  mix,
+  radius,
+  spacing,
+  useColors,
+  useContentWidth,
+} from '@/theme';
 
 const BODY_PART_LABELS: Record<string, string> = {
   chest: 'Chest',
@@ -90,6 +100,9 @@ export default function HomeScreen() {
    * per week in one pass, so a tap is a re-render.
    */
   const [metric, setMetric] = useState<TrendMetric>('volume');
+
+  // See the note above `if (!stats)`.
+  const slowLoad = useSlowLoad(stats === null);
 
   /*
    * Which week the masthead is reporting on, as that week's Monday.
@@ -166,6 +179,13 @@ export default function HomeScreen() {
    * Hold the frame until the first aggregate lands, and then show the
    * dashboard whatever it says.
    *
+   * Blank for the first 120ms and a skeleton after that, rather than one or
+   * the other for the whole wait. See `use-slow-load.ts` for why the two
+   * halves are different states: on a phone that answers in 40ms a skeleton is
+   * a second layout flashed and withdrawn before it can be read, and on one
+   * that takes half a second a blank screen is a screen that looks broken.
+   * `Reveal` still handles the arrival either way.
+   *
    * This screen used to paint twice before it was right: `stats` starts null,
    * so the first frame was a 40px "0 kg" masthead over a zeroed streak, and
    * then, if the query came back with no workouts, the whole thing was replaced
@@ -181,7 +201,13 @@ export default function HomeScreen() {
    * what would fill it, which is a layout rather than the hole an empty
    * headed section leaves behind.
    */
-  if (!stats) return <Screen width="board" scrolled={scrollEdge.progress}>{null}</Screen>;
+  if (!stats) {
+    return (
+      <Screen width="board" scrolled={scrollEdge.progress}>
+        {slowLoad ? <DashboardSkeleton chartWidth={chartWidth} /> : null}
+      </Screen>
+    );
+  }
 
   const isThisWeek = shownIndex === weekly.length - 1;
   const before = shownIndex > 0 ? weekly[shownIndex - 1]! : null;
@@ -302,31 +328,32 @@ export default function HomeScreen() {
   const deltaCaption = isThisWeek ? 'vs last week' : 'vs week before';
 
   /*
-   * A hue per body part, which is the one chart on this screen where six
-   * colours are the honest rendering rather than decoration.
+   * One ink at three weights, and the heaviest goes to the muscle on top.
    *
-   * These bars were shaded by rank, from `borderStrong` up to `textSecondary`,
-   * and before that they were six bars of flat accent. Both were attempts to
-   * solve the same thing with brightness. The rank shading is the worse of the
-   * two on inspection: the bar's own *length* already says which is biggest, so
-   * the shade said it a second time, and the one thing the chart could not say
-   * at all was which muscle a bar belonged to without reading its label.
+   * These bars have now been three things. They were six bars of flat accent,
+   * then a shade per rank from `borderStrong` up to `textSecondary`, then a
+   * fixed hue per body part. The first two solved the wrong problem with
+   * brightness: the bar's own *length* already says which is biggest, so the
+   * shade said it a second time. The hues solved the right one, which is that
+   * nothing said which muscle a bar belonged to, and paid for it in the only
+   * currency this screen is short of. Six of them here, six more on the
+   * workout summary, six on each of four stats screens.
    *
-   * `bodyPartColor` fixes exactly that, and the fixed map behind it is what
-   * makes it worth doing: chest is the same colour here, on the workout
-   * summary, and in a week where it has dropped to the bottom of the sort. See
-   * `tones.ts` for why the map is fixed rather than positional.
+   * The label beside each bar was answering that question the whole time. So
+   * the colour is spent on the one thing the labels cannot say at a glance,
+   * which is where the sort peaks: `distribution` arrives sorted by sets, so
+   * the leading bar takes `text` and the rest sit a step back in
+   * `textSecondary`. See `tones.ts`, and `toneColors` in `ui/surfaces.tsx` for
+   * the rule this follows.
    *
-   * This is still not the loudest block on the screen, which was the real point
-   * of the note this replaces. Six hues at equal weight have no peak, so the
-   * eye reads them as one textured band and moves on; a single bright colour on
-   * six full-width bars is what made this the loudest thing here, and that is
-   * the thing that has not come back.
+   * This was never the loudest block on the screen under the hues, because six
+   * at equal weight have no peak and the eye reads them as one textured band.
+   * It is quieter still now, and it has a top.
    */
-  const distributionData: BarDatum[] = distribution.map((entry) => ({
+  const distributionData: BarDatum[] = distribution.map((entry, index) => ({
     label: BODY_PART_LABELS[entry.bodyPart] ?? entry.bodyPart,
     value: entry.sets,
-    color: bodyPartColor(entry.bodyPart, colors),
+    color: bodyPartColor(entry.bodyPart, colors, index === 0),
   }));
 
   return (
@@ -401,7 +428,15 @@ export default function HomeScreen() {
             <Text variant="overline" style={{ color: tone }} numberOfLines={1}>
               {kicker}
             </Text>
-            <CountUp value={targetValue} format={(v) => config.format(v, weightUnit)} />
+            {/* `series` is the question, not the answer. See `CountUp`: a tap
+                on a metric or a week is a question being re-asked and the
+                figure snaps, a refetch landing a new total is the screen
+                resolving and it climbs. */}
+            <CountUp
+              value={targetValue}
+              series={`${metric}:${selectedWeek ?? 'now'}`}
+              format={(v) => config.format(v, weightUnit)}
+            />
 
             {deltaPercent !== null ? (
               <View style={styles.delta}>
@@ -679,8 +714,33 @@ export default function HomeScreen() {
  * And the unit is a sibling rather than a nested `Text`. Nesting it inside the
  * animated one put it through the same re-measure sixty times a second to print
  * a word that never changes.
+ *
+ * ## Why `series` exists
+ *
+ * The climb is worth 800ms exactly once: when the screen resolves and the
+ * figure arrives. It is worth nothing at all on the taps that follow, and this
+ * block has two of them. The metric tabs and the twelve columns both change
+ * `value`, so both used to restart the count from zero, which put four fifths
+ * of a second between "how long did I train" and an answer legible enough to
+ * read. That is a question being answered late, and a question asked by thumb
+ * is asked repeatedly: the tabs are three, the columns twelve, and a reader
+ * comparing two weeks pays the delay on every comparison.
+ *
+ * `series` names which question is being asked. When it changes the figure
+ * snaps, because the user is waiting on it; when only `value` changes, which is
+ * a refetch landing a new total under an unchanged question, it climbs. Same
+ * animation, kept to the one moment it is feedback rather than a wait.
  */
-function CountUp({ value, format }: { value: number; format: (value: number) => string }) {
+function CountUp({
+  value,
+  series,
+  format,
+}: {
+  value: number;
+  /** Identifies the question the figure answers. A change snaps; see above. */
+  series: string;
+  format: (value: number) => string;
+}) {
   const reduceMotion = useReduceMotion();
 
   /*
@@ -696,19 +756,43 @@ function CountUp({ value, format }: { value: number; format: (value: number) => 
 
   const frame = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
 
+  /*
+   * The question the last climb was run for.
+   *
+   * Seeded with the current one rather than left empty, so the first run reads
+   * as "unchanged" and the figure arrives counting. Every run after that
+   * compares against what it was actually asked last time.
+   */
+  const asked = useRef(series);
+
   useEffect(() => {
     // Reduce motion never starts a climb; the figure is read straight off
     // `value` during render instead. See `display` below.
     if (reduceMotion) return;
 
     /*
-     * From zero on every change, not from the figure before it.
+     * A new question is answered on the frame it is asked.
      *
-     * Tempting to treat a change as a transition between two totals, and wrong
-     * here: the metric tabs swap the *quantity*, so continuing would walk
-     * 52,600 kilograms down to 312 minutes through numbers that are not a
-     * reading of anything. Zero is the one honest place to start counting a
-     * total from, whichever total it turns out to be.
+     * `setShown` rather than a climb from zero: the user has just tapped a tab
+     * or a column and is waiting on the figure, and there is nothing to
+     * animate between anyway, since the two totals are of different weeks or
+     * different quantities. See the note on `series` above.
+     */
+    if (asked.current !== series) {
+      asked.current = series;
+      setShown(value);
+      return;
+    }
+
+    /*
+     * From zero, not from the figure before it.
+     *
+     * What reaches this line is one week's total for one metric being replaced
+     * by a newer reading of the same thing, so a transition between the two
+     * looks defensible and is still wrong: the motion would be a difference
+     * being applied rather than a total being counted, and the difference is
+     * the one thing the delta line under the figure already states in full.
+     * Zero is where you count a total from.
      */
     const from = 0;
     const startedAt = Date.now();
@@ -727,7 +811,7 @@ function CountUp({ value, format }: { value: number; format: (value: number) => 
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
     };
-  }, [value, reduceMotion]);
+  }, [value, series, reduceMotion]);
 
   /*
    * Reduce motion drops the climb and keeps the figure, which is the rule
@@ -757,6 +841,78 @@ function CountUp({ value, format }: { value: number; format: (value: number) => 
           {` ${unit}`}
         </Text>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The dashboard's shape, drawn before the dashboard is.
+ *
+ * Only reached once the load has run past `SLOW_LOAD_MS`, so this is not the
+ * screen's usual first frame: it is what a slow phone gets instead of a void.
+ *
+ * ## It is laid out by the real screen's styles
+ *
+ * `masthead`, `strip`, `tabs`, `rule`, `pair`, `tile` and `tileRow` are the
+ * same objects the dashboard is built from, not copies with matching numbers.
+ * That is the whole point of a skeleton over a spinner: the blocks arrive into
+ * positions that are already correct, so the content lands rather than pushing
+ * the page around as it comes. Copied numbers drift the first time one of the
+ * originals is adjusted, and the drift is invisible until someone happens to
+ * be loading on a slow device.
+ *
+ * Only the bones themselves are new, and they are only heights: everything
+ * horizontal comes from the layout they sit in.
+ *
+ * ## Why it does not pulse
+ *
+ * A shimmer is the convention and it is the wrong convention here. This app
+ * spends motion on things that happened (a set logged, a record beaten) and
+ * stays still otherwise, and a placeholder animating on its own would be the
+ * loudest thing on a screen with nothing on it yet. The `Reveal` on the real
+ * content is already the movement that says the wait ended.
+ *
+ * The two wide bones are approximations of the widgets they stand in for
+ * rather than exact heights: both are below the fold on a phone, so the cost
+ * of being twenty points out is a scrollbar that settles, not a jump anyone
+ * watches.
+ */
+function DashboardSkeleton({ chartWidth }: { chartWidth: number }) {
+  const colors = useColors();
+  const bone = { backgroundColor: colors.surfaceMuted };
+
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.masthead}>
+        <View style={[styles.bone, styles.boneKicker, bone]} />
+        <View style={[styles.bone, styles.boneFigure, bone]} />
+        <View style={[styles.bone, styles.boneMeta, bone]} />
+      </View>
+
+      {/* The plot's own box, not twelve columns. A run of bars at invented
+          heights is a placeholder pretending to be a reading, and the one
+          thing a screen with no data yet must not do is show a shape someone
+          could mistake for their week. */}
+      <View style={styles.strip}>
+        <View style={[styles.bone, styles.boneChart, { width: chartWidth }, bone]} />
+      </View>
+
+      <View style={[styles.bone, styles.boneTabs, styles.tabs, bone]} />
+
+      <Divider style={styles.rule} />
+
+      <View style={styles.pair}>
+        <View style={[styles.bone, styles.boneSquare, styles.tile, bone]} />
+        <View style={[styles.bone, styles.boneSquare, styles.tile, bone]} />
+      </View>
+
+      <View style={styles.tileRow}>
+        <View style={[styles.bone, styles.boneWide, bone]} />
+      </View>
+
+      <View style={styles.tileRow}>
+        <View style={[styles.bone, styles.boneWide, bone]} />
+      </View>
     </View>
   );
 }
@@ -843,4 +999,29 @@ const styles = StyleSheet.create({
    * the two stop being halves.
    */
   tile: { flex: 1, minWidth: 0 },
+
+  /*
+   * The placeholder blocks. See `DashboardSkeleton`.
+   *
+   * `bone` carries only the corner, and each of the others only a height (or a
+   * ratio). Nothing here sets a margin or a horizontal position: every one of
+   * these is dropped into one of the layout objects above, which is what keeps
+   * the skeleton and the dashboard in the same places.
+   *
+   * The heights are the type they stand in for rather than round numbers:
+   * `overline` and `label` are 11 and 13, the masthead figure is the 40px
+   * `display`, and the tabs are `controlHeight.sm`. A bone measured off the
+   * text it replaces is a bone that does not move the page when the text
+   * arrives.
+   */
+  bone: { borderRadius: radius.sm },
+  boneKicker: { width: 132, height: 11 },
+  boneFigure: { width: 190, height: 40 },
+  boneMeta: { width: 148, height: 13, marginTop: spacing.sm },
+  boneChart: { height: 150, borderRadius: radius.md },
+  boneTabs: { height: controlHeight.sm },
+  boneSquare: { aspectRatio: 1, borderRadius: radius.lg },
+  // Roughly a `WideWidget` with a header and a body: see the note on
+  // `DashboardSkeleton` about why these two are approximate.
+  boneWide: { height: 190, borderRadius: radius.lg },
 });

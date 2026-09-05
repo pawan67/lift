@@ -86,9 +86,10 @@ import {
 import { showSupersetMenu, supersetMap } from '@/features/workouts/superset';
 import type { ProgressionInput } from '@/features/workouts/suggestion';
 import { useWriteGuard } from '@/features/workouts/use-write-guard';
+import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { useTicker } from '@/hooks/use-ticker';
 import { showAlert, showConfirm } from '@/store/dialog';
-import ConfettiCannon from 'react-native-confetti-cannon';
+import { Confetti } from '@/components/celebration/confetti';
 import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
 import { useNoticeRequest } from '@/store/notice-request';
 import { useSettings } from '@/store/settings';
@@ -98,11 +99,51 @@ import { spacing, timing, useColors } from '@/theme';
 /** This screen's name on the picker's hand-off channel. */
 const PICKER_ADDRESS = 'active-workout';
 
+/**
+ * How long a record burst is on screen, and therefore how long it is mounted.
+ *
+ * Shorter than the summary screen's 3200ms. That burst is the screen's subject
+ * and can take its time; this one falls over a session that is still being
+ * logged, and the next set is often already being loaded onto the bar while it
+ * runs. Long enough to read as a celebration, short enough that the screen is
+ * clear before the thumb comes back.
+ */
+const RECORD_BURST_MS = 2400;
+
 export default function ActiveWorkoutScreen() {
   const scrollEdge = useScrollEdge();
-  const confettiRef = useRef<ConfettiCannon>(null);
+
+  /*
+   * The record burst, counted rather than triggered.
+   *
+   * Zero is "no burst on screen" and every record bumps it, which gives
+   * `Confetti` the `runKey` it reseeds its particles from: two records in one
+   * session are two different falls rather than the same one replayed. It is
+   * put back to zero when the run is over, so a screen that is open for an
+   * hour is not holding forty-odd particle views for the fifty-nine minutes
+   * after the burst finished.
+   *
+   * This replaced `react-native-confetti-cannon`, which was mounted for the
+   * life of the session, fired through an imperative ref, and had no reduce-
+   * motion path at all: the one celebration in the app that ignored the
+   * setting, on the screen where it fires most. `Confetti` is the same burst
+   * the summary screen already uses, so a record looks the same when it lands
+   * as it does when the session is read back.
+   */
+  const [recordBurst, setRecordBurst] = useState(0);
+  const reduceMotion = useReduceMotion();
 
   const colors = useColors();
+
+  /*
+   * Gold-led, and the same four colours the summary screen falls in. A record
+   * is one event with one look, whether it is met as it happens or read back
+   * afterwards.
+   */
+  const recordColors = useMemo(
+    () => [colors.record, colors.warning, colors.success, colors.accent],
+    [colors],
+  );
   const insets = useSafeAreaInsets();
   // Only ever one live session, so this screen is a singleton and needs no id
   // in its address. Unlike the routine editor, which has one instance per
@@ -115,11 +156,62 @@ export default function ActiveWorkoutScreen() {
   const startRest = useTimer((state) => state.startRest);
   const { guard, lostWrites } = useWriteGuard();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  /*
+   * The hand-off between one lift and the next.
+   *
+   * `advanceTo` holds the unit the screen owes the reader a scroll to, and it
+   * is a ref rather than state on purpose: nothing renders differently because
+   * of it, and putting it in state would re-render every block on the screen to
+   * record an intention that is spent one layout pass later.
+   *
+   * It is only ever set by the *automatic* advance, never by a tap on a
+   * collapsed lift. Someone who reaches down the list and opens a block has
+   * already put their eye where they want it, and scrolling under them there
+   * would be the app arguing with the gesture.
+   */
+  const advanceTo = useRef<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const [demo, setDemo] = useState<{
     name: string;
     thumbnailUrl: string | null;
     videoUrl: string | null;
   } | null>(null);
+
+  /*
+   * Take the burst down once it has landed.
+   *
+   * Without this the particles stay mounted for the rest of the session,
+   * finished and invisible but still forty-four views deep in a screen whose
+   * whole job is staying responsive between sets. A second record inside the
+   * window restarts this timer along with the fall, which is what should
+   * happen: the run is one burst that got extended, not two overlapping.
+   */
+  useEffect(() => {
+    if (recordBurst === 0) return;
+    const done = setTimeout(() => setRecordBurst(0), RECORD_BURST_MS);
+    return () => clearTimeout(done);
+  }, [recordBurst]);
+
+  /*
+   * The advance expires if nothing claims it.
+   *
+   * `advanceTo` is spent by the next layout of the unit it names, and a layout
+   * is not a thing this screen can promise: an expand that changes neither the
+   * unit's height nor its position fires no event, and the intention would sit
+   * in the ref until some unrelated edit re-laid that block out and scrolled
+   * the user somewhere they had not asked to go, minutes later. Half a second
+   * is many frames longer than the layout it is waiting on and far short of
+   * anything a user would connect to the set they just logged.
+   */
+  useEffect(() => {
+    const owed = advanceTo.current;
+    if (owed === null) return;
+    const lapse = setTimeout(() => {
+      if (advanceTo.current === owed) advanceTo.current = null;
+    }, 500);
+    return () => clearTimeout(lapse);
+  }, [expandedId]);
 
   /*
    * Keeps the screen on mid-set so the phone doesn't lock between reps.
@@ -569,7 +661,20 @@ export default function ActiveWorkoutScreen() {
         if (finishesUnit) {
           const index = units.findIndex((entry) => entry.id === unit.id);
           const next = units.slice(index + 1).find((entry) => !unitIsComplete(entry));
-          if (next) setExpandedId(next.id);
+          if (next) {
+            setExpandedId(next.id);
+            /*
+             * And take the eye to it. See `advanceTo`.
+             *
+             * The expand on its own moves the page out from under the thumb:
+             * the block just finished collapses from a table of five rows to
+             * one line, and the next opens somewhere below the fold, so the
+             * hand that has just checked off the last set of the squat is
+             * looking at whatever happened to slide into that space. The
+             * scroll is what turns a re-layout into a hand-off.
+             */
+            advanceTo.current = next.id;
+          }
         }
       }
 
@@ -616,13 +721,29 @@ export default function ActiveWorkoutScreen() {
           bests,
         );
         if (prs.some((pr) => pr.setIndex !== null && fakedSets[pr.setIndex].id === set.id)) {
-          confettiRef.current?.start();
+          /*
+           * The record gets weight as well as colour.
+           *
+           * The burst was carrying the whole announcement, and a burst is the
+           * one part of it a phone in a pocket or a hand mid-rack cannot
+           * deliver: the set was already checked off with `logged`, which is
+           * the same cue the forty ordinary sets around it get, so a record
+           * felt like an ordinary set to the thumb that logged it. `finished`
+           * is the heavier cue the vocabulary already keeps for closing
+           * something out, and the guard is what stops the last set of an
+           * exercise firing it twice in the same frame.
+           */
+          if (!finishesExercise) haptics.finished();
+          // Reduce motion drops the fall and keeps the haptic: the cue is not
+          // motion, and it is the half of the announcement that still works
+          // with the phone face down on the bench.
+          if (!reduceMotion) setRecordBurst((run) => run + 1);
         }
       }
 
       return guard(updateSet(set.id, patch, fill));
     },
-    [settings, startRest, previousByExercise, bestsByExercise, guard, units],
+    [settings, startRest, previousByExercise, bestsByExercise, guard, units, reduceMotion],
   );
 
   /*
@@ -989,6 +1110,7 @@ export default function ActiveWorkoutScreen() {
       )}
 
       <ScrollView
+        ref={scrollRef}
         {...scrollEdge.list}
         // The discard button is the last thing in the scroll, so the system
         // navigation inset is added to the content rather than the container.
@@ -1094,7 +1216,29 @@ export default function ActiveWorkoutScreen() {
             ));
 
             return (
-              <View key={unit.id}>
+              <View
+                key={unit.id}
+                /*
+                 * Every unit reports where it sits, and the one being advanced
+                 * to acts on it.
+                 *
+                 * `layout.y` is measured against the content container, which
+                 * is the coordinate `scrollTo` wants, and the event arrives
+                 * *after* the re-layout that the expand caused: reading a
+                 * position at the moment `setExpandedId` runs would give the
+                 * one it held while the block above it was still open. One
+                 * `lg` of headroom above it so the block does not sit flush
+                 * against the session bar.
+                 */
+                onLayout={(event) => {
+                  if (advanceTo.current !== unit.id) return;
+                  advanceTo.current = null;
+                  scrollRef.current?.scrollTo({
+                    y: Math.max(0, event.nativeEvent.layout.y - spacing.lg),
+                    animated: !reduceMotion,
+                  });
+                }}
+              >
                 {index > 0 && <Divider />}
                 {open ? (
                   unit.label ? (
@@ -1181,13 +1325,27 @@ export default function ActiveWorkoutScreen() {
           rather than sitting above it, so it has to paint last. */}
       <RestTimerBar onExpand={() => setTimerSheetOpen(true)} />
 
-      <ConfettiCannon
-        ref={confettiRef}
-        count={50}
-        origin={{ x: -10, y: 0 }}
-        autoStart={false}
-        fadeOut={true}
-      />
+      {/*
+       * Over the rest bar, and only while it is falling.
+       *
+       * Last in the tree so the fall passes in front of the docked bar rather
+       * than behind it, which is where a record landing mid-rest actually
+       * wants to be. It takes no touches (`Confetti` is `pointerEvents:
+       * 'none'` throughout), so painting over the bar costs the controls under
+       * it nothing.
+       *
+       * Shorter and lighter than the summary screen's burst: that one is the
+       * point of the screen it is on, this one lands over a set that still has
+       * to be logged and cannot be in the way of the next one.
+       */}
+      {recordBurst > 0 && (
+        <Confetti
+          runKey={recordBurst}
+          count={44}
+          durationMs={RECORD_BURST_MS}
+          colors={recordColors}
+        />
+      )}
 
       <RestTimerSheet
         visible={timerSheetOpen}

@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { EQUIPMENT_LABELS, MUSCLE_GROUP_LABELS } from '@lift/shared';
 import { memo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { PressableScale, Text } from '@/components/ui';
 import type { ExerciseListItem } from '@/features/exercises/repository';
 import { ExerciseThumbnail } from '@/features/exercises/exercise-thumbnail';
-import { radius, spacing, useColors } from '@/theme';
+import { radius, spacing, translucent, useColors } from '@/theme';
 
 export interface ExerciseRowProps {
   // Narrowed to what the row draws, so list screens can select those columns
@@ -47,12 +47,34 @@ export const ExerciseRow = memo(function ExerciseRow({
     .join(', ');
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={selectable ? { selected } : undefined}
       onPress={() => onPress?.(exercise)}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfacePressed }]}
+      /*
+       * The crossfade alone, and it is worth the hook even here.
+       *
+       * This row is the one the catalog is drawn from, so the instinct is to
+       * keep it as cheap as a `Pressable` and leave the fill swapping
+       * instantly. That reasoning does not survive the list it sits in: both
+       * screens render it inside a `FlashList`, which mounts what fits on
+       * screen and recycles those views down the whole 6,800 rows. The cost is
+       * a dozen shared values, not six thousand, and it is paid once per
+       * visible slot rather than once per exercise.
+       *
+       * What it buys is the case the instant swap is worst at. Picking is
+       * multi-select: a tap toggles a checkbox rather than leaving the screen,
+       * so the row stays under the thumb and the press state is the only thing
+       * that reports on the tap itself. `translucent(..., 0)` for the resting
+       * fill so the interpolation moves alpha alone and never walks a light
+       * row through a dark smear on the way. No scale: full-bleed rows get the
+       * crossfade alone (`motion.ts`).
+       */
+      scaleTo={1}
+      fill={translucent(colors.surfacePressed, 0)}
+      fillPressed={colors.surfacePressed}
+      style={styles.row}
     >
       <ExerciseThumbnail
         name={exercise.name}
@@ -66,9 +88,12 @@ export const ExerciseRow = memo(function ExerciseRow({
           <Text variant="bodyMedium" numberOfLines={1} style={styles.title}>
             {exercise.name}
           </Text>
+          {/* Neutral, not the accent. "Custom" is a category, and a lime pill
+              on it made every hand-made exercise the loudest row in a 6,800-row
+              list. */}
           {exercise.isCustom && (
-            <View style={[styles.customTag, { backgroundColor: colors.accentSurface }]}>
-              <Text variant="caption" color="accent">
+            <View style={[styles.customTag, { backgroundColor: colors.surfaceMuted }]}>
+              <Text variant="caption" color="textSecondary">
                 Custom
               </Text>
             </View>
@@ -96,7 +121,7 @@ export const ExerciseRow = memo(function ExerciseRow({
       ) : (
         <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
       )}
-    </Pressable>
+    </PressableScale>
   );
 });
 

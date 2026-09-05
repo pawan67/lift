@@ -148,8 +148,25 @@ export function RestTimerBar({ onExpand }: RestTimerBarProps) {
    */
   const parked = useSharedValue(1);
 
+  /*
+   * In on `content`, out on `press`, rather than `travel` both ways.
+   *
+   * `travel` is `inOut`, which is the curve for something crossing the screen
+   * under a watched start and a watched finish. This is neither: arriving, the
+   * bar is a consequence of the check the user just tapped, and an `inOut`
+   * spends its first frames barely moving, which is exactly the window where
+   * the eye is asking whether the tap registered. `out` starts at speed and
+   * settles, so the bar is legibly present sooner without being any faster on
+   * paper.
+   *
+   * Leaving, the reading is spent. The user has hit Skip, or the countdown has
+   * run out and been dismissed, and the only thing 200ms of exit buys is 200ms
+   * before the list underneath is reachable again. `press` is the shortest
+   * duration in the file and the right one for a control clearing itself out
+   * of the way.
+   */
   useEffect(() => {
-    parked.value = withTiming(resting ? 0 : 1, timing.travel);
+    parked.value = withTiming(resting ? 0 : 1, resting ? timing.content : timing.press);
   }, [parked, resting]);
 
   const lift = useKeyboardLift(insets.bottom);

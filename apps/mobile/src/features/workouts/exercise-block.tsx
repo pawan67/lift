@@ -19,16 +19,16 @@ import {
   type WeightUnit,
 } from '@lift/shared';
 import { useMemo, type ComponentProps, Fragment } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 
-import { Text } from '@/components/ui';
+import { PressableScale, Text } from '@/components/ui';
 import type { WorkoutSet } from '@/db/schema';
 import { useExerciseUnits } from '@/features/exercises/units';
 import { haptics } from '@/features/feedback/haptics';
 import { showConfirm, showDialog } from '@/store/dialog';
 import { useSettings } from '@/store/settings';
-import { radius, spacing, stroke, useColors } from '@/theme';
+import { PRESS_SCALE_SMALL, radius, spacing, stroke, useColors } from '@/theme';
 
 import { ExerciseThumbnail } from '@/features/exercises/exercise-thumbnail';
 
@@ -403,11 +403,14 @@ export function ExerciseBlock({
       <View style={styles.header}>
         <View style={styles.titleBar}>
           {onOpenDemo ? (
-            <Pressable
+            <PressableScale
               onPress={onOpenDemo}
               hitSlop={THUMB_SLOP}
               accessibilityRole="button"
               accessibilityLabel={`Show ${detail.exercise.name} demonstration`}
+              // The case `PRESS_SCALE_SMALL` exists for: a 40pt circle taking
+              // the standard 3% is a press nobody can see.
+              scaleTo={PRESS_SCALE_SMALL}
             >
               <ExerciseThumbnail
                 name={detail.exercise.name}
@@ -415,7 +418,7 @@ export function ExerciseBlock({
                 size={THUMBNAIL_SIZE}
                 style={styles.thumbnail}
               />
-            </Pressable>
+            </PressableScale>
           ) : (
             <ExerciseThumbnail
               name={detail.exercise.name}
@@ -424,8 +427,13 @@ export function ExerciseBlock({
               style={styles.thumbnail}
             />
           )}
-          <Pressable
-            style={({ pressed }) => [styles.titlePress, pressed && styles.pressed]}
+          <PressableScale
+            style={styles.titlePress}
+            // Dim, not scale. The name stretches to fill the bar between the
+            // thumbnail and the menu, so shrinking it pulls both of its ends
+            // inward and reads as the header coming loose from the block.
+            dimTo={0.6}
+            scaleTo={1}
             onPress={onOpenExercise}
             accessibilityRole="link"
             // The badge is decorative; the state it reports has to reach a screen
@@ -459,43 +467,46 @@ export function ExerciseBlock({
                 </Animated.View>
               )}
             </View>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             onPress={openMenu}
             hitSlop={MENU_SLOP}
             accessibilityRole="button"
             accessibilityLabel={`More options for ${detail.exercise.name}`}
+            scaleTo={PRESS_SCALE_SMALL}
           >
             <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableScale>
         </View>
 
         <View style={styles.chipRow}>
           {restTimerEnabled && (
-            <Pressable
+            <PressableScale
               onPress={onEditRest}
               hitSlop={REST_SLOP}
               accessibilityRole="button"
               accessibilityLabel={`Rest after ${detail.exercise.name}, ${formatDuration(restSeconds)}. Edit`}
-              style={({ pressed }) => [
-                styles.chip,
-                {
-                  backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
-                },
-              ]}
+              fill={colors.surfaceMuted}
+              fillPressed={colors.surfacePressed}
+              style={[styles.chip, { backgroundColor: colors.surfaceMuted }]}
             >
               <Ionicons
                 name="timer-outline"
                 size={12}
-                color={restIsExplicit ? colors.accent : colors.textTertiary}
+                // An override is a state rather than a category, so it keeps
+                // its distinction. It stops being the accent and becomes a
+                // step up the ink instead: this chip is one of three in a row
+                // and the accent on it was reading as "this is the important
+                // one" rather than as "this one differs from the default".
+                color={restIsExplicit ? colors.text : colors.textTertiary}
               />
               <Text
                 variant="caption"
-                style={{ color: restIsExplicit ? colors.accent : colors.textTertiary }}
+                style={{ color: restIsExplicit ? colors.text : colors.textTertiary }}
               >
                 {formatDuration(restSeconds)}
               </Text>
-            </Pressable>
+            </PressableScale>
           )}
 
           {chipVisible && onEditSuperset && (
@@ -506,7 +517,7 @@ export function ExerciseBlock({
             />
           )}
 
-          <Pressable
+          <PressableScale
             onPress={openNote}
             hitSlop={NOTE_SLOP}
             accessibilityRole="button"
@@ -517,18 +528,15 @@ export function ExerciseBlock({
                   ? `Note from last time: ${previousNote}. Edit`
                   : `Add a note for ${detail.exercise.name}`
             }
-            style={({ pressed }) => [
-              styles.chip,
-              {
-                backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted,
-              },
-            ]}
+            fill={colors.surfaceMuted}
+            fillPressed={colors.surfacePressed}
+            style={[styles.chip, { backgroundColor: colors.surfaceMuted }]}
           >
             <Ionicons name="document-text-outline" size={12} color={noteChipColor} />
             <Text variant="caption" style={{ color: noteChipColor }}>
               Note
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
 
@@ -666,33 +674,46 @@ export function ExerciseBlock({
         />
       ))}
 
+      {/*
+       * The two ways a row gets added, and both of them press.
+       *
+       * "Add set" is the most-tapped control on this block after the check
+       * itself, and it was the only one of the pair that gave nothing back: a
+       * fill that swapped on the frame the finger landed and swapped back on
+       * the frame it lifted, which on a fast tap is a flicker or nothing at
+       * all. `PressableScale` runs the same fill as a 90ms interpolation with
+       * the spring release under it, so a tap that misses the write still
+       * reads as a tap that landed.
+       */}
       <View style={styles.addSetRow}>
-        <Pressable
+        <PressableScale
           onPress={() => onAddSet('warmup')}
           hitSlop={ADD_SET_SLOP}
-          style={({ pressed }) => [
-            styles.addSet,
-            { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-          ]}
+          fill={colors.surfaceMuted}
+          fillPressed={colors.surfacePressed}
+          style={[styles.addSet, { backgroundColor: colors.surfaceMuted }]}
         >
-          <Ionicons name="add" size={16} color={colors.warning} />
+          {/* The plus was amber against the plain one on "Add set" beside it,
+              which is a category (warm-up versus working) drawn in a role
+              colour that means "careful" everywhere else. The labels differ,
+              which is enough. */}
+          <Ionicons name="add" size={16} color={colors.textSecondary} />
           <Text variant="label" color="textSecondary">
             Add warm-up
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableScale>
+        <PressableScale
           onPress={() => onAddSet('normal')}
           hitSlop={ADD_SET_SLOP}
-          style={({ pressed }) => [
-            styles.addSet,
-            { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-          ]}
+          fill={colors.surfaceMuted}
+          fillPressed={colors.surfacePressed}
+          style={[styles.addSet, { backgroundColor: colors.surfaceMuted }]}
         >
           <Ionicons name="add" size={16} color={colors.textSecondary} />
           <Text variant="label" color="textSecondary">
             Add set
           </Text>
-        </Pressable>
+        </PressableScale>
       </View>
     </View>
   );
@@ -726,14 +747,16 @@ function CueCard({
   const inkToken = tone === 'secondary' ? 'textSecondary' : 'textTertiary';
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
-      style={({ pressed }) => [
+      fill={colors.surfaceMuted}
+      fillPressed={colors.surfacePressed}
+      style={[
         compact ? styles.cueChip : styles.cueNote,
-        { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
+        { backgroundColor: colors.surfaceMuted },
       ]}
     >
       <Ionicons name={icon} size={14} color={ink} />
@@ -761,7 +784,7 @@ function CueCard({
           </Text>
         </View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -785,18 +808,17 @@ function WarmupCard({
   const show = (kg: number) => formatWeight(kg, unit, { withUnit: false });
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={described.label}
       accessibilityHint="Adds these as warm-up sets above the sets below"
-      style={({ pressed }) => [
-        styles.cue,
-        { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-      ]}
+      fill={colors.surfaceMuted}
+      fillPressed={colors.surfacePressed}
+      style={[styles.cue, { backgroundColor: colors.surfaceMuted }]}
     >
       <View style={styles.cueHead}>
-        <Ionicons name="flame-outline" size={14} color={colors.warning} />
+        <Ionicons name="flame-outline" size={14} color={colors.textSecondary} />
         <Text variant="overline" color="textSecondary" style={styles.cueHeadLabel}>
           Warm-up
         </Text>
@@ -819,7 +841,7 @@ function WarmupCard({
           </Fragment>
         ))}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -868,7 +890,7 @@ function UnitHeader<T extends string>({
   const next = options[(options.indexOf(value) + 1) % options.length] ?? value;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={() => {
         haptics.selection();
         onChange(next);
@@ -880,7 +902,12 @@ function UnitHeader<T extends string>({
       accessibilityLabel={`${name} unit: ${value}`}
       accessibilityHint={`Switches to ${next}`}
       hitSlop={UNIT_SLOP}
-      style={({ pressed }) => [styles.unitCell, styles.unitHeader, pressed && styles.pressed]}
+      // Dim rather than fill: this one sits in the column header with no
+      // background of its own, and giving it one on press would draw a box
+      // around a label that does not have one at rest.
+      dimTo={0.5}
+      scaleTo={1}
+      style={[styles.unitCell, styles.unitHeader]}
     >
       <Text variant="overline" color="textTertiary">
         {value}
@@ -891,7 +918,7 @@ function UnitHeader<T extends string>({
       <View pointerEvents="none" style={styles.unitSwap}>
         <Ionicons name="swap-horizontal" size={9} color={colors.textTertiary} />
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -1158,5 +1185,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
   },
-  pressed: { opacity: 0.6 },
 });

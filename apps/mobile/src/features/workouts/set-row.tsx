@@ -39,13 +39,21 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Button, NumericField, Text } from '@/components/ui';
+import { Button, NumericField, PressableScale, Text } from '@/components/ui';
 import type { WorkoutSet } from '@/db/schema';
 import { haptics } from '@/features/feedback/haptics';
 import { canLogSet } from '@/features/workouts/repository';
-import { showConfirm } from '@/store/dialog';
 import { useSettings } from '@/store/settings';
-import { font, fontSize, radius, spacing, useColors, type Palette } from '@/theme';
+import {
+  font,
+  fontSize,
+  PRESS_SCALE_SMALL,
+  radius,
+  spacing,
+  translucent,
+  useColors,
+  type Palette,
+} from '@/theme';
 
 export interface SetRowProps {
   set: WorkoutSet;
@@ -485,19 +493,28 @@ function renderStepperButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.stepperButton,
-        { backgroundColor: pressed ? colors.surfacePressed : 'transparent' },
-      ]}
+      /*
+       * The two most repeated taps in the dialog, so they answer.
+       *
+       * RPE is stepped in halves, which means walking from the default to an
+       * 8.5 is three or four taps on the same 44pt square. An instant fill
+       * swap is invisible at that rate: the finger is down for less time than
+       * it takes to notice a background change and there is no release to
+       * watch. The scale is what makes a repeated tap countable.
+       */
+      fill={translucent(colors.surfacePressed, 0)}
+      fillPressed={colors.surfacePressed}
+      scaleTo={PRESS_SCALE_SMALL}
+      style={styles.stepperButton}
     >
       <Text variant="subheading" color="textSecondary">
         {glyph}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -576,14 +593,25 @@ export const SetRow = memo(function SetRow({
         ? `Set ${workingIndex}`
         : `Set ${workingIndex}, ${SET_TYPE_LABELS[set.setType]}`;
 
-  const badgeColor =
-    set.setType === 'warmup'
-      ? colors.warning
-      : set.setType === 'drop'
-        ? colors.accent
-        : set.setType === 'failure'
-          ? colors.danger
-          : colors.textSecondary;
+  /*
+   * One ink for every set type, and the glyph carries which one.
+   *
+   * This was a colour per type: amber for a warm-up, the accent for a drop
+   * set, red for a failure set, plain for a working set. Four hues in a 32pt
+   * cell that repeats twenty to forty times down an open session, which made
+   * this the single densest use of colour in the app.
+   *
+   * `SET_TYPE_BADGE` already prints a letter in that cell for each of the
+   * three, in place of the set's ordinal, so the hue was a second name for
+   * something that was spelling itself out. The red was the worst of them:
+   * `danger` means "this will destroy something" everywhere else in the app,
+   * and a set taken to failure is an achievement.
+   *
+   * A working set stays `textSecondary` rather than `text` for the same reason
+   * it always did: the number in this cell is an index, not a reading, and the
+   * weight and reps beside it are what the row is for.
+   */
+  const badgeColor = colors.textSecondary;
 
   const handleWeightChange = useCallback(
     (text: string) => {
@@ -687,17 +715,33 @@ export const SetRow = memo(function SetRow({
     });
   }, [set.isCompleted, loggable, done, pop, onToggleComplete]);
 
-  const confirmDelete = useCallback(() => {
-    void (async () => {
-      if (await showConfirm({ title: 'Delete set', confirmLabel: 'Delete' })) onDelete();
-    })();
-  }, [onDelete]);
-
+  /*
+   * Delete asks nothing, on every path that reaches it.
+   *
+   * The long press and the accessibility action used to raise a confirmation
+   * dialog while the swipe did not, so the same row had two deletes with two
+   * different costs and no way to tell from the outside which one you were
+   * about to pay. That is worse than either rule applied consistently, and the
+   * rule this app already argues for is the cheap one: `measurement/[kind].tsx`
+   * settles the identical question by noting that a reading is a few
+   * characters to retype and an undo bar has nowhere to live. A set is the same
+   * bargain, and this screen is the worst place in the app to spend a modal:
+   * the user is standing between sets with a bar waiting.
+   *
+   * What keeps that safe is that no path here is reachable by accident. The
+   * swipe is a gesture plus a tap on a revealed red panel. The long press is
+   * half a second of hold on a 32pt cell. The accessibility action is picked by
+   * name out of the actions rotor. Each is already the deliberate half of a
+   * confirmation; the dialog was asking a question the gesture had answered.
+   *
+   * `haptics.destructive` fires from the parent on every one of them, which is
+   * the acknowledgement that replaces the dialog.
+   */
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
-      if (event.nativeEvent.actionName === 'delete') confirmDelete();
+      if (event.nativeEvent.actionName === 'delete') onDelete();
     },
-    [confirmDelete],
+    [onDelete],
   );
 
   const openEffort = useCallback(() => setEffort(seedEffort(set.rpe, defaultRpe)), [set.rpe, defaultRpe]);
@@ -812,10 +856,21 @@ export const SetRow = memo(function SetRow({
             style={[StyleSheet.absoluteFill, tintStyle, { backgroundColor: colors.accentSurface }]}
           />
 
-          {/* Set number / type badge */}
+          {/*
+           * Set number / type badge, and the one control in this row left on a
+           * plain `Pressable` with no press state at all.
+           *
+           * Deliberate on both counts. Its tap cycles the type, so the badge
+           * itself changes glyph and colour on every press: the feedback is
+           * the result, arriving in the same frame a press state would have.
+           * And this row is drawn twenty to forty times on an open session, so
+           * every hook it carries is paid per set. A press animation that only
+           * repeats what the content already says is not worth a shared value
+           * and a worklet on every row of the hottest list in the app.
+           */}
           <Pressable
             onPress={() => onChangeSetType(nextSetType(set.setType))}
-            onLongPress={confirmDelete}
+            onLongPress={onDelete}
             hitSlop={INDEX_HIT_SLOP}
             accessibilityRole="button"
             accessibilityLabel={setName}
@@ -832,13 +887,26 @@ export const SetRow = memo(function SetRow({
           {/* Previous session. One brightness step and one glyph, not a chip:
               five hairline boxes per exercise would clutter the column whose
               whole job is to sit quietly beside the numbers being typed. */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.previousCell,
-              // `surfacePressed`, not `accentSurface`: the accent tint already
-              // means "checked off" one row width away.
-              pressed && { backgroundColor: colors.surfacePressed },
-            ]}
+          <PressableScale
+            style={styles.previousCell}
+            /*
+             * Fill only, at rest fully transparent.
+             *
+             * `translucent(..., 0)` rather than the string 'transparent': the
+             * interpolation is done in RGB, and fading from transparent *black*
+             * to a light grey walks the cell through a dark smear on the way.
+             * Holding the same channels at zero alpha means only the alpha
+             * moves.
+             *
+             * `surfacePressed`, not `accentSurface`: the accent tint already
+             * means "checked off" one row width away. And no scale: the cell is
+             * stretched between the index and the first field, so shrinking it
+             * would pull the row's own layout in on itself. Full-bleed rows get
+             * the crossfade alone (`motion.ts`).
+             */
+            scaleTo={1}
+            fill={translucent(colors.surfacePressed, 0)}
+            fillPressed={colors.surfacePressed}
             disabled={!previous}
             onPress={handleCopyPrevious}
             accessibilityRole="button"
@@ -860,7 +928,7 @@ export const SetRow = memo(function SetRow({
             {previous && (
               <Ionicons name="return-down-forward" size={11} color={colors.textTertiary} />
             )}
-          </Pressable>
+          </PressableScale>
 
           {fields.weight && (
             <NumericField
@@ -935,24 +1003,27 @@ export const SetRow = memo(function SetRow({
             a happy consequence rather than the reason.
           */}
           {fields.reps && (
-            <Pressable
+            <PressableScale
               onPress={openEffort}
               hitSlop={EFFORT_HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel={set.rpe != null ? `${setName}, RPE ${formatRpe(set.rpe)}` : `${setName}, Add RIR`}
               accessibilityHint="Changes the effort"
-              style={({ pressed }) => [
-                styles.effortCell,
-                // `surfaceMuted`, the fill the numeric fields carry: this reads
-                // as one more thing logged about the set rather than as a
-                // status, which is what an accent tint would claim.
-                { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
-              ]}
+              // `surfaceMuted`, the fill the numeric fields carry: this reads
+              // as one more thing logged about the set rather than as a
+              // status, which is what an accent tint would claim.
+              fill={colors.surfaceMuted}
+              fillPressed={colors.surfacePressed}
+              // A 36pt chip, so the deeper press. It opens a modal, which is
+              // the one action in this row that goes somewhere, and it is the
+              // narrowest target in it.
+              scaleTo={PRESS_SCALE_SMALL}
+              style={[styles.effortCell, { backgroundColor: colors.surfaceMuted }]}
             >
               <Text variant="caption" color="textSecondary" style={styles.effortText}>
                 {set.rpe != null ? `@${formatRpe(set.rpe)}` : 'RIR'}
               </Text>
-            </Pressable>
+            </PressableScale>
           )}
 
           <Pressable

@@ -6,7 +6,14 @@
  * when recomputing aggregates.
  */
 
-import { isWorkingSet, type PrKind, type SetType, type TrackingType } from './types.ts';
+import {
+  isWorkingSet,
+  type PrKind,
+  type SetType,
+  type TrackingType,
+  type WeightUnit,
+} from './types.ts';
+import { formatDurationShort, formatVolume, formatWeight } from './units.ts';
 
 // ---------------------------------------------------------------------------
 // Inputs
@@ -383,3 +390,32 @@ export function countActiveDays(workoutDates: readonly Date[]): number {
 }
 
 export { dayKey, weekKey };
+
+/**
+ * A record's value, written in the unit its kind is actually measured in.
+ *
+ * Seven kinds share one `value` column and four different dimensions between
+ * them: a load, a volume, a rep count, a duration and a distance. Formatting
+ * them all as a weight prints "8 kg" for an eight-rep record, which is not an
+ * ugly number but a wrong one.
+ *
+ * Here rather than on the summary screen because that is no longer the only
+ * reader. The session document a model is handed prints the same records, and
+ * two formatters for one column is how the screen and the document end up
+ * disagreeing about what a personal best was.
+ */
+export function formatPrValue(kind: PrKind, value: number, unit: WeightUnit): string {
+  switch (kind) {
+    case 'most_reps':
+      return `${value} reps`;
+    case 'best_duration':
+      return formatDurationShort(value);
+    case 'best_distance':
+      return `${value.toFixed(2)} km`;
+    case 'best_session_volume':
+    case 'best_set_volume':
+      return formatVolume(value, unit);
+    default:
+      return formatWeight(value, unit, { decimals: 1 });
+  }
+}

@@ -3,6 +3,7 @@ export * from './types.ts';
 export * from './units.ts';
 export * from './dates.ts';
 export * from './calculations.ts';
+export * from './ai/index.ts';
 export * from './coach.ts';
 export * from './landmarks.ts';
 export * from './progression.ts';

@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type TextInputProps,
+} from 'react-native';
 
 import { radius, spacing, useColors } from '@/theme';
 
@@ -16,6 +24,26 @@ export interface PromptModalProps {
   confirmLabel?: string;
   maxLength?: number;
   multiline?: boolean;
+  /**
+   * Keyboard behaviour for fields that are not prose.
+   *
+   * An API key, a base URL or a model name are all strings a phone keyboard
+   * will happily capitalise and autocorrect into something that no longer
+   * works, and the user cannot see that it did it. The default is unset, which
+   * is right for the rename dialogs this started as.
+   */
+  inputProps?: Pick<
+    TextInputProps,
+    'autoCapitalize' | 'autoCorrect' | 'autoComplete' | 'keyboardType' | 'spellCheck'
+  >;
+  /**
+   * Allow saving an empty value.
+   *
+   * Off by default: an empty routine name is not a rename. On for the settings
+   * fields whose empty state is meaningful, where clearing the box is how the
+   * user says "use the default".
+   */
+  allowEmpty?: boolean;
   onCancel: () => void;
   onConfirm: (value: string) => void;
 }
@@ -36,6 +64,8 @@ export function PromptModal({
   confirmLabel = 'Save',
   maxLength = 80,
   multiline = false,
+  inputProps,
+  allowEmpty = false,
   onCancel,
   onConfirm,
 }: PromptModalProps) {
@@ -55,6 +85,7 @@ export function PromptModal({
   }
 
   const trimmed = value.trim();
+  const submittable = allowEmpty || trimmed.length > 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -105,8 +136,9 @@ export function PromptModal({
               maxLength={maxLength}
               multiline={multiline}
               style={multiline ? styles.multiline : undefined}
-              onSubmitEditing={() => trimmed && onConfirm(trimmed)}
+              onSubmitEditing={() => submittable && onConfirm(trimmed)}
               returnKeyType="done"
+              {...inputProps}
             />
 
             {/*
@@ -125,7 +157,7 @@ export function PromptModal({
               <Button
                 title={confirmLabel}
                 accessibilityLabel={`${confirmLabel}, ${title}`}
-                disabled={trimmed.length === 0}
+                disabled={!submittable}
                 onPress={() => onConfirm(trimmed)}
                 style={styles.action}
               />

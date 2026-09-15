@@ -11,6 +11,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ColumnChart, type ColumnDatum } from '@/components/charts/column-chart';
 import { Badge, Card, EmptyState, Screen, Text, useScrollEdge } from '@/components/ui';
+import { StatsExplainer } from '@/features/ai/stats-explainer';
 import { UNMAPPED_MUSCLES } from '@/components/charts/body-map';
 import { formatSets, pluralSets } from '@/features/analytics/format';
 import {
@@ -20,7 +21,7 @@ import {
 } from '@/features/analytics/muscle-stats';
 import { RangePicker } from '@/features/analytics/range-picker';
 import { volumeColor } from '@/features/analytics/volume-landmarks';
-import type { StatRange } from '@/features/analytics/windows';
+import { STAT_RANGE_LABELS, type StatRange } from '@/features/analytics/windows';
 import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
 import { useSettings } from '@/store/settings';
 import { radius, spacing, stroke, useColors, useContentWidth } from '@/theme';
@@ -43,6 +44,7 @@ export default function MuscleSetsScreen() {
   // The column this screen is drawn in, not the window: see `useContentWidth`.
   const width = useContentWidth();
   const firstDayOfWeek = useSettings((state) => state.firstDayOfWeek);
+  const trainingLevel = useSettings((state) => state.trainingLevel);
 
   const [range, setRange] = useState<StatRange>('3m');
   const [trend, setTrend] = useState<MuscleSetTrend | null>(null);
@@ -76,6 +78,29 @@ export default function MuscleSetsScreen() {
     () => ranged?.muscles.find((entry) => entry.muscle === muscle) ?? null,
     [ranged, muscle],
   );
+
+  /**
+   * Every row of the table, with the band it is judged against.
+   *
+   * The same two numbers `MuscleRow` prints and `volumeColor` ramps on, written
+   * out. Building it here rather than inside the explainer is what keeps the
+   * reading tied to the range currently picked: this closes over `ranged`, which
+   * is already guarded against describing a window the user has moved off.
+   */
+  const explainFigures = useCallback(() => {
+    if (!ranged || ranged.muscles.length === 0) return null;
+
+    const rows = ranged.muscles.map((entry) => {
+      const landmarks = landmarksFor(entry.muscle, trainingLevel);
+      return `- ${MUSCLE_GROUP_LABELS[entry.muscle]}: ${formatSets(entry.setsPerWeek)} sets/week (${VOLUME_ZONE_LABELS[volumeZone(entry.setsPerWeek, landmarks)]}). MEV ${landmarks.mev}, MAV ${landmarks.mav}, MRV ${landmarks.mrv} sets/week.`;
+    });
+
+    return [
+      `${ranged.totalSets} direct working sets over ${ranged.weeks} weeks.`,
+      '',
+      ...rows,
+    ].join('\n');
+  }, [ranged, trainingLevel]);
 
   const columns = useMemo<ColumnDatum[]>(() => {
     // Resolved inside the memo rather than beside it: a fresh `[]` fallback
@@ -160,6 +185,19 @@ export default function MuscleSetsScreen() {
                 />
               ))}
             </Card>
+
+            {/*
+             * The reading of the table, under the table.
+             *
+             * It is handed the weekly rate and the landmark band for every
+             * muscle listed, which is exactly what the rows above already show
+             * and what the colour ramp already encodes. The one thing it adds
+             * is which of twenty-one rows is worth acting on first.
+             */}
+            <StatsExplainer
+              subject={`Weekly working sets per muscle over ${STAT_RANGE_LABELS[range].toLowerCase()}, against the volume landmarks for my training level.`}
+              figures={explainFigures}
+            />
 
             <Text variant="caption" color="textTertiary" style={styles.footnote}>
               The chart counts sets where the muscle was the target. The weekly rate beside each

@@ -43,6 +43,13 @@
       "when": 1788035570923,
       "tag": "0005_lovely_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788936910004,
+      "tag": "0006_wooden_lockheed",
+      "breakpoints": true
     }
   ]
 }

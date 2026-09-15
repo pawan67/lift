@@ -14,6 +14,8 @@ import { db } from '@/db/client';
 import { trackUpsert } from '@/db/mutations';
 import {
   bodyMeasurements,
+  coachMessages,
+  coachThreads,
   exercises,
   personalRecords,
   routineExercises,
@@ -68,6 +70,8 @@ export async function buildBackup(): Promise<BackupFile> {
     setRows,
     prRows,
     measurementRows,
+    threadRows,
+    threadMessageRows,
   ] = await Promise.all([
     db.select().from(exercises),
     db.select().from(routineFolders),
@@ -79,6 +83,8 @@ export async function buildBackup(): Promise<BackupFile> {
     db.select().from(workoutSets),
     db.select().from(personalRecords),
     db.select().from(bodyMeasurements),
+    db.select().from(coachThreads),
+    db.select().from(coachMessages),
   ]);
 
   const data: Record<string, unknown[]> = {
@@ -92,6 +98,12 @@ export async function buildBackup(): Promise<BackupFile> {
     workout_sets: setRows,
     personal_records: prRows,
     body_measurements: measurementRows,
+    // Named here rather than reached through SYNCABLE_TABLES, because they are
+    // deliberately not in it. A local-only table is still the user's, and this
+    // file is the only way it can leave the device. Missing them here is a
+    // silent hole in the escape hatch rather than a visible failure.
+    coach_threads: threadRows,
+    coach_messages: threadMessageRows,
   };
 
   return {
@@ -296,7 +308,108 @@ export async function restoreBackup(json: string): Promise<ImportResult> {
     imported[name] = count;
   }
 
+  skipped += await restoreCoachThreads(parsed, imported);
+
   return { imported, skipped, queued: signedIn ? queued : 0 };
+}
+
+/**
+ * The local-only half of a restore.
+ *
+ * Separate from the loop above and not merely another entry in it, for three
+ * reasons that are all the same reason: these tables do not replicate.
+ * `SYNC_TABLE_MAP` does not contain them, `trackUpsert` will not accept them
+ * (its parameter is a `SyncableTable`, so the compiler stops this before a test
+ * would), and nothing here is queued, because there is no endpoint to queue it
+ * for.
+ *
+ * Threads before messages: the foreign key is enforced (`PRAGMA foreign_keys =
+ * ON` in db/client.ts), so a message whose thread is missing from the file is
+ * rejected by SQLite and counted as skipped rather than quietly orphaning a
+ * conversation.
+ *
+ * A file written before these tables existed simply has neither key, which is
+ * why this reads them independently and returns early on each. That is also why
+ * `BACKUP_FORMAT_VERSION` is not bumped for them: the change is additive, and an
+ * older build refusing every new backup outright would be a worse outcome than
+ * one dropping two tables it has nowhere to put.
+ */
+async function restoreCoachThreads(
+  parsed: BackupFile,
+  imported: Record<string, number>,
+): Promise<number> {
+  const tables = [
+    { name: 'coach_threads', table: coachThreads },
+    { name: 'coach_messages', table: coachMessages },
+  ] as const;
+
+  let skipped = 0;
+
+  for (const { name, table } of tables) {
+    const rows = parsed.data[name];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+
+    let count = 0;
+
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk: { id: string; [column: string]: unknown }[] = [];
+
+      for (const row of rows.slice(i, i + CHUNK_SIZE)) {
+        // `toRestoreRow` cannot be reused: it requires `updatedAt`, and
+        // `coach_messages` has only a `createdAt`. An id is the whole
+        // requirement here, since nothing downstream resolves a conflict.
+        if (typeof row === 'object' && row !== null && typeof (row as { id?: unknown }).id === 'string') {
+          chunk.push(row as { id: string });
+        } else {
+          skipped += 1;
+        }
+      }
+
+      if (chunk.length === 0) continue;
+
+      const result = await insertCoachRows(table, chunk);
+      skipped += result.failed;
+      count += result.inserted;
+    }
+
+    imported[name] = count;
+  }
+
+  return skipped;
+}
+
+/**
+ * The same chunk-then-retry shape `insertRows` uses, without the oplog half.
+ *
+ * One malformed row, or one message pointing at a thread the file did not
+ * carry, costs itself rather than the forty-nine beside it.
+ */
+async function insertCoachRows(
+  table: typeof coachThreads | typeof coachMessages,
+  rows: { id: string }[],
+): Promise<{ inserted: number; failed: number }> {
+  try {
+    const returned = await db
+      .insert(table)
+      .values(rows as never)
+      .onConflictDoNothing()
+      .returning({ id: table.id });
+
+    return { inserted: returned.length, failed: 0 };
+  } catch {
+    if (rows.length === 1) return { inserted: 0, failed: 1 };
+
+    let inserted = 0;
+    let failed = 0;
+
+    for (const row of rows) {
+      const result = await insertCoachRows(table, [row]);
+      inserted += result.inserted;
+      failed += result.failed;
+    }
+
+    return { inserted, failed };
+  }
 }
 
 type RestoreTable = (typeof SYNC_TABLE_MAP)[SyncableTable];

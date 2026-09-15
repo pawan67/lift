@@ -29,6 +29,7 @@ import {
 } from '@/features/analytics/repository';
 import { BodyweightSquareWidget } from '@/features/measurements/bodyweight-square-widget';
 import { CalendarWidget } from '@/components/widgets/calendar-widget';
+import { VolumeAdviceSection } from '@/features/ai/volume-advice-section';
 import { SquareWidget, WideWidget, widgetFigure } from '@/components/ui/widget';
 import { listCompletedWorkouts } from '@/features/workouts/repository';
 import type { Workout } from '@/db/schema';
@@ -678,6 +679,25 @@ export default function HomeScreen() {
               <BarChart data={distributionData} formatValue={(value) => `${Math.round(value)}`} />
             </WideWidget>
           </View>
+        </Reveal>
+
+        {/*
+         * The one thing on this dashboard that is not a readout.
+         *
+         * Everything above reports what happened. This says what is missing,
+         * which is the question the tile above it raises and cannot answer: a
+         * bar chart of sets by body part shows a short bar, and a short bar is
+         * only a problem against a number the chart does not carry.
+         *
+         * Three rows and no button. The prescription costs a request, and this
+         * screen is walked past on the way to starting a session rather than
+         * read; the full list and the model live one tap away under Statistics.
+         * It renders nothing at all when the training is balanced or when there
+         * is too little in the window to judge, which is most of a new user's
+         * first month.
+         */}
+        <Reveal index={4}>
+          <VolumeAdviceSection limit={3} offerPrescription={false} />
         </Reveal>
       </ScrollView>
     </Screen>

@@ -1,4 +1,5 @@
 import {
+  AI_PROVIDER_LABELS,
   ONE_REP_MAX_FORMULA_LABELS,
   formatClockTime,
   formatDuration,
@@ -65,6 +66,11 @@ export default function SettingsScreen() {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  // Named rather than described: someone who has set this up wants to see
+  // which provider is going to be billed, and someone who has not wants the
+  // one word that says nothing is being sent anywhere.
+  const ai = settings.aiEnabled ? AI_PROVIDER_LABELS[settings.aiProvider] : 'Off';
 
   // Sex is deliberately left out. It is the one figure here somebody may not
   // want printed on the screen they opened in front of other people, and the
@@ -154,6 +160,22 @@ export default function SettingsScreen() {
             title="Calculations"
             subtitle={calculations}
             onPress={() => router.push('/settings/calculations')}
+          />
+          <Divider inset={spacing.lg} />
+          {/*
+           * Last, and its subtitle says "Off" where the others summarise.
+           *
+           * Every row above holds preferences that are already in effect. This
+           * one is the only place in Settings that turns on a request to a
+           * third party, so the state worth putting on the hub is whether it is
+           * on at all, not which model is named on the page.
+           */}
+          <ListRow
+            icon="sparkles-outline"
+            tone="category5"
+            title="AI coach"
+            subtitle={ai}
+            onPress={() => router.push('/settings/ai')}
           />
         </Card>
       </Reveal>

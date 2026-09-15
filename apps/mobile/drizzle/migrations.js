@@ -7,6 +7,7 @@ import m0002 from './0002_youthful_colossus.sql';
 import m0003 from './0003_known_gambit.sql';
 import m0004 from './0004_low_rhodey.sql';
 import m0005 from './0005_lovely_boom_boom.sql';
+import m0006 from './0006_wooden_lockheed.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0001,
 m0002,
 m0003,
 m0004,
-m0005
+m0005,
+m0006
     }
   }
   

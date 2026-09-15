@@ -9,13 +9,16 @@
 
 import {
   defaultBarKg,
+  DEFAULT_TRAINING_LEVEL,
   USES_BODYWEIGHT,
+  type AiProvider,
   type DistanceUnit,
   type MeasurementUnit,
   type OneRepMaxFormula,
   type Sex,
   type ThemePreference,
   type TrackingType,
+  type TrainingLevel,
   type WeightUnit,
 } from '@lift/shared';
 import { and, desc, eq, isNull } from 'drizzle-orm';
@@ -132,6 +135,43 @@ export interface Settings {
   weighInReminderEnabled: boolean;
   /** Format HH:mm, e.g. "08:00" */
   weighInReminderTime: string;
+
+  /**
+   * The AI coach, and why it is off until somebody turns it on.
+   *
+   * This app's whole claim is that nothing leaves the device unless it is asked
+   * to. A model call is the first thing in it that contacts a third party, so
+   * the default is off, the key is the user's own, and every screen that offers
+   * an AI reading works without one. Turning it on is a deliberate act taken on
+   * a screen that names the host it will contact.
+   *
+   * The key itself is not here. Settings are a JSON blob in an ordinary SQLite
+   * row; a credential belongs in the keychain, which is `features/ai/key-storage`.
+   */
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  /** Empty means "whatever `DEFAULT_AI_MODELS` says for this provider". */
+  aiModel: string;
+  /** Origin only. Empty means the provider's own address. Ignored for Anthropic. */
+  aiBaseUrl: string;
+  /**
+   * Write the session summary without being asked.
+   *
+   * Off by default because it spends money on a request nobody requested, and
+   * because the finish screen is the worst place in the app to introduce a wait.
+   * On, the card fills itself in behind the totals that are already on screen.
+   */
+  aiAutoSummary: boolean;
+
+  /**
+   * Which column of the landmark table the volume advice is judged against.
+   *
+   * Every statistics screen hardcodes `intermediate` today, and that was fine
+   * while the landmarks were a colour ramp. Advice is different: telling a
+   * genuine beginner they are eight sets short of an MEV fitted for someone
+   * three years in is how a useful feature becomes one people switch off.
+   */
+  trainingLevel: TrainingLevel;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -179,6 +219,13 @@ export const DEFAULT_SETTINGS: Settings = {
   // by more than the week's actual trend does. The one hour where a daily
   // weigh-in is comparable with the one before it.
   weighInReminderTime: '08:00',
+
+  aiEnabled: false,
+  aiProvider: 'anthropic',
+  aiModel: '',
+  aiBaseUrl: '',
+  aiAutoSummary: false,
+  trainingLevel: DEFAULT_TRAINING_LEVEL,
 };
 
 interface SettingsStore extends Settings {
@@ -344,6 +391,12 @@ async function persist(state: Settings): Promise<void> {
     gymReminderTime: state.gymReminderTime,
     weighInReminderEnabled: state.weighInReminderEnabled,
     weighInReminderTime: state.weighInReminderTime,
+    aiEnabled: state.aiEnabled,
+    aiProvider: state.aiProvider,
+    aiModel: state.aiModel,
+    aiBaseUrl: state.aiBaseUrl,
+    aiAutoSummary: state.aiAutoSummary,
+    trainingLevel: state.trainingLevel,
   };
 
   await db

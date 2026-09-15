@@ -251,7 +251,7 @@ export interface CoachReport {
  * spend their words on the two things a model gets wrong here: praising instead
  * of criticising, and inventing sets to criticise.
  */
-const BRIEF = `You are an experienced strength and hypertrophy coach reviewing a client's training log.
+export const COACH_BRIEF = `You are an experienced strength and hypertrophy coach reviewing a client's training log.
 
 Everything below is a real export from Lift, a workout tracker: the sessions as they were performed, the weekly set counts they add up to, the routines they came from, and the current personal bests. Read all of it before you answer.
 
@@ -272,11 +272,23 @@ Rules:
 - Where the data is thin, missing or contradictory, say so instead of filling the gap.
 - Skip the encouragement. I want the criticism.`;
 
-/** Renders a whole report as the Markdown document the user hands to a model. */
-export function buildCoachPrompt(report: CoachReport): string {
+/**
+ * The log itself, without the brief in front of it.
+ *
+ * Split out because the two halves are addressed differently once the app talks
+ * to a model directly rather than through a paste. The brief is an instruction
+ * and belongs in the system position, where it stays out of the conversation and
+ * cannot be argued with; the document is evidence and belongs in the first user
+ * turn, where a provider that caches prompt prefixes can hold on to it across
+ * every follow-up question. A year of training is tens of thousands of tokens
+ * and re-sending it to ask "why that exercise?" is most of the cost of a chat.
+ *
+ * `buildCoachPrompt` still exists and still returns exactly what it did, because
+ * the export path is not going anywhere: it is the whole feature for anyone who
+ * has not given the app a key.
+ */
+export function buildCoachDocument(report: CoachReport): string {
   const sections: string[] = [
-    '# Training review request',
-    BRIEF,
     aboutSection(report),
     windowSection(report),
     muscleSection(report),
@@ -288,6 +300,13 @@ export function buildCoachPrompt(report: CoachReport): string {
   ];
 
   return sections.filter((section) => section.length > 0).join('\n\n');
+}
+
+/** Renders a whole report as the Markdown document the user hands to a model. */
+export function buildCoachPrompt(report: CoachReport): string {
+  return ['# Training review request', COACH_BRIEF, buildCoachDocument(report)]
+    .filter((section) => section.length > 0)
+    .join('\n\n');
 }
 
 /**
@@ -499,6 +518,21 @@ function exerciseLines(exercise: CoachExercise, units: CoachUnits): string[] {
   if (exercise.sets.length === 0) lines.push('- no completed sets');
 
   return lines;
+}
+
+/**
+ * The routines, rendered exactly as the review document renders them.
+ *
+ * Exported because the volume advisor needs the same section and nothing else
+ * from the document: to say "add three sets of lateral raises to Push A" a model
+ * has to know that Push A exists and what is already in it. Reusing this rather
+ * than writing a second, shorter routine formatter keeps one description of a
+ * routine in the codebase, which matters because the interesting parts of it
+ * (prescribed targets, superset grouping, the units on every figure) are exactly
+ * the parts a quick reimplementation would drop.
+ */
+export function buildRoutineSection(report: CoachReport): string {
+  return routineSection(report);
 }
 
 function routineSection(report: CoachReport): string {

@@ -20,6 +20,8 @@ import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import type {
+  AiRole,
+  CoachThreadKind,
   DistanceUnit,
   Equipment,
   MeasurementKind,
@@ -351,6 +353,87 @@ export const syncMeta = sqliteTable('sync_meta', {
   key: text('key').primaryKey(),
   value: text('value'),
 });
+
+// ---------------------------------------------------------------------------
+// Coach threads
+// ---------------------------------------------------------------------------
+
+/**
+ * Conversations with a language model, and why they do not replicate.
+ *
+ * These two tables are **deliberately absent from `SYNCABLE_TABLES`**, and that
+ * is a wire-compatibility decision rather than a privacy one. `sync.controller`
+ * parses a whole push body against `z.enum(SYNCABLE_TABLES)` and rejects it
+ * entire, so a phone that took an over-the-air update and queued `coach_threads`
+ * rows against a self-hosted API that has not been redeployed gets a 400 for
+ * every mutation in the batch, including the workout it just finished. The
+ * engine only retires an entry on a returned conflict, so nothing would drain
+ * and the oplog would wedge permanently.
+ *
+ * The type system already enforces it: `trackUpsert` takes a `SyncableTable`, so
+ * these tables cannot be handed to it even by accident. They are written with
+ * plain inserts.
+ *
+ * Not replicating is not the same as not being the user's, so both tables are
+ * listed explicitly in `buildBackup`. That function dumps a hardcoded set, and a
+ * table missing from it disappears from the escape hatch without a word.
+ */
+export const coachThreads = sqliteTable(
+  'coach_threads',
+  {
+    id: text('id').primaryKey(),
+    /**
+     * Which surface opened it. `review` is the coach chat, `session` a finish
+     * screen summary, `advice` the volume advisor, `stats` a statistics reading.
+     */
+    kind: text('kind').notNull().$type<CoachThreadKind>(),
+    title: text('title').notNull(),
+    /**
+     * What the thread is about, for the kinds that are about one row: the
+     * workout id for a session summary. Null for a free conversation.
+     *
+     * This is what stops a summary being regenerated, and re-billed, every time
+     * someone reopens a workout they finished last Tuesday.
+     */
+    subjectId: text('subject_id'),
+    /**
+     * `COACH_PROMPT_VERSION` at the time it was asked.
+     *
+     * A stored answer outlives the document it was written against. Someone
+     * comparing two reviews months apart can see whether they were even asked
+     * the same question.
+     */
+    promptVersion: integer('prompt_version').notNull(),
+    /** The model that answered, for the same reason. Opinions are not portable. */
+    model: text('model').notNull(),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    updatedAt: integer('updated_at').notNull().$defaultFn(now),
+  },
+  (table) => [index('coach_threads_subject_idx').on(table.kind, table.subjectId)],
+);
+
+/**
+ * One turn.
+ *
+ * The first user message of a `review` thread is the whole training document,
+ * tens of thousands of characters of it. Stored rather than rebuilt because the
+ * log moves: rebuilding it to ask a follow-up would silently change the evidence
+ * under an answer that has already been given.
+ */
+export const coachMessages = sqliteTable(
+  'coach_messages',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => coachThreads.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().$type<AiRole>(),
+    content: text('content').notNull(),
+    position: real('position').notNull(),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (table) => [index('coach_messages_thread_idx').on(table.threadId, table.position)],
+);
 
 // ---------------------------------------------------------------------------
 // Relations

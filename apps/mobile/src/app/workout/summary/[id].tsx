@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   formatDateTime,
   formatDurationShort,
+  formatPrValue,
   formatVolume,
-  formatWeight,
   isWorkingSet,
   PR_KIND_LABELS,
   type MuscleGroup,
@@ -27,6 +27,7 @@ import {
   splitMeasure,
   useScrollEdge,
 } from '@/components/ui';
+import { SessionSummaryCard } from '@/features/ai/session-summary-card';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { db } from '@/db/client';
 import { personalRecords } from '@/db/schema';
@@ -246,6 +247,20 @@ export default function WorkoutSummaryScreen() {
           </View>
         </Card>
 
+        {/*
+         * After the totals, before the body map.
+         *
+         * The figures above are what happened and are on screen the instant
+         * this route opens. This is the reading of them, and it belongs on the
+         * same side of the screen as the numbers it refers to rather than under
+         * the exercise list, where it would be read after the user had already
+         * scrolled past everything it is about.
+         *
+         * It renders nothing at all when the AI coach is off, which is the
+         * default, so this screen is unchanged for anyone who never sets a key.
+         */}
+        <SessionSummaryCard workoutId={id} />
+
         <Text variant="overline" color="textSecondary" style={styles.sectionHeading}>
           Muscles trained
         </Text>
@@ -283,22 +298,6 @@ export default function WorkoutSummaryScreen() {
       </ScrollView>
     </Screen>
   );
-}
-
-function formatPrValue(kind: PrKind, value: number, unit: 'kg' | 'lb'): string {
-  switch (kind) {
-    case 'most_reps':
-      return `${value} reps`;
-    case 'best_duration':
-      return formatDurationShort(value);
-    case 'best_distance':
-      return `${value.toFixed(2)} km`;
-    case 'best_session_volume':
-    case 'best_set_volume':
-      return formatVolume(value, unit);
-    default:
-      return formatWeight(value, unit, { decimals: 1 });
-  }
 }
 
 /** Label above figure, on a hairline-ruled band: the same grid as `StatBand`. */

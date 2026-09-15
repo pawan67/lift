@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { BodyMap } from '@/components/charts/body-map';
 import { Card, Divider, ListRow, Reveal, Screen, Text, useScrollEdge } from '@/components/ui';
 import { DayStrip } from '@/features/analytics/day-strip';
+import { VolumeAdviceSection } from '@/features/ai/volume-advice-section';
 import { getMuscleBoard, type MuscleBoard } from '@/features/analytics/muscle-stats';
 import { VolumeLegend } from '@/features/analytics/volume-legend';
 import { addDays, startOfDay } from '@/features/analytics/windows';
@@ -141,6 +142,21 @@ export default function StatisticsScreen() {
             </Reveal>
           )}
         </Card>
+
+        {/*
+         * Under the body map, because it is the same claim in words.
+         *
+         * The map has coloured a muscle dim for as long as the volume landmarks
+         * have existed, and a colour is only legible to somebody who already
+         * knows what the ramp means. This says it: four sets a week against a
+         * minimum of ten. The window is four weeks rather than the map's seven
+         * days and the card says so, because a weekly set count read off a
+         * single week mostly reports which day of a split it happens to be.
+         *
+         * Absent rather than empty when the training is balanced. A card whose
+         * good state is a blank space is a card that teaches people to skip it.
+         */}
+        <VolumeAdviceSection />
 
         {/* A plain overline rather than `SectionHeader`, whose own 16px indent
             is right on screens that scroll edge to edge and wrong here: this

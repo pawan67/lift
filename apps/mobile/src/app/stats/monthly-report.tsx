@@ -23,6 +23,7 @@ import {
   splitMeasure,
   useScrollEdge,
 } from '@/components/ui';
+import { StatsExplainer } from '@/features/ai/stats-explainer';
 import { pluralSessions, pluralSets } from '@/features/analytics/format';
 import {
   getMonthlyReport,
@@ -85,6 +86,7 @@ export default function MonthlyReportScreen() {
   // The column this screen is drawn in, not the window: see `useContentWidth`.
   const width = useContentWidth();
   const weightUnit = useSettings((state) => state.weightUnit);
+
   const bodyweightKg = useSettings((state) => state.bodyweightKg);
   const formula = useSettings((state) => state.oneRepMaxFormula);
 
@@ -118,6 +120,40 @@ export default function MonthlyReportScreen() {
   // asynchronous, and last month's totals left up under this month's title are
   // read as this month's.
   const current = report?.monthStart === month.getTime() ? report : null;
+
+  /**
+   * The figures on screen, serialised for a model.
+   *
+   * Built from `monthlyReportShareText`, which already writes the month's
+   * headline numbers with a unit on each, then extended with the two things a
+   * share card has no room for and a reading cannot do without: the month
+   * before, and the trailing year the chart is plotting.
+   */
+  const explainFigures = useCallback(() => {
+    if (!current || current.totals.workouts === 0) return null;
+
+    const lines = [monthlyReportShareText(current, weightUnit)];
+
+    if (current.previous) {
+      lines.push(
+        '',
+        'The month before:',
+        `Workouts: ${current.previous.workouts}`,
+        `Volume: ${formatVolume(current.previous.volumeKg, weightUnit)}`,
+        `Sets: ${current.previous.sets.toLocaleString()}`,
+      );
+    }
+
+    lines.push(
+      '',
+      'Volume by month, oldest first:',
+      current.series
+        .map((bucket) => `${bucket.label}: ${formatVolume(bucket.volumeKg, weightUnit)}`)
+        .join('\n'),
+    );
+
+    return lines.join('\n');
+  }, [current, weightUnit]);
 
   const columns = useMemo<ColumnDatum[]>(
     () =>
@@ -212,6 +248,18 @@ export default function MonthlyReportScreen() {
             </Text>
           </Card>
         ) : null}
+
+        {/*
+         * The reading of the month, under the month.
+         *
+         * `explainFigures` hands over the same numbers `SummaryGrid` and the
+         * chart above are drawn from, including the twelve-month series and the
+         * month before, because a monthly recap only means anything against the
+         * ones either side of it. Nothing is recomputed for it.
+         */}
+        {current && current.totals.workouts > 0 && (
+          <StatsExplainer subject="A month of my training, against the year around it." figures={explainFigures} />
+        )}
 
         {current && (
           <Button

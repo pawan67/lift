@@ -1,24 +1,39 @@
-import { buildCoachPrompt, coachFileName, estimateTokens, type CoachReport } from '@lift/shared';
+import {
+  buildCoachPrompt,
+  coachFileName,
+  estimateTokens,
+  formatDateTime,
+  type CoachReport,
+} from '@lift/shared';
 import { File, Paths } from 'expo-file-system';
-import { Stack } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, Share, StyleSheet, View } from 'react-native';
+import {
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+  type AccessibilityActionEvent,
+} from 'react-native';
 
 import {
   Button,
   Card,
   Divider,
+  ListRow,
   Screen,
   SectionHeader,
   Text,
   TextField,
   useScrollEdge,
 } from '@/components/ui';
+import { loadAiConfig } from '@/features/ai/client';
+import { deleteThread, listThreads, type CoachThread } from '@/features/ai/threads';
 import { RangePicker } from '@/features/analytics/range-picker';
 import { buildCoachReport, MAX_LOGGED_SESSIONS } from '@/features/coach/report';
 import { SettingToggle } from '@/features/settings/rows';
-import { showAlert } from '@/store/dialog';
+import { showAlert, showConfirm } from '@/store/dialog';
 import { spacing } from '@/theme';
 import type { StatRange } from '@/features/analytics/windows';
 
@@ -79,6 +94,20 @@ export default function CoachScreen() {
   });
   const [note, setNote] = useState('');
 
+  /**
+   * Whether asking in the app is even on the table.
+   *
+   * A keychain read, so it cannot be answered during render, and it decides
+   * which of the buttons below is the primary one. Nothing about this screen
+   * breaks when it stays false: the export it was built as is still the whole
+   * feature for anyone who has not set up a key, and is still the right answer
+   * for anyone who would rather read the review somewhere else.
+   */
+  const [configured, setConfigured] = useState(false);
+
+  /** Stored conversations, newest first. Empty until one has been had. */
+  const [threads, setThreads] = useState<CoachThread[]>([]);
+
   const [report, setReport] = useState<CoachReport | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<'text' | 'file' | null>(null);
@@ -97,6 +126,41 @@ export default function CoachScreen() {
     setReport(null);
     setFailed(false);
   }, []);
+
+  const refreshThreads = useCallback(() => {
+    void listThreads('review')
+      .then(setThreads)
+      .catch(() => setThreads([]));
+  }, []);
+
+  // Re-read on focus rather than on mount: coming back from a conversation just
+  // had is exactly when this list is wrong.
+  useFocusEffect(refreshThreads);
+
+  useEffect(() => {
+    let live = true;
+    void loadAiConfig().then((config) => {
+      if (live) setConfigured(config !== null);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const remove = useCallback(
+    async (threadId: string) => {
+      const confirmed = await showConfirm({
+        title: 'Delete this review?',
+        message: 'The conversation is removed from this device. Your training log is untouched.',
+        confirmLabel: 'Delete',
+      });
+      if (!confirmed) return;
+
+      await deleteThread(threadId);
+      refreshThreads();
+    },
+    [refreshThreads],
+  );
 
   useEffect(() => {
     // Two reads can be in flight (change the range, then a toggle) and they
@@ -200,7 +264,8 @@ export default function CoachScreen() {
           This writes out your training as one long message: every session in the window, how many
           sets each muscle got against what it needs, your routines and your records, and ends by
           asking for criticism. Send it to ChatGPT, Claude or whatever you use, and the answer comes
-          back against your real log instead of a guess at it.
+          back against your real log instead of a guess at it. Set up a key under Settings, AI
+          coach, and you can ask here instead and keep the conversation.
         </Text>
 
         <SectionHeader title="How much to send" />
@@ -269,10 +334,48 @@ export default function CoachScreen() {
           </Text>
         ) : null}
 
+        {/*
+         * Two ways out, and which one leads depends on whether a key is set.
+         *
+         * The export is not a fallback that the in-app answer replaced. It is
+         * the honest option for somebody who has no key, does not want one, or
+         * would rather read a long review on a computer, and it is the only one
+         * of the two that costs nothing. So it keeps its size and its wording;
+         * asking in the app is added above it when asking in the app is
+         * possible, and is silent otherwise.
+         */}
+        {configured && (
+          <>
+            <Button
+              title="Ask now"
+              icon="sparkles-outline"
+              size="lg"
+              fullWidth
+              disabled={prompt === null || empty}
+              onPress={() =>
+                router.push({
+                  pathname: '/coach/chat',
+                  params: {
+                    range: choices.range,
+                    sessions: choices.withSessions ? '1' : '0',
+                    routines: choices.withRoutines ? '1' : '0',
+                    note: note.trim(),
+                  },
+                })
+              }
+            />
+            <Text variant="caption" color="textTertiary" style={styles.hint}>
+              Sends the same message to your own model and reads the answer here, where you can ask
+              it follow-up questions against the same log.
+            </Text>
+          </>
+        )}
+
         <Button
           title="Share the prompt"
           icon="chatbubble-ellipses-outline"
-          size="lg"
+          size={configured ? 'md' : 'lg'}
+          variant={configured ? 'secondary' : 'primary'}
           fullWidth
           loading={busy === 'text'}
           disabled={prompt === null || busy !== null}
@@ -305,6 +408,50 @@ export default function CoachScreen() {
           disabled={prompt === null}
           onPress={() => setPreviewing((open) => !open)}
         />
+
+        {/*
+         * Past conversations.
+         *
+         * The one thing the export could never do. A shared file goes into a
+         * chat app and the answer lives there, so there is no memory, no
+         * follow-up against the same log, and nothing to compare a review from
+         * March against. These are stored on the device, are excluded from sync
+         * for wire-compatibility reasons, and travel in a backup.
+         *
+         * Reopening one does not re-read the log: the answer keeps the evidence
+         * it was actually given, which is the only way two reviews months apart
+         * can be compared at all.
+         */}
+        {threads.length > 0 && (
+          <>
+            <SectionHeader title="Earlier reviews" />
+            <Card padded={false}>
+              {threads.map((thread, index) => (
+                <View key={thread.id}>
+                  {index > 0 && <Divider inset={spacing.lg} />}
+                  <ListRow
+                    icon="time-outline"
+                    title={thread.title}
+                    subtitle={`${formatDateTime(new Date(thread.createdAt))} · ${thread.model}`}
+                    onPress={() => router.push({ pathname: '/coach/chat', params: { thread: thread.id } })}
+                    accessibilityActions={[{ name: 'delete', label: 'Delete this review' }]}
+                    onAccessibilityAction={(event: AccessibilityActionEvent) => {
+                      if (event.nativeEvent.actionName === 'delete') void remove(thread.id);
+                    }}
+                    accessory={
+                      <Button
+                        title="Delete"
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => void remove(thread.id)}
+                      />
+                    }
+                  />
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
 
         {previewing && prompt !== null && (
           <Card style={styles.preview}>

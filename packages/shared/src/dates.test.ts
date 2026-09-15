@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { formatClockTime, parseClockTime, toClockTime } from './dates.ts';
+import { describeElapsed, formatClockTime, parseClockTime, toClockTime } from './dates.ts';
 
 describe('parseClockTime', () => {
   it('reads both padded and unpadded hours', () => {
@@ -61,5 +61,50 @@ describe('formatClockTime', () => {
   it('passes unparseable input through', () => {
     assert.equal(formatClockTime('not a time'), 'not a time');
     assert.equal(formatClockTime(''), '');
+  });
+});
+
+describe('describeElapsed', () => {
+  const NOW = 1_800_000_000_000;
+  const MINUTE = 60_000;
+  const HOUR = 3_600_000;
+  const DAY = 86_400_000;
+
+  const ago = (ms: number) => describeElapsed(NOW - ms, NOW);
+
+  it('holds still under a minute', () => {
+    assert.equal(ago(0), 'Just now');
+    assert.equal(ago(59 * 1000), 'Just now');
+  });
+
+  it('counts minutes, then hours', () => {
+    assert.equal(ago(MINUTE), '1 min ago');
+    assert.equal(ago(40 * MINUTE), '40 min ago');
+    assert.equal(ago(HOUR), '1 hour ago');
+    assert.equal(ago(5 * HOUR), '5 hours ago');
+    assert.equal(ago(23 * HOUR), '23 hours ago');
+  });
+
+  // The boundary the whole thing exists for: a session logged this morning
+  // reads in hours, and only a session from another day reads in days.
+  it('turns over to days at twenty-four hours, not at midnight', () => {
+    assert.equal(ago(DAY - 1), '23 hours ago');
+    assert.equal(ago(DAY), '1 day ago');
+    assert.equal(ago(3 * DAY), '3 days ago');
+    assert.equal(ago(13 * DAY), '13 days ago');
+  });
+
+  it('coarsens to weeks and then months', () => {
+    assert.equal(ago(14 * DAY), '2 weeks ago');
+    assert.equal(ago(30 * DAY), '4 weeks ago');
+    assert.equal(ago(60 * DAY), '2 months ago');
+    assert.equal(ago(400 * DAY), '13 months ago');
+  });
+
+  // Clocks move backwards: a device correcting its time, or a row written by
+  // another device a few seconds ahead. "In 4 seconds" is not a thing a log
+  // should ever say.
+  it('reads a future instant as just now', () => {
+    assert.equal(describeElapsed(NOW + 5 * HOUR, NOW), 'Just now');
   });
 });

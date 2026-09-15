@@ -143,3 +143,49 @@ export function prefersTwelveHourClock(): boolean {
 export function formatDateTime(date: Date, dateOptions?: Intl.DateTimeFormatOptions): string {
   return `${date.toLocaleDateString(undefined, dateOptions)} · ${formatTimeOfDay(date)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Elapsed time
+// ---------------------------------------------------------------------------
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/** "1 hour ago", "3 days ago": the count with its unit agreeing with it. */
+function elapsedIn(count: number, unit: string): string {
+  return `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * How long ago something happened, in the coarsest unit that still answers the
+ * question: "Just now", "40 min ago", "5 hours ago", "3 days ago".
+ *
+ * The unit is the point. A date tells you *when* a routine was last performed
+ * and leaves the subtraction to the reader; standing in the gym deciding what
+ * to train, the fact wanted is the gap, not the date, and below a day that gap
+ * is measured in hours. "12 Sep" and "18 hours ago" are the same instant and
+ * only one of them says "you already trained today".
+ *
+ * Measured in elapsed time rather than in calendar days, so it never claims
+ * "1 day ago" for something two hours old that happened either side of
+ * midnight. The tiers above a day match `describeRecency` in the app, so a
+ * routine's recency and a measurement's read the same way.
+ *
+ * `now` is passed rather than read, because this runs inside render: a function
+ * that reads the clock itself cannot be tested and cannot be held still for the
+ * length of a list, where two rows stamped a millisecond apart should not end
+ * up on different sides of a boundary.
+ */
+export function describeElapsed(at: number, now: number): string {
+  const elapsed = Math.max(0, now - at);
+
+  if (elapsed < MINUTE_MS) return 'Just now';
+  if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)} min ago`;
+  if (elapsed < DAY_MS) return elapsedIn(Math.floor(elapsed / HOUR_MS), 'hour');
+
+  const days = Math.floor(elapsed / DAY_MS);
+  if (days < 14) return elapsedIn(days, 'day');
+  if (days < 60) return elapsedIn(Math.round(days / 7), 'week');
+  return elapsedIn(Math.round(days / 30), 'month');
+}

@@ -32,6 +32,7 @@ import { db } from '@/db/client';
 import { routineFolders, workouts } from '@/db/schema';
 import { useRows } from '@/db/use-rows';
 import { RoutineExerciseBlock } from '@/features/routines/exercise-block';
+import { describeLastPerformed } from '@/features/routines/recency';
 import {
   addExerciseToRoutine,
   applyRoutineExerciseOrder,
@@ -51,6 +52,7 @@ import { buildRoutineShare } from '@/features/share';
 import { useShare } from '@/features/share/use-share';
 import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
 import { useLaunchAction } from '@/hooks/use-launch-action';
+import { useTicker } from '@/hooks/use-ticker';
 import { showConfirm } from '@/store/dialog';
 import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
 import { HIT_SLOP, spacing, useColors } from '@/theme';
@@ -70,6 +72,11 @@ export default function RoutineEditorScreen() {
   const openPicker = useExercisePicker((state) => state.open);
 
   const colors = useColors();
+
+  // A minute is the fastest the line below moves: it is measured in hours once
+  // it is measured in anything, and the screen is open for as long as it takes
+  // to read a routine and decide to start it.
+  const now = useTicker(60_000);
 
   const [detail, setDetail] = useState<RoutineDetail | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -391,6 +398,17 @@ export default function RoutineEditorScreen() {
             title={detail.routine.name}
             subtitle="Name"
             onPress={() => setRenaming(true)}
+          />
+          {/* Inert, like a settings row showing a value: there is nothing to
+              edit here, the session that finishes it writes this. It earns a
+              place on a card of editable fields because this is the screen the
+              Start button is on, and "how long has it been" is the last
+              question asked before pressing it. */}
+          <Divider inset={spacing.lg} />
+          <ListRow
+            icon="time-outline"
+            title={describeLastPerformed(detail.routine.lastPerformedAt, now)}
+            subtitle="Last performed"
           />
           {folders.length > 0 && (
             <>

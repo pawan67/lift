@@ -1,6 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { DATE_MEDIUM, formatDateTime, formatDuration, reorder, type PositionedRow } from '@lift/shared';
-import { and, asc, desc, isNull } from 'drizzle-orm';
+import {
+  describeElapsed,
+  formatDuration,
+  reorder,
+  suggestNextRoutine,
+  type PositionedRow,
+  type RoutineSuggestion,
+} from '@lift/shared';
+import { and, asc, desc, isNotNull, isNull } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -25,6 +32,7 @@ import {
 import { db } from '@/db/client';
 import { routines as routinesTable, routineFolders, workouts, type Routine, type RoutineFolder } from '@/db/schema';
 import { useRows } from '@/db/use-rows';
+import { describeLastPerformed } from '@/features/routines/recency';
 import {
   assignRoutinesToFolder,
   createRoutineFolder,
@@ -90,13 +98,73 @@ export default function WorkoutScreen() {
       .orderBy(asc(routineFolders.position)),
   );
 
+  /*
+   * The last few finished sessions, for the rotation hint below the heading.
+   *
+   * Two columns and twenty rows: this is not history, it is the order the
+   * routines were performed in, and `suggestNextRoutine` reads nothing else.
+   * Unfinished sessions are excluded because an open workout has not happened
+   * yet, and it is the one this hint is answering *after*.
+   */
+  const { rows: recentSessions } = useRows(
+    db
+      .select({ routineId: workouts.routineId, startedAt: workouts.startedAt })
+      .from(workouts)
+      .where(and(isNotNull(workouts.finishedAt), isNull(workouts.deletedAt)))
+      .orderBy(desc(workouts.startedAt))
+      .limit(20),
+  );
+
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [editingFolder, setEditingFolder] = useState<{id: string, name: string} | null>(null);
   const [assigningToFolder, setAssigningToFolder] = useState<{ id: string; name: string } | null>(null);
   const [reordering, setReordering] = useState(false);
 
   const active = activeRows[0];
-  const now = useTicker(1000, Boolean(active));
+
+  /*
+   * One clock for two jobs, at whichever rate the finer of them needs.
+   *
+   * The resume card counts seconds, so a live session ticks at 1s. With none
+   * open, all that moves is "5 hours ago" on the routine rows, which turns over
+   * at a minute at its fastest. This used to switch *off* entirely without a
+   * session, which froze those rows at whatever the clock read when the tab
+   * mounted: open the app in the evening on a tab that mounted at breakfast and
+   * every routine still claims it was trained an hour ago.
+   */
+  const now = useTicker(active ? 1000 : 60_000);
+
+  /*
+   * Which routine the log says comes next, and the routine it names.
+   *
+   * Suppressed while a session is open, which is not a limitation of the
+   * reading but a rule about the screen: the card above already says what the
+   * user is in the middle of, and a hint about what to start next is an
+   * argument with it. Recomputed on the minute with `now`, which costs a walk
+   * over twenty rows and keeps the hint from going stale on a tab left open.
+   */
+  const suggestion = useMemo<RoutineSuggestion | null>(
+    () =>
+      active
+        ? null
+        : suggestNextRoutine({
+            routines: routines.map((routine) => ({
+              id: routine.id,
+              name: routine.name,
+              lastPerformedAt: routine.lastPerformedAt?.getTime() ?? null,
+            })),
+            sessions: recentSessions.map((session) => ({
+              routineId: session.routineId,
+              startedAt: session.startedAt.getTime(),
+            })),
+            now,
+          }),
+    [active, routines, recentSessions, now],
+  );
+
+  const suggested = suggestion
+    ? routines.find((routine) => routine.id === suggestion.routineId)
+    : undefined;
 
   // Which Start control is mid-flight, or null. Session creation is a round
   // trip to disk, so an unlatched second tap would ask for a second session and
@@ -493,6 +561,22 @@ export default function WorkoutScreen() {
           }
         />
 
+        {/*
+         * The hint sits under the heading rather than above it, inside the
+         * section it is about: it is a remark on the list, not a third thing
+         * competing with the resume card and the empty start for the top of
+         * the screen.
+         */}
+        {suggested && suggestion && (
+          <NextUpCard
+            name={suggested.name}
+            reason={suggestionReason(suggestion, now)}
+            onPress={() =>
+              router.push({ pathname: '/routine/[id]', params: { id: suggested.id } })
+            }
+          />
+        )}
+
         {routines.length === 0 && folders.length === 0 ? (
           <EmptyState
             icon="list-outline"
@@ -524,6 +608,7 @@ export default function WorkoutScreen() {
                   canAddExisting={existingOutside.length > 0}
                   activeRoutineId={active?.routineId}
                   starting={starting}
+                  now={now}
                   onMenu={() =>
                     openFolderMenu(folder, {
                       empty: folderRoutines.length === 0,
@@ -551,6 +636,7 @@ export default function WorkoutScreen() {
                           routine={routine}
                           active={active?.routineId === routine.id}
                           starting={starting === routine.id}
+                          now={now}
                           onOpen={() =>
                             router.push({ pathname: '/routine/[id]', params: { id: routine.id } })
                           }
@@ -666,27 +752,98 @@ function replayPositions(rows: PositionedRow[], orderedIds: string[]): Positione
   return [...final.values()];
 }
 
+/**
+ * Why this routine and not another, in one line under its name.
+ *
+ * The two readings are phrased as the observations they are rather than as
+ * instructions. "Usually follows Push" is a fact about the log the user can
+ * check and disagree with; "Do Pull today" is the app pretending to hold a
+ * programme it was never given.
+ */
+function suggestionReason(suggestion: RoutineSuggestion, now: number): string {
+  return suggestion.basis === 'rotation'
+    ? `Usually follows ${suggestion.after}`
+    : `Rested longest · ${describeElapsed(suggestion.lastPerformedAt, now)}`;
+}
+
+/**
+ * The rotation hint: which routine the log says is next.
+ *
+ * It opens the routine rather than starting it. A second Start on this screen
+ * would be a third control with a destination the list already offers, and the
+ * routine screen is where the decision actually gets made: it shows the
+ * exercises, the same recency line, and its own Start. The hint's job is to
+ * point, not to commit the user to a session from a card they only glanced at.
+ *
+ * Quieter than the resume card above it on purpose. That one reports something
+ * true and in progress; this one is an opinion, so the accent is spent on the
+ * glyph and the kicker and the card itself stays `surface`.
+ */
+function NextUpCard({
+  name,
+  reason,
+  onPress,
+}: {
+  name: string;
+  reason: string;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <Card padded={false} style={styles.nextUpCard}>
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel={`Up next: ${name}`}
+        accessibilityHint={reason}
+        onPress={onPress}
+        fill={colors.surface}
+        fillPressed={colors.surfacePressed}
+        // The same reasoning as `ListRow`: this runs the full width of its card,
+        // so a scale pulls both margins in at once.
+        scaleTo={1}
+        style={styles.nextUp}
+      >
+        <View style={[styles.nextUpGlyph, { backgroundColor: colors.accentSurface }]}>
+          <Ionicons name="sparkles" size={17} color={colors.accent} />
+        </View>
+        <View style={styles.nextUpBody}>
+          <Text variant="overline" color="accent">
+            Up next
+          </Text>
+          <Text variant="bodyMedium" numberOfLines={1}>
+            {name}
+          </Text>
+          <Text variant="caption" color="textTertiary" numberOfLines={1}>
+            {reason}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+      </PressableScale>
+    </Card>
+  );
+}
+
 function RoutineEntry({
   routine,
   active,
   starting,
+  now,
   onOpen,
   onStart,
 }: {
   routine: Routine;
   active: boolean;
   starting: boolean;
+  /** The screen's clock, so every row on it ages against the same instant. */
+  now: number;
   onOpen: () => void;
   onStart: () => void;
 }) {
   return (
     <ListRow
       title={routine.name}
-      subtitle={
-        routine.lastPerformedAt
-          ? `Last performed ${formatDateTime(routine.lastPerformedAt, DATE_MEDIUM)}`
-          : 'Not performed yet'
-      }
+      subtitle={describeLastPerformed(routine.lastPerformedAt, now)}
       onPress={onOpen}
       accessibilityActions={[{ name: 'start', label: active ? 'Resume' : 'Start' }]}
       onAccessibilityAction={(event) => {
@@ -711,6 +868,7 @@ function FolderCard({
   canAddExisting,
   activeRoutineId,
   starting,
+  now,
   onMenu,
   onAddNew,
   onAddExisting,
@@ -722,6 +880,7 @@ function FolderCard({
   canAddExisting: boolean;
   activeRoutineId?: string | null;
   starting: string | null;
+  now: number;
   onMenu: () => void;
   onAddNew: () => void;
   onAddExisting: () => void;
@@ -795,6 +954,7 @@ function FolderCard({
                   routine={routine}
                   active={activeRoutineId === routine.id}
                   starting={starting === routine.id}
+                  now={now}
                   onOpen={() => onOpenRoutine(routine.id)}
                   onStart={() => onStart(routine.id)}
                 />
@@ -931,6 +1091,23 @@ const styles = StyleSheet.create({
   },
   headerGlyph: { paddingVertical: spacing.sm },
   routineCard: { marginHorizontal: spacing.lg },
+  nextUpCard: { marginHorizontal: spacing.lg, marginBottom: spacing.lg },
+  nextUp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    minHeight: 56,
+  },
+  nextUpGlyph: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextUpBody: { flex: 1, gap: 2 },
   folderHeader: {
     flexDirection: 'row',
     alignItems: 'center',

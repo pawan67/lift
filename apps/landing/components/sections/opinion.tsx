@@ -141,6 +141,15 @@ export function Opinion() {
               what comes back. The app sends nothing anywhere. You share the
               file.
             </p>
+            <p className="mt-5 max-w-[52ch] text-[1.0625rem] leading-[1.7] text-fg-2 sm:text-lg">
+              Or give Lift your own API key and read the answer in the app,
+              where you can ask it follow-up questions against the same log. Off
+              by default. Your key, your account, straight from the phone to the
+              provider you choose, or to a model running on your own machine.
+              The figures stay ours either way: which muscles are under their
+              weekly minimum is arithmetic, and Lift tells you that with no key
+              and no connection.
+            </p>
 
             {/*
               A document, set as one: a filename, a rule, and headings on a

@@ -61,6 +61,16 @@ each of the eight palettes, is in [`screenshots/`](screenshots).
   [Home screen widgets](#home-screen-widgets).
 - **History, a workout calendar, and volume/PR analytics.**
 - **Body tracking**, with estimated 1RM, BMI and body-fat figures.
+- **An AI coach, off by default and on your own key.** The app tells you which
+  muscles are under their weekly minimum without one: that figure is arithmetic
+  over the volume landmarks and it works offline. Add an Anthropic or
+  OpenAI-compatible key under Settings, AI coach, and the same screens will also
+  say what to change, review a block of training in a conversation you can
+  follow up on, and write a few sentences on the session you just finished.
+  Requests go from the phone straight to the provider you pick, never through a
+  Lift server, and the key is held in the device keychain rather than in your
+  settings or your backups. Pointing the base URL at Ollama or LM Studio keeps
+  the whole thing on your own machine. See [The AI coach](#the-ai-coach).
 - **Nine palettes** — Nord, Gruvbox, Catppuccin and Solarized among them —
   each carried through to the Android launcher icon.
 - **Ships as an APK**, not a store listing, with over-the-air JavaScript
@@ -169,6 +179,52 @@ its ranges are added.
 
 Two things worth doing on day one: turn on scheduled database backups, and
 verify a restore. This app holds people's multi-year training history.
+
+## The AI coach
+
+Off until you turn it on, and it stays useful when you don't.
+
+**What works without a key.** `packages/shared/src/ai/advisor.ts` compares the
+weekly set count per muscle against the MEV/MAV/MRV landmarks in
+`landmarks.ts` and ranks whatever is outside its range. That is the card on the
+home screen and under Statistics saying side delts got 4 sets a week against a
+minimum of 10. It is arithmetic over data already on the device, it is unit
+tested, and it runs on a plane.
+
+**What a key adds.** The words, never the numbers. A model is handed the figures
+above and asked where to put the sets, which routine to put them in, and what a
+block of training looks like. The rule the whole feature is built on is that
+logic owns every figure and the model owns only the prose: a model that arrives
+at a slightly different set count is not a second opinion, it is a contradiction
+of the screen next to it that the reader has no way to adjudicate. Each brief in
+`packages/shared/src/ai/briefs.ts` says so explicitly.
+
+Four surfaces use it: the coach chat (`/coach`, which still exports the prompt
+for anyone who would rather paste it somewhere else), a summary on the finish
+screen, the prescription half of the volume advisor, and a reading of the
+statistics screens.
+
+**Where the key goes.** Into the OS keychain via `expo-secure-store`, or
+`localStorage` on the web build, through the same dual-target module the session
+token uses and for the same reasons. It is not in `settings`, so it is not in a
+backup, and it is never rendered back into a field.
+
+**Providers.** Anthropic natively, plus anything speaking OpenAI's
+chat-completions dialect, which covers OpenAI, OpenRouter, Groq, and a local
+Ollama or LM Studio. Anthropic has its own adapter for one reason worth the
+duplication: the training document is tens of thousands of tokens and every
+follow-up question re-sends it, so `cache_control` on that first message is most
+of what a second question costs.
+
+**One implementation note.** The client uses `fetch` from `expo/fetch`, not the
+global. React Native's global `fetch` is built on XMLHttpRequest and its response
+has no `body`, so a streaming request made with it does not fail: it waits for
+the whole answer and delivers it at once. That produces a feature that looks
+finished and feels broken, and it is invisible in review. Relatedly, SSE frames
+do not align with network chunks, so the line buffering lives in
+`packages/shared/src/ai/providers.ts` as `createSseDecoder` rather than in the
+fetch loop, where it could not be tested without a socket. It is exercised at
+every chunk size from one byte up.
 
 ## Over-the-air updates
 

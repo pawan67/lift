@@ -8,6 +8,18 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.21.0](https://github.com/pawan67/lift/compare/v0.20.0...v0.21.0) - 2026-09-15
+
+### Features
+
+- say how long it has been, and which routine is next ([3ca4606](https://github.com/pawan67/lift/commit/3ca46063cee95da8f0898582069ee835465e8673))
+- **landing:** say what a key buys, and what runs without one ([2f0f23a](https://github.com/pawan67/lift/commit/2f0f23ad436d101a293461eb1d8bd451636ccf62))
+- put a coach behind your own key, and keep the numbers ours ([d10a595](https://github.com/pawan67/lift/commit/d10a595efe24a18e01a500ac4bd43af5ac189eee))
+
+### Internal
+
+- docs: write down the rule the AI coach is built on ([63cbce0](https://github.com/pawan67/lift/commit/63cbce0f90e76c5de7f9e9bcce8e5ac7baf353b3))
+
 ## [0.20.0](https://github.com/pawan67/lift/compare/v0.19.0...v0.20.0) - 2026-09-05
 
 ### Features

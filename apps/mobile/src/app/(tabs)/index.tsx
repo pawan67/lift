@@ -697,7 +697,17 @@ export default function HomeScreen() {
          * first month.
          */}
         <Reveal index={4}>
-          <VolumeAdviceSection limit={3} offerPrescription={false} />
+          {/*
+           * Inset by hand, unlike on Statistics.
+           *
+           * `VolumeAdviceSection` carries no horizontal margin of its own,
+           * because the screen it was written for scrolls inside a padded
+           * content container and a margin there would double the inset. This
+           * one does not: every block above sets its own `marginHorizontal`,
+           * so without this the card ran edge to edge and was the only element
+           * on the dashboard off the margin the rest of it sits on.
+           */}
+          <VolumeAdviceSection limit={3} offerPrescription={false} style={styles.advice} />
         </Reveal>
       </ScrollView>
     </Screen>
@@ -988,6 +998,9 @@ const styles = StyleSheet.create({
      above it. Every block below the rule uses it, so the vertical rhythm of the
      grid is one number rather than a margin repeated at each call site. */
   tileRow: { marginHorizontal: spacing.lg, marginTop: spacing.lg },
+  /* The volume advisor, on the same margin as the tile rows above it. Its own
+     top padding supplies the gap, so there is no `marginTop` here. */
+  advice: { marginHorizontal: spacing.lg },
   /*
    * The two-up row.
    *

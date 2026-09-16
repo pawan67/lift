@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
 import { loadAiConfig } from './client';
@@ -28,7 +28,8 @@ export interface VolumeAdviceSectionProps {
    * button that spends money does not belong on it.
    */
   offerPrescription?: boolean;
-  style?: object;
+  /** Laid out by the screen: Home is on its own margin, Statistics is inset already. */
+  style?: StyleProp<ViewStyle>;
 }
 
 export function VolumeAdviceSection({

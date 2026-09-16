@@ -19,8 +19,8 @@
     "lint": "pnpm -r lint"
   },
   "dependencies": {
-    "expo": "~57.0.7",
-    "react": "19.2.3",
-    "react-native": "0.86.0"
+    "expo": "~57.0.22",
+    "react": "19.3.0",
+    "react-native": "0.87.1"
   }
 }

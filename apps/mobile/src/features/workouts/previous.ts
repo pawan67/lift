@@ -11,14 +11,20 @@
  * finished session reads them too.
  */
 
-import { TRACKING_FIELDS, USES_BODYWEIGHT, isWorkingSet, type TrackingType } from '@lift/shared';
+import {
+  TRACKING_FIELDS,
+  USES_BODYWEIGHT,
+  isWorkingSet,
+  type SetType,
+  type TrackingType,
+} from '@lift/shared';
 
 import type { WorkoutSet } from '@/db/schema';
 
 import type { SetInput } from './repository';
 
-export interface SetRowModel {
-  set: WorkoutSet;
+export interface SetRowModel<T = WorkoutSet> {
+  set: T;
   /** 1-based ordinal among working sets; a warm-up carries the count so far. */
   workingIndex: number;
   /** The set that occupied this ordinal last session, if there was one. */
@@ -40,11 +46,16 @@ export interface SetRowModel {
  *
  * Warm-ups don't consume a working-set number either, so the ordinal shown in
  * the set column is counted here rather than taken from the array index.
+ *
+ * Generic in the left-hand side because the rows being paired are not always
+ * `workoutSets`: starting a session from a routine pairs the routine's
+ * *targets* against the same history, so that a prescription only fills a slot
+ * history cannot. Anything carrying a `setType` is enough to walk.
  */
-export function pairWithPrevious(
-  sets: readonly WorkoutSet[],
+export function pairWithPrevious<T extends { setType: SetType }>(
+  sets: readonly T[],
   previousSets: readonly WorkoutSet[],
-): SetRowModel[] {
+): SetRowModel<T>[] {
   const previousWorking = previousSets.filter((set) => isWorkingSet(set.setType));
   const previousWarmups = previousSets.filter((set) => !isWorkingSet(set.setType));
 

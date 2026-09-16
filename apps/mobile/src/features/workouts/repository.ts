@@ -42,6 +42,8 @@ import {
 } from '@/db/schema';
 import type { RestKind } from '@/store/timer';
 
+import { pairWithPrevious } from './previous';
+
 // ---------------------------------------------------------------------------
 // Composite read models
 // ---------------------------------------------------------------------------
@@ -296,7 +298,36 @@ async function getRoutine(routineId: string) {
   return row;
 }
 
-/** Materialises a routine's prescribed exercises and target sets into a session. */
+/**
+ * Materialises a routine's prescribed exercises and target sets into a session.
+ *
+ * ## What lands in the fields
+ *
+ * Last session's numbers, and the routine's targets only where there are none.
+ *
+ * The rows used to be seeded from the targets alone, which meant a routine
+ * written once, months ago, as "3 × 10" put a 10 in front of somebody who has
+ * been doing twelves since February, every session, for them to clear and
+ * retype. A target is what the routine asked for when it was written; what the
+ * user lifted last time is what they are about to do again. When the two
+ * disagree, the second one is the better guess, and it is the one the Previous
+ * column beside it is already showing.
+ *
+ * The targets are not dead weight: they fill every slot history cannot. A first
+ * time through an exercise, a fourth set on a routine that has only ever been
+ * taken to three, a warm-up ramp that was skipped last week. `pairWithPrevious`
+ * pairs by ordinal *within set class*, the same walk the logging screen draws
+ * the Previous column with, so a routine's warm-ups line up against last
+ * session's warm-ups rather than against its first working set.
+ *
+ * Per-field rather than per-row: an exercise logged last time with reps but no
+ * weight keeps the routine's target weight beside its performed reps, instead
+ * of a history row's null blanking a prescription that was there.
+ *
+ * RPE is the exception and always comes from the target. It is a prescription
+ * about how hard to go, not a measurement to repeat, and most rows carry none
+ * at all.
+ */
 async function copyRoutineIntoWorkout(routineId: string, workoutId: string): Promise<void> {
   const planned = await db
     .select()
@@ -320,16 +351,24 @@ async function copyRoutineIntoWorkout(routineId: string, workoutId: string): Pro
       )
       .orderBy(routineSets.position);
 
-    for (const target of targets) {
+    // What was actually lifted the last time this exercise came up. Excluding
+    // the session being built is belt and braces: it has no `finishedAt` yet,
+    // so it cannot be a candidate, but the intent should not depend on that.
+    const { sets: performed } = await getPreviousPerformance(plannedExercise.exerciseId, {
+      excludeWorkoutId: workoutId,
+    });
+
+    for (const { set: target, previous } of pairWithPrevious(targets, performed)) {
       await addSet(created.id, {
         position: target.position,
         setType: target.setType,
-        // Targets seed the row but stay unchecked. The user still logs what
-        // they actually did.
-        weightKg: target.targetWeightKg,
-        reps: target.targetReps,
-        durationSeconds: target.targetDurationSeconds,
-        distanceKm: target.targetDistanceKm,
+        // Seeded but unchecked, either way. The user still logs what they
+        // actually did; this only decides which numbers they are correcting
+        // rather than typing.
+        weightKg: previous?.weightKg ?? target.targetWeightKg,
+        reps: previous?.reps ?? target.targetReps,
+        durationSeconds: previous?.durationSeconds ?? target.targetDurationSeconds,
+        distanceKm: previous?.distanceKm ?? target.targetDistanceKm,
         rpe: target.targetRpe,
       });
     }

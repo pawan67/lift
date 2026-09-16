@@ -8,6 +8,13 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.21.1](https://github.com/pawan67/lift/compare/v0.21.0...v0.21.1) - 2026-09-16
+
+### Fixes
+
+- start a routine on what was lifted, not what it asked for ([cf0da98](https://github.com/pawan67/lift/commit/cf0da98c63435c857315db24c84de2747ea1d09a))
+- put the volume card back on the dashboard's margin ([feac4dd](https://github.com/pawan67/lift/commit/feac4dda95e64e72704c328210abe0a2601d6c2b))
+
 ## [0.21.0](https://github.com/pawan67/lift/compare/v0.20.0...v0.21.0) - 2026-09-15
 
 ### Features

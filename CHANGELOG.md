@@ -8,6 +8,18 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.22.0](https://github.com/pawan67/lift/compare/v0.21.1...v0.22.0) - 2026-09-29
+
+### Features
+
+- check for updates on return, say when one lands, and install it ([0afd025](https://github.com/pawan67/lift/commit/0afd025e10e5055653a6f38aa125e08de3fdb8ea))
+- welcome a new install with a first-run flow ([843bdba](https://github.com/pawan67/lift/commit/843bdba4ac0017bbdceab55f7aaca142b9952d15))
+- adjust the sets left in a session from how the last one felt ([a24548c](https://github.com/pawan67/lift/commit/a24548c6318bb8e2baed865a26c4d47394ee33b1))
+
+### Fixes
+
+- line wide headers and tiles up with the column they sit over ([e9826ed](https://github.com/pawan67/lift/commit/e9826ed791e14dcd6cd432660715911f0d86c94b))
+
 ## [0.21.1](https://github.com/pawan67/lift/compare/v0.21.0...v0.21.1) - 2026-09-16
 
 ### Fixes

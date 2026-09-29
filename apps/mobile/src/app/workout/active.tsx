@@ -437,12 +437,20 @@ export default function ActiveWorkoutScreen() {
   );
 
   /**
-   * Everything the progression engine is allowed to see, per exercise.
+   * Everything the progression engines are allowed to see, per exercise.
    *
    * Assembled here rather than in the block so the block is handed a value and
-   * not a query, and so the session editor (which shares that block) can
-   * simply not pass one. Keyed off the loaded history: an exercise whose
-   * sessions have not arrived yet has no entry, and no line renders.
+   * not a query, and so the session editor (which shares that block) can simply
+   * not pass one.
+   *
+   * Keyed off the exercises in the session rather than off the loaded history,
+   * which it used to be. History was the right key while the only question was
+   * "what did this lift do last month": no sessions, nothing to read, no entry,
+   * no line. Mid-session autoregulation reads the session you are standing in,
+   * so an exercise being performed for the very first time has something to say
+   * the moment a set in it is rated, and keying off history would have been the
+   * one thing stopping it from being said. An empty `sessions` is now a fact
+   * the adapter handles rather than a reason to withhold the input.
    */
   const progressionByExercise = useMemo(() => {
     const prescribed = new Map<string, number>();
@@ -456,15 +464,27 @@ export default function ActiveWorkoutScreen() {
     }
 
     const byExercise: Record<string, ProgressionInput> = {};
-    for (const [exerciseId, previous] of Object.entries(previousByExercise)) {
+    for (const detail of details) {
+      const exerciseId = detail.exercise.id;
       byExercise[exerciseId] = {
-        sessions: previous.sessions,
+        sessions: previousByExercise[exerciseId]?.sessions ?? [],
         targetReps: prescribed.get(exerciseId) ?? null,
+        // The effort the user trains to, as far as the app is ever told. The
+        // setting is worded as the value the effort dialog opens on, which is
+        // the closest thing to a stated target there is: somebody who seeds it
+        // at 8 is saying 8 is their normal set. It is read only to be compared
+        // against a rating they left, so a user who never rates a set never
+        // meets this number.
+        targetRpe: settings.defaultRpe,
+        // Only the mid-session engine reads this, and only on the three
+        // tracking types whose real load is bodyweight plus or minus what was
+        // typed. Null is handled there by falling back to adjusting reps.
+        bodyweightKg: settings.bodyweightKg,
       };
     }
 
     return byExercise;
-  }, [previousByExercise, routineTargets]);
+  }, [details, previousByExercise, routineTargets, settings.defaultRpe, settings.bodyweightKg]);
 
   /*
    * The slot a picker trip is meant to replace, when it is one.

@@ -581,7 +581,7 @@ export function ExerciseBlock({
       {suggestionLine && (
         <CueCard
           icon="sparkles-outline"
-          kicker="Target"
+          kicker={suggestionLine.kicker}
           text={suggestionLine.text}
           detail={suggestionLine.detail}
           compact
@@ -945,9 +945,12 @@ function describeSuggestion(
   suggestion: Suggestion,
   fields: { weight: boolean; reps: boolean },
   unit: WeightUnit,
-): { text: string; detail: string; label: string } | null {
-  // The first working set is the target. The engine may taper the ones after
-  // it, and a heading that recited four sets would be the table below it.
+): { kicker: string; text: string; detail: string; label: string } | null {
+  // The first set the engine spoke about is the target. Between sessions that
+  // is the first working set; mid-session it is the first one still open,
+  // because those are the only ones `autoregulateRemaining` returns. Either way
+  // it is the next set the user will walk to the rack for, and a heading that
+  // recited all four would be the table below it.
   const target = suggestion.sets[0];
   if (!target) return null;
 
@@ -965,10 +968,18 @@ function describeSuggestion(
 
   if (parts.length === 0) return null;
 
+  // "Target" is a claim about the session; "Adjusted" is a claim about the last
+  // four minutes. Saying which one this is matters more than it looks: the same
+  // card in the same place has been quietly recomputed against a set the user
+  // performed thirty seconds ago, and a word is the cheapest way to say so.
+  const adjusted = suggestion.kind === 'autoregulate';
+  const kicker = adjusted ? 'Adjusted' : 'Target';
+
   return {
+    kicker,
     text: parts.join(' '),
     detail: suggestion.reason,
-    label: `Suggested target, ${spoken.join(' ')}. ${suggestion.reason}`,
+    label: `${adjusted ? 'Adjusted target' : 'Suggested target'}, ${spoken.join(' ')}. ${suggestion.reason}`,
   };
 }
 

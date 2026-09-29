@@ -103,7 +103,8 @@ export interface ProgressionConfig {
 // Outputs
 // ---------------------------------------------------------------------------
 
-export type SuggestionKind =
+/** The four answers this engine has, all of them about the session after this one. */
+export type ProgressionKind =
   /** Same load, one more rep: the normal week. */
   | 'add_reps'
   /**
@@ -117,6 +118,24 @@ export type SuggestionKind =
   | 'hold'
   /** Stalled for `stallSessions`. Take load off and climb back through it. */
   | 'back_off';
+
+/**
+ * What a suggestion is, across both engines that make one.
+ *
+ * The fifth member is never returned by `suggestProgression`, which is why the
+ * union is split rather than simply widened: the two switches below stay
+ * exhaustive over the four this file can actually produce, instead of carrying
+ * a dead branch apiece for a kind that arrives from `autoregulate.ts`. What the
+ * screen needs is one type it can render, and that is this one.
+ */
+export type SuggestionKind =
+  | ProgressionKind
+  /**
+   * Mid-session, from the set that just ended: the rating on it disagreed with
+   * the effort these sets are meant to be taken to, so the ones still open have
+   * been re-planned around it. See `autoregulate.ts`.
+   */
+  | 'autoregulate';
 
 /** What to put in front of one working set. */
 export interface SetSuggestion {
@@ -237,7 +256,7 @@ export function inferRepRange(sessions: readonly ExerciseSession[]): {
  * screen where every other line is a fact, a confident wrong answer costs more
  * than a blank space.
  */
-const UNOPINIONATED_TRACKING: ReadonlySet<TrackingType> = new Set<TrackingType>([
+export const UNOPINIONATED_TRACKING: ReadonlySet<TrackingType> = new Set<TrackingType>([
   'duration',
   'distance_duration',
   'weight_distance',
@@ -298,6 +317,19 @@ interface ReadSet {
  */
 function usableReps(set: PerformedSet): number | null {
   if (!set.isCompleted || !isWorkingSet(set.setType)) return null;
+  return setRepCount(set);
+}
+
+/**
+ * The rep count on a set, whether or not it has happened yet.
+ *
+ * Split out of `usableReps` because `autoregulate.ts` needs the number off an
+ * *open* row, which is the one case the gate above exists to reject: a set
+ * nobody has checked off says nothing about what was lifted, but it says
+ * exactly what is being asked for next, which is the question one file over.
+ * The validation is shared so the two cannot drift about what counts as a rep.
+ */
+export function setRepCount(set: PerformedSet): number | null {
   if (set.reps === null || !Number.isFinite(set.reps) || set.reps < 1) return null;
   // Reps are whole in the schema; rounding keeps a stray float from coming back
   // out of the engine as "8.5 reps".
@@ -313,7 +345,7 @@ function usableReps(set: PerformedSet): number | null {
  * "2.5 kg" as the next step up from a load we never knew is worse than silence.
  * The logging screen's `ghostFill` draws the same line for the same reason.
  */
-function readLoad(set: PerformedSet, trackingType: TrackingType): number | null {
+export function setLoadKg(set: PerformedSet, trackingType: TrackingType): number | null {
   if (!TRACKING_FIELDS[trackingType].weight) return null;
   if (set.weightKg === null || !Number.isFinite(set.weightKg)) {
     return USES_BODYWEIGHT.has(trackingType) ? 0 : null;
@@ -329,7 +361,7 @@ function readLoad(set: PerformedSet, trackingType: TrackingType): number | null 
  * quietly withhold reps from someone whose file had the wrong header on it. The
  * importer's `parseRpe` refuses the same numbers at the same two bounds.
  */
-function usableRpe(set: PerformedSet): number | null {
+export function setRpe(set: PerformedSet): number | null {
   const rpe = set.rpe;
   if (rpe == null || !Number.isFinite(rpe)) return null;
   return rpe >= MIN_RPE && rpe <= MAX_RPE ? rpe : null;
@@ -353,9 +385,9 @@ function readSets(session: ExerciseSession, trackingType: TrackingType): ReadSet
     if (reps === null) continue;
     sets.push({
       workingIndex: sets.length + 1,
-      loadKg: readLoad(set, trackingType),
+      loadKg: setLoadKg(set, trackingType),
       reps,
-      rpe: usableRpe(set),
+      rpe: setRpe(set),
     });
   }
 
@@ -591,7 +623,7 @@ export function suggestProgression(
   // weight to add because the top of the range was not cleared, and no rep to
   // add because the sets are coming in under the bottom of it. Three sessions of
   // that is a stall.
-  let kind: SuggestionKind;
+  let kind: ProgressionKind;
   if (clearedTop && canStepLoad) kind = 'add_weight';
   else if (last.some(canTakeRep)) kind = 'add_reps';
   else if (canStepLoad && isStalled(history, stallSessions, sign)) kind = 'back_off';
@@ -710,7 +742,7 @@ interface ReasonContext {
  * "Two reps off the top of the range", not "Add a rep". Sentence case and no
  * full stop, because it is a caption, not prose.
  */
-function writeReason(kind: SuggestionKind, ctx: ReasonContext): string {
+function writeReason(kind: ProgressionKind, ctx: ReasonContext): string {
   const { last, minReps, maxReps, stallSessions, backOffFraction, sign, effort, effortRule } = ctx;
 
   switch (kind) {

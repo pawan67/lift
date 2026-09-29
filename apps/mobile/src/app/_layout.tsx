@@ -19,6 +19,7 @@ import { seedExerciseLibrary } from '@/db/seed';
 import { writeBackupFile } from '@/features/backup';
 import { HomeWidgets } from '@/features/home-widgets/publisher';
 import { WeighInResponder } from '@/features/notifications/weigh-in-responder';
+import { Onboarding } from '@/features/onboarding';
 import { useSyncTriggers } from '@/features/sync/use-sync-triggers';
 import { RestCues } from '@/features/workouts/rest-cues';
 import { WorkoutNotice } from '@/features/workouts/workout-notice';
@@ -253,6 +254,20 @@ function AppNavigator() {
   const colors = useColors();
   const { isWide } = useLayout();
 
+  /*
+   * Whether the first-run flow is still owed.
+   *
+   * Read here rather than in `Startup` because the flow renders *over* this
+   * navigator rather than instead of it: its last page offers to open the
+   * import screen, and that is a route, so the router has to already be
+   * mounted when it is pressed. See the note on `Onboarding`.
+   *
+   * `hydrate` has already run by the time anything below mounts, so this is the
+   * stored answer on the first frame and never flips from false to true. It
+   * flips the other way exactly once, when the flow finishes.
+   */
+  const onboarding = useSettings((state) => state.onboardingCompletedAt == null);
+
   // Syncs on launch and whenever the app returns to the foreground.
   useSyncTriggers();
 
@@ -289,7 +304,13 @@ function AppNavigator() {
         crossing 840 while dragging a window edge does not remount the
         navigator, which would drop the entire back stack.
       */}
-      <View style={styles.shell}>
+      <View
+        style={styles.shell}
+        // Android's half of making the flow modal to a screen reader. iOS has
+        // `accessibilityViewIsModal` on the layer itself; Android has no
+        // equivalent, so the thing underneath is hidden from its own side.
+        importantForAccessibility={onboarding ? 'no-hide-descendants' : 'auto'}
+      >
         {isWide && <SideRail />}
         <View style={styles.pane}>
           <Stack
@@ -358,6 +379,14 @@ function AppNavigator() {
           </Stack>
         </View>
       </View>
+
+      {/*
+        Last, so it is over everything: the navigator, the rail, and the three
+        headless listeners above. It is opaque and fills the screen, so nothing
+        behind it is ever seen, and it unmounts for good the moment the flow is
+        finished or skipped.
+      */}
+      {onboarding && <Onboarding />}
     </>
   );
 }

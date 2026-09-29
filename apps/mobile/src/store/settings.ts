@@ -25,7 +25,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { create } from 'zustand';
 
 import { db } from '@/db/client';
-import { bodyMeasurements, settings as settingsTable } from '@/db/schema';
+import { bodyMeasurements, settings as settingsTable, workouts } from '@/db/schema';
 
 /**
  * Which of the phone's volume sliders the rest bell rings on.
@@ -172,6 +172,21 @@ export interface Settings {
    * three years in is how a useful feature becomes one people switch off.
    */
   trainingLevel: TrainingLevel;
+
+  /**
+   * When the first-run flow was finished or dismissed, in epoch milliseconds.
+   * Null means it has never been seen, which is the only thing that puts it on
+   * screen.
+   *
+   * A timestamp rather than a boolean, and not because anything reads the date.
+   * A `false` that has to be flipped to `true` is indistinguishable from a
+   * `false` that is merely the default a new key arrived with, and this key
+   * arrives in an existing app whose users have all already skipped past a flow
+   * that did not exist. Null means "no answer recorded", which is the honest
+   * state for both of them, and `hydrate` is where the two are told apart.
+   */
+  onboardingCompletedAt: number | null;
+
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -209,6 +224,9 @@ export const DEFAULT_SETTINGS: Settings = {
   heightCm: null,
   sex: null,
 
+  // Never seen. Existing installs are stamped by `hydrate` before this is read.
+  onboardingCompletedAt: null,
+
   promptRoutineUpdate: true,
 
   gymReminderEnabled: false,
@@ -244,6 +262,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
 
   hydrate: async () => {
     let stored: Partial<Settings> = {};
+    let hasStoredRow = false;
 
     try {
       const [row] = await db
@@ -252,7 +271,10 @@ export const useSettings = create<SettingsStore>((set, get) => ({
         .where(eq(settingsTable.key, SETTINGS_KEY))
         .limit(1);
 
-      if (row?.value) stored = JSON.parse(row.value) as Partial<Settings>;
+      if (row?.value) {
+        stored = JSON.parse(row.value) as Partial<Settings>;
+        hasStoredRow = true;
+      }
     } catch {
       // A corrupt or unreadable row should not block app start. Fall through
       // to defaults, which will be rewritten on the next change.
@@ -272,6 +294,27 @@ export const useSettings = create<SettingsStore>((set, get) => ({
         next.bodyweightKg = logged;
         void persist(next);
       }
+    }
+
+    /*
+     * Nobody who is already using this app is shown a welcome screen.
+     *
+     * `onboardingCompletedAt` is a key that arrives in a shipped app, so on
+     * every existing install it reads null on the first launch after the
+     * update, which is the same thing it reads on a phone the app was installed
+     * on ten seconds ago. The two have to be told apart here or the next
+     * release opens on "Welcome to Lift" for someone two years into their log.
+     *
+     * Told apart by evidence of prior use, of which there are two kinds and
+     * both are needed. A stored settings row means something was once changed
+     * and persisted, which covers most people; a workout covers the rest, who
+     * have trained for months and simply never opened Settings. What is left
+     * after both is an install with no preferences and no sessions, and that is
+     * a new user whether the app was put here today or last year.
+     */
+    if (next.onboardingCompletedAt == null && (hasStoredRow || (await hasLoggedWorkout()))) {
+      next.onboardingCompletedAt = Date.now();
+      void persist(next);
     }
 
     set({ ...next, hydrated: true });
@@ -318,11 +361,43 @@ export const useSettings = create<SettingsStore>((set, get) => ({
    * quietly breaks the volume figures until the process is restarted.
    */
   reset: async () => {
-    const { bodyweightKg, heightCm, sex } = get();
-    set({ ...DEFAULT_SETTINGS, bodyweightKg, heightCm, sex, hydrated: true });
+    // `onboardingCompletedAt` is kept for a related but distinct reason: it is
+    // not a fact about a person, it is a record that something already
+    // happened. Clearing it would answer "reset my settings" by reopening the
+    // welcome flow on somebody who has been using the app for a year, which is
+    // not a reading of that button anyone intends.
+    const { bodyweightKg, heightCm, sex, onboardingCompletedAt } = get();
+    set({
+      ...DEFAULT_SETTINGS,
+      bodyweightKg,
+      heightCm,
+      sex,
+      onboardingCompletedAt,
+      hydrated: true,
+    });
     await persist(get());
   },
 }));
+
+/**
+ * Has anything ever been logged on this device?
+ *
+ * Deliberately the cheapest question that separates a new install from an old
+ * one: one row, any row, deleted ones included. A soft-deleted workout is still
+ * proof that somebody has used this app, which is the only thing being asked.
+ *
+ * False on the way out of a throw, for the same reason `readLatestBodyweightKg`
+ * swallows its own: this runs on the startup path, and the cost of guessing
+ * wrong is one skippable screen rather than an app that will not open.
+ */
+async function hasLoggedWorkout(): Promise<boolean> {
+  try {
+    const [row] = await db.select({ id: workouts.id }).from(workouts).limit(1);
+    return row !== undefined;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Latest bodyweight from the measurement log, in kg.
@@ -397,6 +472,7 @@ async function persist(state: Settings): Promise<void> {
     aiBaseUrl: state.aiBaseUrl,
     aiAutoSummary: state.aiAutoSummary,
     trainingLevel: state.trainingLevel,
+    onboardingCompletedAt: state.onboardingCompletedAt,
   };
 
   await db

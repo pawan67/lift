@@ -187,6 +187,24 @@ export interface Settings {
    */
   onboardingCompletedAt: number | null;
 
+  /**
+   * Post a notification when an over-the-air update has finished downloading.
+   *
+   * Never prompts for the permission on its own; see
+   * `features/notifications/update`. On by default because the alternative is
+   * an update nobody hears about until the next cold start, which on a phone
+   * that keeps the app in memory can be days.
+   */
+  updateNotifications: boolean;
+  /**
+   * Restart into a downloaded update without being asked.
+   *
+   * Only ever on a return to the app after a few minutes away, and never with a
+   * workout open: see `features/updates/update-agent` for both rules. Off, the
+   * update still applies on the next cold start, which is what the app did
+   * before this existed.
+   */
+  autoInstallUpdates: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -244,6 +262,9 @@ export const DEFAULT_SETTINGS: Settings = {
   aiBaseUrl: '',
   aiAutoSummary: false,
   trainingLevel: DEFAULT_TRAINING_LEVEL,
+
+  updateNotifications: true,
+  autoInstallUpdates: true,
 };
 
 interface SettingsStore extends Settings {
@@ -473,6 +494,8 @@ async function persist(state: Settings): Promise<void> {
     aiAutoSummary: state.aiAutoSummary,
     trainingLevel: state.trainingLevel,
     onboardingCompletedAt: state.onboardingCompletedAt,
+    updateNotifications: state.updateNotifications,
+    autoInstallUpdates: state.autoInstallUpdates,
   };
 
   await db

@@ -8,17 +8,21 @@
  * against its own fingerprint, so the case this hook cannot reach is also the
  * case it can never get wrong.
  *
- * Most of the time nothing here is used. The default configuration checks on
- * launch and downloads in the background, and a downloaded update is picked up
- * by the next cold start on its own. That makes this whole feature a shortcut
- * rather than a mechanism: it says what state the background process is in and
- * offers to skip the wait. Nothing here is load-bearing, which is why every
- * failure below is reported and then dropped rather than retried.
+ * The default configuration checks on launch and downloads in the background,
+ * and a downloaded update is picked up by the next cold start on its own.
+ * `./update-agent` adds a check on every return to the foreground, a
+ * notification once something has downloaded, and an optional restart into it.
+ * This hook is the settings row's view of the same state: it says what the
+ * background process is doing and offers to skip the wait. Nothing here is
+ * load-bearing, which is why every failure below is reported and then dropped
+ * rather than retried.
  */
 
 import * as Updates from 'expo-updates';
 import { useCallback } from 'react';
 import { Platform } from 'react-native';
+
+import { showConfirm } from '@/store/dialog';
 
 /**
  * Whether this build can receive updates at all.
@@ -69,6 +73,46 @@ export interface AppUpdate {
   install: () => void;
 }
 
+/**
+ * Asks the server, and downloads whatever it offers.
+ *
+ * Downloading immediately rather than stopping at "available": nobody wants a
+ * version they cannot run yet, and the download is what makes the restart that
+ * follows it instant. Shared by the settings row's button and by the agent's
+ * checks on resume, so the two can never disagree about what a check does.
+ *
+ * Both calls reject as well as populating `checkError` / `downloadError` on
+ * `useUpdates`, so the catch is not error handling: the state the UI reads is
+ * already being set. It is here so an offline check does not surface as an
+ * unhandled rejection, which on Android is a red box over the app.
+ */
+export async function checkAndFetch(): Promise<void> {
+  try {
+    const result = await Updates.checkForUpdateAsync();
+    if (result.isAvailable) await Updates.fetchUpdateAsync();
+  } catch {
+    // Reported through `checkError` / `downloadError`.
+  }
+}
+
+/**
+ * Asks before restarting into a downloaded update.
+ *
+ * Asked rather than done, because a reload is a cold start: the screen goes
+ * away and comes back. Everything logged is already in the database and the
+ * rest period is restored on launch, so nothing is lost, but the moment is the
+ * user's to pick. Mid-set is not it.
+ */
+export function confirmUpdateRestart(): Promise<boolean> {
+  return showConfirm({
+    title: 'Restart now?',
+    message:
+      'Lift closes and reopens on the new version. Your workouts, and any rest timer running, are kept.',
+    confirmLabel: 'Restart',
+    tone: 'confirm',
+  });
+}
+
 export function useAppUpdate(): AppUpdate {
   const {
     currentlyRunning,
@@ -84,23 +128,8 @@ export function useAppUpdate(): AppUpdate {
     lastCheckForUpdateTimeSinceRestart,
   } = Updates.useUpdates();
 
-  // Both calls reject as well as populating `checkError` / `downloadError` on
-  // the hook, so the catch is not error handling: the state the UI reads is
-  // already being set for us. It is here so an offline check does not surface
-  // as an unhandled rejection, which on Android is a red box over the app.
   const check = useCallback(() => {
-    void (async () => {
-      try {
-        const result = await Updates.checkForUpdateAsync();
-        // Downloading immediately rather than leaving the user on a second
-        // button. Someone who opened settings and pressed check has already
-        // said what they want, and the alternative is a row that reports good
-        // news and then asks for another tap to act on it.
-        if (result.isAvailable) await Updates.fetchUpdateAsync();
-      } catch {
-        // Reported through `checkError` / `downloadError` below.
-      }
-    })();
+    void checkAndFetch();
   }, []);
 
   const install = useCallback(() => {

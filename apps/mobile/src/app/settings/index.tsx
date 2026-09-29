@@ -12,11 +12,11 @@ import { StyleSheet, View } from 'react-native';
 
 import { Card, Divider, ListRow, Reveal, SectionHeader, Text } from '@/components/ui';
 import { Footnote, SettingsPage, settingsStyles } from '@/features/settings/page';
-import { SettingAction } from '@/features/settings/rows';
+import { SettingAction, SettingToggle } from '@/features/settings/rows';
 import { THEME_LABELS } from '@/features/settings/theme-picker';
 import { UpdateFooter, UpdateRow } from '@/features/updates/update-row';
 import { UPDATES_SUPPORTED } from '@/features/updates/use-app-update';
-import { showConfirm } from '@/store/dialog';
+import { showAlert, showConfirm } from '@/store/dialog';
 import { DEFAULT_SETTINGS, useSettings } from '@/store/settings';
 import { spacing } from '@/theme';
 
@@ -41,6 +41,7 @@ const APP_VERSION = Constants.expoConfig?.version;
 export default function SettingsScreen() {
   const settings = useSettings();
   const reset = useSettings((state) => state.reset);
+  const update = useSettings((state) => state.update);
 
   const weightUnit = settings.weightUnit;
   const measurementUnit = settings.measurementUnit;
@@ -105,6 +106,33 @@ export default function SettingsScreen() {
     });
 
     if (confirmed) await reset();
+  };
+
+  /**
+   * The reminders' rule, applied to one more notification: the switch only
+   * turns on once the OS will actually let it post, so a switch that stays off
+   * always comes with a reason.
+   */
+  const toggleUpdateNotifications = async (enabled: boolean) => {
+    if (!enabled) {
+      update('updateNotifications', false);
+      return;
+    }
+
+    const { prepareUpdateNotifications } = await import('@/features/notifications/update');
+    const permission = await prepareUpdateNotifications();
+
+    if (permission === 'denied') {
+      await showAlert(
+        'Notifications are off',
+        'Lift needs permission to post notifications before it can tell you about updates. Turn them on for Lift in your phone settings, then try again.',
+      );
+      return;
+    }
+
+    // `unsupported` is not reachable here: this section only renders where
+    // updates work, and every such build carries the notification module.
+    update('updateNotifications', true);
   };
 
   return (
@@ -183,10 +211,9 @@ export default function SettingsScreen() {
       {/*
        * Updates stays on the hub rather than taking a page of its own.
        *
-       * It is the one thing here that is not a preference: nothing is
-       * remembered, and the row reports a state rather than holding a value.
-       * A page containing a single row that answers itself the moment it opens
-       * is a tap charged for nothing.
+       * The status row reports a state rather than holding a value, and the two
+       * switches under it are the only preferences about it there are. Three
+       * rows on a page of their own would be a tap charged for very little.
        *
        * The whole section is gated, header and footnote included: a development
        * build and the web export have no update mechanism at all, and a heading
@@ -197,6 +224,22 @@ export default function SettingsScreen() {
           <SectionHeader title="Updates" />
           <Card padded={false} style={settingsStyles.section}>
             <UpdateRow />
+            <Divider inset={spacing.lg} />
+            <SettingToggle
+              icon="sync-outline"
+              label="Install automatically"
+              description="Restarts on the new version when you come back to Lift, never mid-workout."
+              value={settings.autoInstallUpdates}
+              onChange={(value) => update('autoInstallUpdates', value)}
+            />
+            <Divider inset={spacing.lg} />
+            <SettingToggle
+              icon="notifications-outline"
+              label="Notify me"
+              description="A notification when a new version has downloaded."
+              value={settings.updateNotifications}
+              onChange={(value) => void toggleUpdateNotifications(value)}
+            />
           </Card>
           <Footnote>
             Updates carry the app itself, not your training log, and arrive without going through

@@ -1,12 +1,11 @@
 /**
  * The settings row for over-the-air updates.
  *
- * Deliberately the only place in the app that mentions them. A downloaded
- * update is applied by the next cold start whether or not anybody visits this
- * screen, so interrupting a workout to announce one would be spending the
- * user's attention on something that resolves itself. What this row adds is a
- * way to ask early, a way to skip the wait, and somewhere for the answer to
- * appear when the phone is offline or the check is failing.
+ * The only place in the app that shows their state. Announcing one is
+ * `./update-agent`'s job, and it waits for a workout to finish before it says
+ * anything. What this row adds is a way to ask early, a way to skip the wait,
+ * and somewhere for the answer to appear when the phone is offline or the
+ * check is failing.
  */
 
 import { useState } from 'react';
@@ -14,9 +13,8 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { SettingAction } from '@/features/settings/rows';
-import { showConfirm } from '@/store/dialog';
 import { spacing, useColors } from '@/theme';
-import { useAppUpdate, type UpdateStatus } from './use-app-update';
+import { confirmUpdateRestart, useAppUpdate, type UpdateStatus } from './use-app-update';
 
 /**
  * What each state says, and whether tapping it does anything.
@@ -113,17 +111,7 @@ export function UpdateRow() {
     if (update.status === 'ready') {
       void (async () => {
         setConfirming(true);
-        // Asked rather than done, because a reload is a cold start: the screen
-        // goes away and comes back. Everything logged is already in the
-        // database and the rest period is restored on launch, so nothing is
-        // lost, but the moment is the user's to pick. Mid-set is not it.
-        const confirmed = await showConfirm({
-          title: 'Restart now?',
-          message:
-            'Lift closes and reopens on the new version. Your workouts, and any rest timer running, are kept.',
-          confirmLabel: 'Restart',
-          tone: 'confirm',
-        });
+        const confirmed = await confirmUpdateRestart();
         setConfirming(false);
         if (confirmed) update.install();
       })();

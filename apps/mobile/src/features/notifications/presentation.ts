@@ -48,6 +48,16 @@ export const GYM_REMINDER_TYPE = 'gym-reminder';
  */
 export const WEIGH_IN_REMINDER_TYPE = 'weigh-in-reminder';
 
+/**
+ * Marks "a new version is ready", see `./update`.
+ *
+ * Shown in the foreground like the reminders, because it is the only way the
+ * news arrives: the settings row reports the same state, but only to someone
+ * who goes and looks. Silent there, unlike them, since the user is already
+ * holding the phone.
+ */
+export const APP_UPDATE_TYPE = 'app-update';
+
 let configured = false;
 
 export function configureNotificationHandler(): void {
@@ -69,6 +79,7 @@ export function configureNotificationHandler(): void {
       // worth showing even to a user who is already looking at the app: the
       // banner is the fastest route to logging the reading there is.
       const isReminder = type === GYM_REMINDER_TYPE || type === WEIGH_IN_REMINDER_TYPE;
+      const isUpdate = type === APP_UPDATE_TYPE;
 
       /*
        * The rest bell rings here only when the user asked for a system route,
@@ -97,11 +108,11 @@ export function configureNotificationHandler(): void {
         // The gym reminder is the only banner. The rest bell is a sound and
         // nothing else, and the workout status is a status line, not news; a
         // reminder to come in is news, and nothing on screen says it.
-        shouldShowBanner: isReminder,
+        shouldShowBanner: isReminder || isUpdate,
         // The ongoing notification is the one thing that *must* stay in the
         // shade while the app is open. Being visible there is its entire job.
         // Everything else is redundant with the UI the user is looking at.
-        shouldShowList: isOngoing || isReminder,
+        shouldShowList: isOngoing || isReminder || isUpdate,
         shouldPlaySound: isReminder || ringsRestBell,
         shouldSetBadge: false,
       };

@@ -21,6 +21,7 @@ import { HomeWidgets } from '@/features/home-widgets/publisher';
 import { WeighInResponder } from '@/features/notifications/weigh-in-responder';
 import { Onboarding } from '@/features/onboarding';
 import { useSyncTriggers } from '@/features/sync/use-sync-triggers';
+import { UpdateAgent } from '@/features/updates/update-agent';
 import { RestCues } from '@/features/workouts/rest-cues';
 import { WorkoutNotice } from '@/features/workouts/workout-notice';
 import { showAlert } from '@/store/dialog';
@@ -289,6 +290,10 @@ function AppNavigator() {
           screens all over the app. Renders nothing, and subscribes to nothing
           off Android. */}
       <HomeWidgets />
+      {/* Checks for over-the-air updates on every return to the app, announces
+          one once it has downloaded, and installs it when that is switched on.
+          Renders nothing, and is nothing at all where updates are unsupported. */}
+      <UpdateAgent />
       {/*
         The desktop shell: rail beside the stack, rather than inside it.
 

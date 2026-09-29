@@ -238,7 +238,10 @@ export function SideRail() {
           borderRightColor: colors.border,
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
-          paddingLeft: insets.left,
+          // Added to the rail's own margin rather than replacing it. On its own
+          // this overrode `paddingHorizontal`, and in a browser, where the inset
+          // is 0, every row sat flush against the window's left edge.
+          paddingLeft: spacing.md + insets.left,
         },
       ]}
     >

@@ -13,7 +13,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAction, tabHeaderOptions } from '@/components/ui';
 import { useOpenSession } from '@/features/workouts/use-open-session';
-import { font, fontSize, spacing, spring, stroke, timing, useColors, useLayout } from '@/theme';
+import {
+  font,
+  fontSize,
+  spacing,
+  spring,
+  stroke,
+  timing,
+  useColors,
+  useColumnGutter,
+  useLayout,
+} from '@/theme';
 
 /** The bar's own height, before the system navigation area is added to it. */
 const TAB_BAR_CONTENT_HEIGHT = 58;
@@ -70,6 +80,14 @@ function TabIcon({
   );
 }
 
+/** A tab header's side margins for a column `gutter` points in from the pane. */
+function columnHeaderStyle(gutter: number) {
+  return {
+    headerTitleContainerStyle: { marginLeft: spacing.lg + gutter },
+    headerRightContainerStyle: { paddingRight: spacing.lg + gutter },
+  };
+}
+
 export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -88,6 +106,18 @@ export default function TabLayout() {
    * it, and is worth reading before changing either caller.
    */
   const sessionOpen = useOpenSession();
+
+  /*
+   * Each header's margins, set to the column its screen draws in.
+   *
+   * On a phone both gutters are 0 and this is the `lg` the headers always had.
+   * Wide, the title moves in to sit over the content's left edge and the action
+   * over its right, instead of the two being pinned to the corners of a pane
+   * the content is centred in. Home is a `board` screen and the other two are
+   * `column`s, so they get different gutters.
+   */
+  const boardHeader = columnHeaderStyle(useColumnGutter('board'));
+  const columnHeader = columnHeaderStyle(useColumnGutter('column'));
 
   return (
     <Tabs
@@ -225,6 +255,7 @@ export default function TabLayout() {
            * as data loss to anyone who does not know when the window turns.
            */
           headerTitle: 'Home',
+          ...boardHeader,
           /*
            * History, pinned.
            *
@@ -289,6 +320,7 @@ export default function TabLayout() {
         name="workout"
         options={{
           title: 'Workout',
+          ...columnHeader,
           /*
            * Resume, for as long as there is something to resume.
            *
@@ -345,6 +377,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          ...columnHeader,
           /*
            * Settings, from the top of the screen instead of the bottom.
            *

@@ -46,7 +46,14 @@ import {
   spacing,
   useColors,
   useContentWidth,
+  useLayout,
 } from '@/theme';
+
+/** How tall a square tile may grow once the grid is wider than a phone's. */
+const TILE_MAX_HEIGHT = 184;
+
+/** The metric track's width on a wide screen: about what it is on a phone. */
+const TABS_WIDE_WIDTH = 360;
 
 const BODY_PART_LABELS: Record<string, string> = {
   chest: 'Chest',
@@ -67,6 +74,8 @@ export default function HomeScreen() {
   // not the window: on a desktop the pane beside the rail is capped at 1040 and
   // the chart has to be told the same number the `Screen` used.
   const chartWidth = useContentWidth('board') - spacing.lg * 2;
+  const { isWide } = useLayout();
+  const tile = isWide ? styles.tileWide : styles.tile;
 
   const weightUnit = useSettings((state) => state.weightUnit);
 
@@ -540,7 +549,7 @@ export default function HomeScreen() {
             onChange={setMetric}
             size="sm"
             label="Metric"
-            style={styles.tabs}
+            style={isWide ? styles.tabsWide : styles.tabs}
           />
 
           {/*
@@ -589,7 +598,7 @@ export default function HomeScreen() {
              * actually hold: forty is a long day, twelve is a short one.
              */}
             <SquareWidget
-              style={styles.tile}
+              style={tile}
               icon="barbell-outline"
               // The orange. Each tile in the grid carries a hue of its own on
               // its icon, in the ramp's order down the screen, which is what
@@ -636,7 +645,7 @@ export default function HomeScreen() {
               </Text>
             </SquareWidget>
 
-            <BodyweightSquareWidget style={styles.tile} tone={colors.data[2]} />
+            <BodyweightSquareWidget style={tile} tone={colors.data[2]} />
           </View>
         </Reveal>
 
@@ -909,7 +918,9 @@ function CountUp({
  */
 function DashboardSkeleton({ chartWidth }: { chartWidth: number }) {
   const colors = useColors();
+  const { isWide } = useLayout();
   const bone = { backgroundColor: colors.surfaceMuted };
+  const tile = isWide ? styles.tileWide : styles.tile;
 
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -927,13 +938,13 @@ function DashboardSkeleton({ chartWidth }: { chartWidth: number }) {
         <View style={[styles.bone, styles.boneChart, { width: chartWidth }, bone]} />
       </View>
 
-      <View style={[styles.bone, styles.boneTabs, styles.tabs, bone]} />
+      <View style={[styles.bone, styles.boneTabs, isWide ? styles.tabsWide : styles.tabs, bone]} />
 
       <Divider style={styles.rule} />
 
       <View style={styles.pair}>
-        <View style={[styles.bone, styles.boneSquare, styles.tile, bone]} />
-        <View style={[styles.bone, styles.boneSquare, styles.tile, bone]} />
+        <View style={[styles.bone, styles.boneSquare, tile, bone]} />
+        <View style={[styles.bone, styles.boneSquare, tile, bone]} />
       </View>
 
       <View style={styles.tileRow}>
@@ -992,6 +1003,15 @@ const styles = StyleSheet.create({
   // there is no way to say that in a margin: hence a step that looks larger
   // than it is on paper and comes out as ordinary on screen.
   tabs: { marginHorizontal: spacing.lg, marginTop: spacing.xl },
+  // Wide, the track is held to a phone's width and set on the left margin.
+  // Stretched across a 1000pt board, three short words sat 330pt apart and the
+  // control read as a toolbar for the page rather than as the chart's axis.
+  tabsWide: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    alignSelf: 'flex-start',
+    width: TABS_WIDE_WIDTH,
+  },
   strip: { marginHorizontal: spacing.lg },
   rule: { marginHorizontal: spacing.lg, marginTop: spacing.xl },
   /* One row of the grid: on the screen's margin, one `lg` clear of the row
@@ -1032,6 +1052,15 @@ const styles = StyleSheet.create({
    * the two stop being halves.
    */
   tile: { flex: 1, minWidth: 0 },
+  /*
+   * The same tile, no taller than a phone draws it.
+   *
+   * Square is right at 170pt and wrong at 500, which is what half a board is
+   * on a desktop: a figure floating in the middle of a card the height of the
+   * window, with its title pushed off the bottom of the first screen. The ratio
+   * still drives the height up to the cap, so a narrow wide window is unchanged.
+   */
+  tileWide: { flex: 1, minWidth: 0, maxHeight: TILE_MAX_HEIGHT },
 
   /*
    * The placeholder blocks. See `DashboardSkeleton`.

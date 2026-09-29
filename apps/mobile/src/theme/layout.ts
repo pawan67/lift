@@ -175,6 +175,24 @@ export function useContentWidth(kind: ContentWidth = 'column'): number {
 }
 
 /**
+ * The empty band either side of a capped column, in points. Zero on a phone.
+ *
+ * For chrome that spans the whole pane but has to line up with the column
+ * inside it: the tab headers. Their title is drawn by the navigator 16pt in
+ * from the pane's edge, and on a 1440pt monitor the column that title heads
+ * starts some 240pt further in, so the page's name floats over nothing while
+ * its content sits in the middle. Adding this to the header's own margins puts
+ * the title over the column's first line and the header action over its last.
+ */
+export function useColumnGutter(kind: ContentWidth = 'column'): number {
+  const { width, isWide } = useLayout();
+  const column = useContentWidth(kind);
+
+  if (!isWide) return 0;
+  return Math.max(0, (width - RAIL_WIDTH - column) / 2);
+}
+
+/**
  * Whether this session is driven by a pointer that can hover.
  *
  * The one genuine platform question in this file. Hover is not a width

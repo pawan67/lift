@@ -31,6 +31,7 @@ import { BodyweightSquareWidget } from '@/features/measurements/bodyweight-squar
 import { CalendarWidget } from '@/components/widgets/calendar-widget';
 import { VolumeAdviceSection } from '@/features/ai/volume-advice-section';
 import { SquareWidget, WideWidget, widgetFigure } from '@/components/ui/widget';
+import { UpNextCard } from '@/features/routines/up-next-card';
 import { listCompletedWorkouts } from '@/features/workouts/repository';
 import type { Workout } from '@/db/schema';
 import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
@@ -369,6 +370,18 @@ export default function HomeScreen() {
   return (
     <Screen width="board" scrolled={scrollEdge.progress}>
       <ScrollView {...scrollEdge.list} contentContainerStyle={styles.content}>
+        {/*
+         * What to do today, above how the week is going.
+         *
+         * Most visits to this screen are on the way to a session, and the
+         * routine that comes next used to be a tab away. It sits above the
+         * masthead rather than replacing it: the week still has its block, it
+         * is just no longer the first thing between opening the app and
+         * starting to lift. It draws nothing with a session open or with no
+         * routine to suggest, and the masthead then leads as it always did.
+         */}
+        <UpNextCard style={styles.upNext} />
+
         {/*
          * Four blocks, revealed in the order they are read.
          *
@@ -969,6 +982,7 @@ function toDateTotals(point: WeeklyPoint) {
 
 const styles = StyleSheet.create({
   content: { paddingBottom: spacing.huge },
+  upNext: { marginHorizontal: spacing.lg, marginTop: spacing.lg },
   masthead: {
     paddingHorizontal: spacing.lg,
     // Deeper above than the `lg` it was, and shallower below, because the strip

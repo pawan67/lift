@@ -45,11 +45,13 @@ import { haptics } from '@/features/feedback/haptics';
 import { canLogSet } from '@/features/workouts/repository';
 import { useSettings } from '@/store/settings';
 import {
+  duration,
   font,
   fontSize,
   PRESS_SCALE_SMALL,
   radius,
   spacing,
+  stroke,
   translucent,
   useColors,
   type Palette,
@@ -69,6 +71,12 @@ export interface SetRowProps {
   distanceUnit: DistanceUnit;
   /** Whether this set broke a personal record. */
   isPr?: boolean;
+  /**
+   * Whether this is the set the user is about to do, which draws the focus
+   * outline. One row on the screen at most, chosen by `nextOpenSet` so the
+   * outline and the rest bar's "Next" line always name the same set.
+   */
+  isNext?: boolean;
   /** Same-position set from the previous session, shown as a ghost target. */
   previous?: WorkoutSet;
   onChange: (patch: Partial<WorkoutSet>) => void;
@@ -82,12 +90,23 @@ export interface SetRowProps {
   onChangeSetType: (setType: SetType) => void;
 }
 
-/** Formats the "previous" column, e.g. "100 kg × 5" or "—". */
+/**
+ * Formats the "previous" column, e.g. "100 × 5" or "—".
+ *
+ * `short` drops the weight unit, and the column is always drawn short. The
+ * heading two cells over already names the unit and is the control that
+ * changes it, so "kg" on every row was the same word printed again, and it was
+ * exactly the width that pushed "87.5 kg × 5 @8" into an ellipsis on a 390pt
+ * phone. The column's job is to be read at a glance, and a truncated figure is
+ * the one thing it cannot be. The spoken label keeps the unit: a screen reader
+ * does not have the heading in view.
+ */
 function formatPrevious(
   previous: WorkoutSet | undefined,
   trackingType: TrackingType,
   unit: WeightUnit,
   distanceUnit: DistanceUnit,
+  short = false,
 ): string {
   if (!previous) return '—';
 
@@ -95,7 +114,7 @@ function formatPrevious(
   const parts: string[] = [];
 
   if (fields.weight && previous.weightKg != null) {
-    parts.push(formatWeight(previous.weightKg, unit));
+    parts.push(formatWeight(previous.weightKg, unit, { withUnit: !short }));
   }
   if (fields.duration && previous.durationSeconds != null) {
     parts.push(formatDuration(previous.durationSeconds));
@@ -525,6 +544,7 @@ export const SetRow = memo(function SetRow({
   weightUnit,
   distanceUnit,
   isPr,
+  isNext = false,
   previous,
   onChange,
   onToggleComplete,
@@ -572,9 +592,6 @@ export const SetRow = memo(function SetRow({
     pop.value = withSequence(withTiming(0.85, SQUASH), withSpring(1, RELEASE));
   }, [set.isCompleted, done, pop]);
 
-  // A tint layer rather than an animated `backgroundColor`: interpolating out of
-  // `transparent` runs through rgba(0,0,0,0) and greys the row on the way past.
-  const tintStyle = useAnimatedStyle(() => ({ opacity: done.value }));
   const checkStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
   const fillStyle = useAnimatedStyle(() => ({ opacity: done.value }));
   const idleGlyphStyle = useAnimatedStyle(() => ({ opacity: 1 - done.value }));
@@ -851,10 +868,38 @@ export const SetRow = memo(function SetRow({
         )}
       >
         <View style={styles.row}>
-          <Animated.View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, tintStyle, { backgroundColor: colors.accentSurface }]}
-          />
+          {/*
+            The focus plate: the next set to do, outlined.
+
+            This replaced a tint on every row that was already *done*, which
+            had the emphasis the wrong way round. A half-finished block read as
+            a stack of lime rows with the one that mattered sitting plain
+            underneath them, and the check plate already says "done" on its own.
+            Now finished rows are quiet and the only accent in the table is on
+            the row the thumb is heading for. When a set is checked off this one
+            fades out and the next row's fades in, so the outline steps down the
+            table with the work.
+
+            Mounted only on that one row, rather than an animated layer on every
+            row: the table is drawn twenty to forty times a session and a hook
+            per row is paid on each of them (see the note on the set number).
+            A full point of outline because it follows a radius
+            (`stroke.outline`).
+
+            Outline only, with no fill. On the web an absolutely positioned
+            layer paints above its in-flow siblings whatever its place in the
+            tree, so a filled plate covered the weight and reps fields there.
+            The stroke sits in the 8pt gutter outside the cells and cannot.
+          */}
+          {isNext && (
+            <Animated.View
+              pointerEvents="none"
+              collapsable={false}
+              entering={FadeIn.duration(duration.fast).reduceMotion(ReduceMotion.System)}
+              exiting={FadeOut.duration(duration.instant).reduceMotion(ReduceMotion.System)}
+              style={[styles.focus, { borderColor: colors.accent }]}
+            />
+          )}
 
           {/*
            * Set number / type badge, and the one control in this row left on a
@@ -879,7 +924,7 @@ export const SetRow = memo(function SetRow({
             onAccessibilityAction={handleAccessibilityAction}
             style={styles.indexCell}
           >
-            <Text variant="numeric" style={{ color: badgeColor }}>
+            <Text variant="numeric" style={{ color: isNext ? colors.text : badgeColor }}>
               {badge ?? workingIndex}
             </Text>
           </Pressable>
@@ -898,8 +943,8 @@ export const SetRow = memo(function SetRow({
              * Holding the same channels at zero alpha means only the alpha
              * moves.
              *
-             * `surfacePressed`, not `accentSurface`: the accent tint already
-             * means "checked off" one row width away. And no scale: the cell is
+             * `surfacePressed`, not `accentSurface`: the accent belongs to the
+             * focus outline one row width away. And no scale: the cell is
              * stretched between the index and the first field, so shrinking it
              * would pull the row's own layout in on itself. Full-bleed rows get
              * the crossfade alone (`motion.ts`).
@@ -923,7 +968,7 @@ export const SetRow = memo(function SetRow({
               numberOfLines={1}
               style={styles.previousText}
             >
-              {formatPrevious(previous, trackingType, weightUnit, distanceUnit)}
+              {formatPrevious(previous, trackingType, weightUnit, distanceUnit, true)}
             </Text>
             {previous && (
               <Ionicons name="return-down-forward" size={11} color={colors.textTertiary} />
@@ -1160,6 +1205,18 @@ const styles = StyleSheet.create({
     left: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Inset from the row's 16pt margins to 8, so the outline frames the cells
+  // with room to spare rather than touching the first and last of them, and 2pt
+  // off the top and bottom so two rows' plates could never meet.
+  focus: {
+    position: 'absolute',
+    top: 2,
+    bottom: 2,
+    left: spacing.sm,
+    right: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: stroke.outline,
   },
   deleteAction: {
     width: 72,

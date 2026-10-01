@@ -22,7 +22,9 @@ import { readRest, useTimer } from '@/store/timer';
 import {
   duration,
   easing,
+  font,
   fontSize,
+  lineHeight,
   MIN_TOUCH_SIZE,
   PRESS_SCALE_SMALL,
   radius,
@@ -47,6 +49,12 @@ const TRACK_HEIGHT = 3;
 const ROW_HEIGHT = MIN_TOUCH_SIZE;
 
 /**
+ * The "Next" line under the controls. One caption line, always reserved, so the
+ * bar is the same height whether or not there is a next set to name.
+ */
+const NEXT_LINE_HEIGHT = lineHeight.xs;
+
+/**
  * The bar's height, excluding the safe-area inset it adds underneath itself.
  *
  * Exported because the bar is `position: 'absolute'` and therefore invisible to
@@ -56,7 +64,8 @@ const ROW_HEIGHT = MIN_TOUCH_SIZE;
  * reason: a promise the caller reserves against cannot be "however tall the
  * readout came out this time".
  */
-export const REST_BAR_HEIGHT = stroke.rule + TRACK_HEIGHT + spacing.sm + ROW_HEIGHT + spacing.sm;
+export const REST_BAR_HEIGHT =
+  stroke.rule + TRACK_HEIGHT + spacing.sm + ROW_HEIGHT + spacing.xs + NEXT_LINE_HEIGHT + spacing.sm;
 
 export interface RestTimerBarProps {
   /**
@@ -70,6 +79,17 @@ export interface RestTimerBarProps {
    * rather than a thing to press.
    */
   onExpand?: () => void;
+  /**
+   * The set after this rest, as `describeNextSet` words it, or null when the
+   * session has no open set left.
+   *
+   * The one thing to read that earned its way back onto the bar. The reason it
+   * is here and not in the sheet is what a rest is for: loading the bar. A
+   * lifter who can see "Set 3 · 30 kg × 10" while the clock runs changes the
+   * plates during the rest instead of after it, and that is the minute the
+   * countdown exists to protect.
+   */
+  nextUp?: string | null;
 }
 
 /**
@@ -85,7 +105,7 @@ export interface RestTimerBarProps {
  * Everything the compact row has no space for. The exercise it belongs to, the
  * rest-duration chip, pause, start: lives in the sheet behind `onExpand`.
  */
-export function RestTimerBar({ onExpand }: RestTimerBarProps) {
+export function RestTimerBar({ onExpand, nextUp }: RestTimerBarProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const controls = useRestControls();
@@ -308,6 +328,27 @@ export function RestTimerBar({ onExpand }: RestTimerBarProps) {
           />
         </View>
       )}
+
+      {frame !== null && nextUp !== undefined && (
+        <Text
+          variant="caption"
+          color="textTertiary"
+          numberOfLines={1}
+          align="center"
+          style={styles.next}
+        >
+          {nextUp === null ? (
+            'That was the last open set'
+          ) : (
+            <>
+              {'Next  '}
+              <Text variant="caption" color="textSecondary" style={styles.nextFigures}>
+                {nextUp}
+              </Text>
+            </>
+          )}
+        </Text>
+      )}
     </Animated.View>
   );
 }
@@ -415,6 +456,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   readout: { fontSize: fontSize.xxxl, letterSpacing: -0.6 },
+  next: {
+    height: NEXT_LINE_HEIGHT,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  // Tabular, so the line does not shimmer when a weight is typed while resting.
+  nextFigures: { ...font('semibold'), fontVariant: ['tabular-nums'] },
   /**
    * `size="sm"` for the label and the padding, overridden back to a full touch
    * target in height. The small size exists for controls inside an

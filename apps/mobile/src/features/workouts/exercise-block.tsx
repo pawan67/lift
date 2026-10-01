@@ -64,6 +64,13 @@ export interface ExerciseBlockProps {
   /** Sets that took a personal record, marked with a trophy. */
   recordSetIds?: ReadonlySet<string>;
   /**
+   * The set the session is waiting on, which draws the focus outline. Chosen
+   * by the screen rather than here, because in a superset the next set can sit
+   * in a different block from the one just logged (see `nextOpenSet`). The
+   * session editor passes nothing: a finished session has no next set.
+   */
+  nextSetId?: string | null;
+  /**
    * Where this exercise sits in the superset it belongs to, if it is in one.
    *
    * Derived by the screen rather than read off `workoutExercise.supersetGroup`,
@@ -132,6 +139,7 @@ export function ExerciseBlock({
   previousSets,
   previousNote,
   recordSetIds,
+  nextSetId,
   superset,
   onEditSuperset,
   onOpenDemo,
@@ -448,8 +456,12 @@ export function ExerciseBlock({
                 than the numbers inside its own set rows, which is why six
                 exercises scrolled as one undifferentiated column. The accent is
                 budgeted at roughly one element per view (`theme/tokens.ts`) and
-                this screen was spending it once per exercise. */}
-            <Text variant="subheading" color="text" numberOfLines={1} style={styles.title}>
+                this screen was spending it once per exercise.
+
+                Two lines rather than one. Catalog names carry their equipment
+                in brackets, so the part a single line cut off was the part that
+                tells "Incline Bench Press (Dumbbell)" from the barbell one. */}
+            <Text variant="subheading" color="text" numberOfLines={2} style={styles.title}>
               {detail.exercise.name}
             </Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
@@ -660,6 +672,7 @@ export function ExerciseBlock({
           set={set}
           workingIndex={workingIndex}
           isPr={recordSetIds?.has(set.id)}
+          isNext={set.id === nextSetId}
           trackingType={detail.exercise.trackingType}
           // Handed down rather than read from settings inside the row: the row
           // has to agree with the heading directly above it, and the heading is

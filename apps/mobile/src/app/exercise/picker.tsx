@@ -49,6 +49,8 @@ interface SuggestionsProps {
   /** True when the workout being built is what shaped the order. */
   fromContext: boolean;
   selected: ReadonlySet<string>;
+  /** Each selected id's place in the selection, from 1. */
+  order: ReadonlyMap<string, number>;
   onPress: (exercise: ExerciseListItem) => void;
 }
 
@@ -67,7 +69,7 @@ interface SuggestionsProps {
  * The subtitle exists because a ranked list that doesn't say what it ranked on
  * reads as an arbitrary one, and this one is worth trusting.
  */
-function Suggestions({ exercises, fromContext, selected, onPress }: SuggestionsProps) {
+function Suggestions({ exercises, fromContext, selected, order, onPress }: SuggestionsProps) {
   return (
     <View>
       <SectionHeader title={fromContext ? 'Suggested' : 'Your lifts'} />
@@ -83,6 +85,7 @@ function Suggestions({ exercises, fromContext, selected, onPress }: SuggestionsP
             exercise={exercise}
             selectable
             selected={selected.has(exercise.id)}
+            order={order.get(exercise.id)}
             onPress={onPress}
           />
         </Fragment>
@@ -186,6 +189,12 @@ export default function ExercisePickerScreen() {
     });
   }, []);
 
+  // Each selected id's place in the order it will be added, which a Set keeps.
+  const order = useMemo(
+    () => new Map([...selected].map((id, index) => [id, index + 1])),
+    [selected],
+  );
+
   // One stable handler for every row rather than an arrow per row: `ExerciseRow`
   // hands its own exercise back, and its `memo` can only hold if the callback
   // identity survives a re-render. Toggling then re-renders exactly one row.
@@ -197,10 +206,11 @@ export default function ExercisePickerScreen() {
         exercise={item}
         selectable
         selected={selected.has(item.id)}
+        order={order.get(item.id)}
         onPress={handlePress}
       />
     ),
-    [selected, handlePress],
+    [selected, order, handlePress],
   );
 
   const listRef = useRef<FlashListRef<ExerciseListItem>>(null);
@@ -290,6 +300,7 @@ export default function ExercisePickerScreen() {
               exercises={suggestions}
               fromContext={context.length > 0}
               selected={selected}
+              order={order}
               onPress={handlePress}
             />
           ) : null

@@ -6,7 +6,7 @@ import { StyleSheet, View } from 'react-native';
 import { PressableScale, Text } from '@/components/ui';
 import type { ExerciseListItem } from '@/features/exercises/repository';
 import { ExerciseThumbnail } from '@/features/exercises/exercise-thumbnail';
-import { radius, spacing, translucent, useColors } from '@/theme';
+import { font, radius, spacing, translucent, useColors } from '@/theme';
 
 export interface ExerciseRowProps {
   // Narrowed to what the row draws, so list screens can select those columns
@@ -16,6 +16,16 @@ export interface ExerciseRowProps {
   /** Shows a checkbox instead of a chevron, for multi-select pickers. */
   selectable?: boolean;
   selected?: boolean;
+  /**
+   * Where this row sits in the selection, from 1, drawn in the check's place.
+   *
+   * A multi-select picker adds what was chosen in the order it was tapped, so
+   * picking a superset or a whole session is a sequence, and a column of
+   * identical ticks hid the one thing about the selection that was going to
+   * shape the workout. Numbered, the order is on screen before it is committed.
+   * Omitted, a selected row shows the plain tick as before.
+   */
+  order?: number;
   /** Small badge on the right, e.g. how many times it's already been added. */
   badge?: string;
 }
@@ -25,6 +35,7 @@ export const ExerciseRow = memo(function ExerciseRow({
   onPress,
   selectable = false,
   selected = false,
+  order,
   badge,
 }: ExerciseRowProps) {
   const colors = useColors();
@@ -42,6 +53,7 @@ export const ExerciseRow = memo(function ExerciseRow({
     EQUIPMENT_LABELS[exercise.equipment],
     exercise.isCustom ? 'Custom exercise' : null,
     badge,
+    selected && order ? `number ${order} in the selection` : null,
   ]
     .filter((part): part is string => part !== null && part !== undefined)
     .join(', ');
@@ -112,7 +124,13 @@ export const ExerciseRow = memo(function ExerciseRow({
         </View>
       ) : null}
 
-      {selectable ? (
+      {selectable && selected && order ? (
+        <View style={[styles.order, { backgroundColor: colors.accent }]}>
+          <Text variant="caption" style={[styles.orderText, { color: colors.textOnAccent }]}>
+            {order}
+          </Text>
+        </View>
+      ) : selectable ? (
         <Ionicons
           name={selected ? 'checkmark-circle' : 'ellipse-outline'}
           size={22}
@@ -141,6 +159,16 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: radius.sm,
   },
+  // The 22pt the tick glyph it replaces occupies, so selecting a row moves
+  // nothing beside it.
+  order: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderText: { ...font('bold'), fontVariant: ['tabular-nums'] },
   badge: {
     minWidth: 24,
     paddingHorizontal: spacing.sm,

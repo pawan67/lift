@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lift",
     "slug": "lift",
-    "version": "0.22.0",
+    "version": "0.23.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lift",

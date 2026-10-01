@@ -8,6 +8,16 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.23.0](https://github.com/pawan67/lift/compare/v0.22.0...v0.23.0) - 2026-10-01
+
+### Features
+
+- number picked exercises in the order they will be added ([f49f961](https://github.com/pawan67/lift/commit/f49f9611339660eec7694d3dd563a891b8995027))
+- show what each record beat and how each lift moved ([1cfd819](https://github.com/pawan67/lift/commit/1cfd8191920ecfefa6ba40cbd95da0c7ea770382))
+- make gold mean new on the records screen ([425cc9e](https://github.com/pawan67/lift/commit/425cc9e1bbe84b651fd659d1d66bbfc236ee9379))
+- put the next routine and its Start at the top of Home ([7840a07](https://github.com/pawan67/lift/commit/7840a073f607ae9dc00b19cc37b89ba493cc0f4c))
+- outline the next set and name it under the rest clock ([62b5f3a](https://github.com/pawan67/lift/commit/62b5f3ae65a127241cff754051daf54b2d4c1b9d))
+
 ## [0.22.0](https://github.com/pawan67/lift/compare/v0.21.1...v0.22.0) - 2026-09-29
 
 ### Features

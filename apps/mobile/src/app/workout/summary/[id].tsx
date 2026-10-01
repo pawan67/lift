@@ -9,9 +9,9 @@ import {
   type MuscleGroup,
   type PrKind,
 } from '@lift/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import { Confetti } from '@/components/celebration/confetti';
@@ -30,13 +30,18 @@ import {
 import { SessionSummaryCard } from '@/features/ai/session-summary-card';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { db } from '@/db/client';
-import { personalRecords } from '@/db/schema';
+import { personalRecords, type WorkoutSet } from '@/db/schema';
 import {
   resolveExerciseUnits,
   useAppUnits,
   type ExerciseUnitOverrides,
 } from '@/features/exercises/units';
-import { getWorkoutDetail, type WorkoutDetail } from '@/features/workouts/repository';
+import { compareWithLastTime, type Trend } from '@/features/workouts/compare';
+import {
+  getPreviousPerformance,
+  getWorkoutDetail,
+  type WorkoutDetail,
+} from '@/features/workouts/repository';
 import { spacing, stroke, useColors } from '@/theme';
 
 /**
@@ -52,6 +57,15 @@ const HERO_DATE: Intl.DateTimeFormatOptions = {
 interface PrSummary {
   kind: PrKind;
   value: number;
+  /**
+   * The best this record beat, or null when it is the first of its kind.
+   *
+   * A record on its own is a number; beside the one it replaced it is a jump,
+   * and the size of the jump is the part worth seeing. Read from the earlier
+   * rows of the same table, which only ever holds a row when a best was beaten,
+   * so the largest earlier value is exactly the previous best.
+   */
+  previous: number | null;
   exerciseName: string;
   /**
    * Evaluated from the exercise exactly as the logging screen does it, so an
@@ -78,6 +92,8 @@ export default function WorkoutSummaryScreen() {
 
   const [detail, setDetail] = useState<WorkoutDetail | null>(null);
   const [prs, setPrs] = useState<PrSummary[]>([]);
+  // Last time's completed sets per lift in this session, keyed by the link id.
+  const [lastTime, setLastTime] = useState<Record<string, WorkoutSet[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +112,31 @@ export default function WorkoutSummaryScreen() {
         loaded.exercises.map((entry) => [entry.exercise.id, entry.exercise]),
       );
 
+      const exerciseIds = [...new Set(records.map((record) => record.exerciseId))];
+      const earlier =
+        exerciseIds.length === 0
+          ? []
+          : await db
+              .select({
+                exerciseId: personalRecords.exerciseId,
+                kind: personalRecords.kind,
+                value: personalRecords.value,
+              })
+              .from(personalRecords)
+              .where(
+                and(
+                  inArray(personalRecords.exerciseId, exerciseIds),
+                  ne(personalRecords.workoutId, id),
+                  isNull(personalRecords.deletedAt),
+                ),
+              );
+
+      const previousBest = new Map<string, number>();
+      for (const row of earlier) {
+        const key = `${row.exerciseId}:${row.kind}`;
+        previousBest.set(key, Math.max(previousBest.get(key) ?? -Infinity, row.value));
+      }
+
       if (!cancelled) {
         setPrs(
           records.map((record) => {
@@ -104,6 +145,7 @@ export default function WorkoutSummaryScreen() {
             return {
               kind: record.kind,
               value: record.value,
+              previous: previousBest.get(`${record.exerciseId}:${record.kind}`) ?? null,
               exerciseName: exercise?.name ?? 'Exercise',
               units: {
                 weightUnit: exercise?.weightUnit ?? null,
@@ -113,6 +155,26 @@ export default function WorkoutSummaryScreen() {
           }),
         );
       }
+
+      /*
+       * Last time, per lift, bounded by when this session started: the newest
+       * other session would otherwise be a later one when this screen is
+       * reopened from History months on. Read after the records so the screen
+       * fills top-down, in the order it is read.
+       */
+      const before = loaded.workout.startedAt.getTime();
+      const previous = await Promise.all(
+        loaded.exercises.map(
+          async (entry) =>
+            [
+              entry.workoutExercise.id,
+              (await getPreviousPerformance(entry.exercise.id, { excludeWorkoutId: id, before }))
+                .sets,
+            ] as const,
+        ),
+      );
+
+      if (!cancelled) setLastTime(Object.fromEntries(previous));
     })();
 
     return () => {
@@ -215,23 +277,31 @@ export default function WorkoutSummaryScreen() {
                 {prs.length === 1 ? '1 personal record' : `${prs.length} personal records`}
               </Text>
             </View>
-            {prs.map((pr, index) => (
-              <View key={`${pr.kind}-${index}`} style={styles.prRow}>
-                <Text variant="label" numberOfLines={1} style={styles.prName}>
-                  {pr.exerciseName}
-                </Text>
-                <Text variant="caption" color="textSecondary">
-                  {PR_KIND_LABELS[pr.kind]}
-                </Text>
-                <Text variant="numeric" color="record">
-                  {formatPrValue(
-                    pr.kind,
-                    pr.value,
-                    resolveExerciseUnits(pr.units, appUnits).weightUnit,
-                  )}
-                </Text>
-              </View>
-            ))}
+            {prs.map((pr, index) => {
+              const unit = resolveExerciseUnits(pr.units, appUnits).weightUnit;
+              return (
+                <View key={`${pr.kind}-${index}`} style={styles.prRow}>
+                  <View style={styles.prName}>
+                    <Text variant="label" numberOfLines={1}>
+                      {pr.exerciseName}
+                    </Text>
+                    <Text variant="caption" color="textSecondary">
+                      {PR_KIND_LABELS[pr.kind]}
+                    </Text>
+                  </View>
+                  <View style={styles.prValue}>
+                    <Text variant="numeric" color="record">
+                      {formatPrValue(pr.kind, pr.value, unit)}
+                    </Text>
+                    {pr.previous !== null && (
+                      <Text variant="caption" color="textTertiary">
+                        {`was ${formatPrValue(pr.kind, pr.previous, unit)}`}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </Card>
         )}
 
@@ -274,6 +344,16 @@ export default function WorkoutSummaryScreen() {
         <Card padded={false}>
           {exercises.map((entry, index) => {
             const working = entry.sets.filter((set) => isWorkingSet(set.setType));
+            const previous = lastTime[entry.workoutExercise.id];
+            const comparison = previous
+              ? compareWithLastTime(
+                  entry.sets,
+                  previous,
+                  entry.exercise.trackingType,
+                  resolveExerciseUnits(entry.exercise, appUnits).weightUnit,
+                )
+              : null;
+
             return (
               <View key={entry.workoutExercise.id}>
                 <ListRow
@@ -281,6 +361,17 @@ export default function WorkoutSummaryScreen() {
                   subtitle={`${working.length} ${working.length === 1 ? 'working set' : 'working sets'}`}
                   showChevron={false}
                   icon="barbell-outline"
+                  accessory={
+                    comparison ? (
+                      <Text
+                        variant="label"
+                        color={TREND_INK[comparison.trend]}
+                        accessibilityLabel={`Against last time: ${comparison.text}`}
+                      >
+                        {comparison.text}
+                      </Text>
+                    ) : undefined
+                  }
                 />
                 {index < exercises.length - 1 && <Divider inset={52} />}
               </View>
@@ -299,6 +390,20 @@ export default function WorkoutSummaryScreen() {
     </Screen>
   );
 }
+
+/**
+ * The ink for each verdict against last time.
+ *
+ * Better is `success`, which is what the role is for. Worse is `textTertiary`
+ * rather than `danger`: red means "this destroys something" everywhere else in
+ * the app, and a lighter Thursday is not a failure state. It is a fact the
+ * lifter is entitled to see, printed at the volume of a footnote.
+ */
+const TREND_INK: Record<Trend, ComponentProps<typeof Text>['color']> = {
+  better: 'success',
+  same: 'textSecondary',
+  worse: 'textTertiary',
+};
 
 /** Label above figure, on a hairline-ruled band: the same grid as `StatBand`. */
 function Stat({ label, value }: { label: string; value: string }) {
@@ -349,7 +454,8 @@ const styles = StyleSheet.create({
   mapCard: { padding: spacing.sm, alignItems: 'center' },
   prHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   prRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  prName: { flex: 1 },
+  prName: { flex: 1, gap: 2 },
+  prValue: { alignItems: 'flex-end', gap: 2 },
   exerciseList: { gap: spacing.sm },
   exerciseRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
   exerciseName: { flex: 1 },

@@ -18,7 +18,7 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import {
-  Divider,
+  Card,
   EmptyState,
   PressableScale,
   Reveal,
@@ -35,7 +35,30 @@ import {
   type ExerciseUnitOverrides,
 } from '@/features/exercises/units';
 import { useDeferredFocusEffect } from '@/hooks/use-deferred-focus-effect';
-import { MIN_TOUCH_SIZE, spacing, useColors } from '@/theme';
+import { font, radius, spacing, stroke, useColors } from '@/theme';
+
+/**
+ * How long a record stays gold.
+ *
+ * Gold is this screen's whole vocabulary for "new", and it only says that if
+ * most of the screen is not wearing it. Every figure here is a record by
+ * definition, so printing all of them in `record` made last November's best
+ * look exactly like this morning's. Two weeks is long enough that a record set
+ * on Monday is still marked when the screen is opened the following weekend,
+ * and short enough that the gold on screen is usually one or two figures.
+ */
+const RECENT_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** The grid's labels: the cell is half a card wide, so "Best Session Volume" will not do. */
+const SHORT_LABELS: Record<PrKind, string> = {
+  heaviest_weight: 'Heaviest',
+  best_1rm: 'Est. 1RM',
+  best_set_volume: 'Best set',
+  best_session_volume: 'Session',
+  most_reps: 'Most reps',
+  best_duration: 'Longest',
+  best_distance: 'Farthest',
+};
 
 interface ExerciseRecords {
   exerciseId: string;
@@ -58,6 +81,9 @@ export default function RecordsScreen() {
   const appUnits = useAppUnits();
   const [grouped, setGrouped] = useState<ExerciseRecords[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // Stamped with the query rather than read at render, so what counts as recent
+  // is decided once per visit and a long-open screen does not quietly re-colour.
+  const [recentSince, setRecentSince] = useState(0);
 
   useDeferredFocusEffect(
     useCallback(() => {
@@ -113,10 +139,31 @@ export default function RecordsScreen() {
             entry.records.sort((a, b) => PR_KINDS.indexOf(a.kind) - PR_KINDS.indexOf(b.kind));
           }
 
+          /*
+           * Recent records first, newest at the top; everything else in name
+           * order below them.
+           *
+           * Alphabetical alone is the right order for finding a lift and the
+           * wrong one for the question most visits ask, which is "what have I
+           * hit lately". A record set this week sat wherever its name fell, so
+           * the gold that marks it could be three screens down. The rest stay
+           * alphabetical so the long tail can still be scanned for a name.
+           */
+          const since = Date.now() - RECENT_MS;
+          const latest = (entry: ExerciseRecords) =>
+            Math.max(...entry.records.map((record) => record.achievedAt.getTime()));
+
+          const all = [...byExercise.values()];
+          const recent = all
+            .filter((entry) => latest(entry) >= since)
+            .sort((a, b) => latest(b) - latest(a));
+          const rest = all
+            .filter((entry) => latest(entry) < since)
+            .sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+
           if (!cancelled) {
-            setGrouped(
-              [...byExercise.values()].sort((a, b) => a.exerciseName.localeCompare(b.exerciseName)),
-            );
+            setRecentSince(since);
+            setGrouped([...recent, ...rest]);
           }
         } catch {
           // A failed query counts as loaded, the same rule use-rows.ts applies:
@@ -190,69 +237,125 @@ export default function RecordsScreen() {
             </Text>
           )}
 
-          {grouped.map((entry, index) => (
-            <View key={entry.exerciseId}>
-              {index > 0 && <Divider inset={spacing.lg} />}
+          {grouped.map((entry) => {
+            const units = resolveExerciseUnits(entry.units, appUnits);
+            const isRecent = (record: { achievedAt: Date }) =>
+              record.achievedAt.getTime() >= recentSince;
 
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel={`${entry.exerciseName}, exercise detail`}
-                onPress={() =>
-                  router.push({ pathname: '/exercise/[id]', params: { id: entry.exerciseId } })
-                }
-                // Full-bleed, so it highlights rather than scales: the same rule
-                // `ListRow` follows. It crossfades from the canvas rather than
-                // from `surface` because this list is unboxed: the records are
-                // ruled off from each other, not carded.
-                fill={colors.background}
-                fillPressed={colors.surfacePressed}
-                scaleTo={1}
-                style={styles.header}
-              >
-                <Text
-                  variant="overline"
-                  color="textSecondary"
-                  numberOfLines={1}
-                  style={styles.flex}
+            /*
+             * One figure leads, and it is the estimated 1RM where there is one.
+             *
+             * Five records at one size made every exercise a column of five
+             * numbers, and the screen a wall of them. The 1RM is the one that
+             * moves when any of the others do, so it is the figure that says
+             * how strong this lift is; the other four sit under it at reading
+             * size, where they can be looked up rather than read past.
+             */
+            const headline =
+              entry.records.find((record) => record.kind === 'best_1rm') ?? entry.records[0]!;
+            const others = entry.records.filter((record) => record !== headline);
+            const anyRecent = entry.records.some(isRecent);
+
+            const headMeasure = formatRecord(
+              headline.kind,
+              headline.value,
+              units.weightUnit,
+              units.distanceUnit,
+            );
+            const [headFigure, headUnit] = splitMeasure(headMeasure);
+            const headDay = formatDateTime(headline.achievedAt, DATE_MEDIUM);
+            // The date alone beside the card's figure. The time of day is in the
+            // spoken label, and on screen it pushed the date into the figure's
+            // column for a detail nobody reads a record for.
+            const headDate = headline.achievedAt.toLocaleDateString(undefined, DATE_MEDIUM);
+
+            return (
+              <Card key={entry.exerciseId} padded={false} style={styles.card}>
+                <PressableScale
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    `${entry.exerciseName}. ${PR_KIND_LABELS[headline.kind]}, ` +
+                    `${headMeasure}, ${headDay}.${anyRecent ? ' New record.' : ''}`
+                  }
+                  accessibilityHint="Opens the exercise"
+                  onPress={() =>
+                    router.push({ pathname: '/exercise/[id]', params: { id: entry.exerciseId } })
+                  }
+                  // Spans the card's width, so it highlights rather than scales:
+                  // the same rule `ListRow` follows.
+                  fill={colors.surface}
+                  fillPressed={colors.surfacePressed}
+                  scaleTo={1}
+                  style={styles.head}
                 >
-                  {entry.exerciseName}
-                </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-              </PressableScale>
-
-              <View style={styles.records}>
-                {entry.records.map((record) => {
-                  const units = resolveExerciseUnits(entry.units, appUnits);
-                  const measure = formatRecord(
-                    record.kind,
-                    record.value,
-                    units.weightUnit,
-                    units.distanceUnit,
-                  );
-                  const [figure, unit] = splitMeasure(measure);
-                  const day = formatDateTime(record.achievedAt, DATE_MEDIUM);
-
-                  return (
-                    <View
-                      key={record.kind}
-                      accessible
-                      accessibilityLabel={`${PR_KIND_LABELS[record.kind]}, ${measure}, ${day}`}
+                  <View style={styles.flex}>
+                    <Text variant="label" color="textSecondary" numberOfLines={1}>
+                      {entry.exerciseName}
+                    </Text>
+                    <Text
+                      variant="title"
+                      color={isRecent(headline) ? 'record' : 'text'}
+                      numberOfLines={1}
+                      style={styles.figure}
                     >
-                      <Text variant="numericLarge" color="record" numberOfLines={1}>
-                        {figure}
-                        {unit ? (
-                          <Text variant="label" color="textTertiary">{` ${unit}`}</Text>
-                        ) : null}
+                      {headFigure}
+                      <Text variant="label" color="textTertiary">
+                        {`${headUnit ? ` ${headUnit}` : ''} ${SHORT_LABELS[headline.kind]}`}
                       </Text>
-                      <Text variant="caption" color="textTertiary">
-                        {`${PR_KIND_LABELS[record.kind]} · ${day}`}
+                    </Text>
+                  </View>
+
+                  {anyRecent ? (
+                    <View style={[styles.chip, { backgroundColor: colors.recordSurface }]}>
+                      <Ionicons name="trophy" size={11} color={colors.record} />
+                      <Text variant="caption" color="record" style={styles.chipText}>
+                        New
                       </Text>
                     </View>
-                  );
-                })}
-              </View>
-              </View>
-            ))}
+                  ) : (
+                    <Text variant="caption" color="textTertiary">
+                      {headDate}
+                    </Text>
+                  )}
+                  <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+                </PressableScale>
+
+                {others.length > 0 && (
+                  <View style={[styles.grid, { borderTopColor: colors.border }]}>
+                    {others.map((record) => {
+                      const measure = formatRecord(
+                        record.kind,
+                        record.value,
+                        units.weightUnit,
+                        units.distanceUnit,
+                      );
+                      const day = formatDateTime(record.achievedAt, DATE_MEDIUM);
+
+                      return (
+                        <View
+                          key={record.kind}
+                          accessible
+                          accessibilityLabel={`${PR_KIND_LABELS[record.kind]}, ${measure}, ${day}`}
+                          style={styles.cell}
+                        >
+                          <Text variant="caption" color="textTertiary" numberOfLines={1}>
+                            {SHORT_LABELS[record.kind]}
+                          </Text>
+                          <Text
+                            variant="numeric"
+                            color={isRecent(record) ? 'record' : 'text'}
+                            numberOfLines={1}
+                          >
+                            {measure}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </Card>
+            );
+          })}
         </ScrollView>
       </Reveal>
     </Screen>
@@ -282,23 +385,39 @@ function formatRecord(
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: spacing.huge },
-  note: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  header: {
+  content: { paddingBottom: spacing.huge, paddingHorizontal: spacing.lg, gap: spacing.md },
+  note: { paddingTop: spacing.lg, paddingBottom: spacing.xs },
+  card: { overflow: 'hidden', borderRadius: radius.xl },
+  head: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  figure: { marginTop: 2, fontVariant: ['tabular-nums'] },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: spacing.sm,
+    height: 22,
+    borderRadius: radius.pill,
+  },
+  // Through `font()`, never a bare `fontWeight`: see the note on it in tokens.ts.
+  chipText: font('semibold'),
+  /*
+   * Two columns, ruled off from the headline above but not boxed: four figures
+   * read as a small table without a grid around them, which is the argument
+   * the logging screen makes for its own column headings.
+   */
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
-    // The heading is the only way into the exercise from here, so it carries a
-    // full touch target rather than the section header's own tight padding.
-    minHeight: MIN_TOUCH_SIZE,
+    borderTopWidth: stroke.rule,
   },
-  records: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    gap: spacing.lg,
-  },
+  cell: { width: '50%', paddingTop: spacing.sm, paddingRight: spacing.md },
   flex: { flex: 1 },
 });

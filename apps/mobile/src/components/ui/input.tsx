@@ -173,6 +173,12 @@ export interface NumericFieldProps extends Omit<TextInputProps, 'style' | 'value
    * so without this its echoes never match and the buffer is inert.
    */
   normalize?: (emitted: string) => string;
+  /**
+   * Re-spells the field's text as it is typed, before it is shown or emitted.
+   * Default identity. Duration uses it to insert colons under a number pad,
+   * which has no colon key: see `formatDurationDraft`.
+   */
+  format?: (text: string) => string;
   align?: 'left' | 'center' | 'right';
   style?: StyleProp<TextStyle>;
 }
@@ -206,6 +212,7 @@ export const NumericField = forwardRef<TextInput, NumericFieldProps>(function Nu
   {
     value,
     normalize = (text: string) => text,
+    format = (text: string) => text,
     align = 'center',
     style,
     onChangeText,
@@ -259,14 +266,19 @@ export const NumericField = forwardRef<TextInput, NumericFieldProps>(function Nu
   }
 
   const handleChangeText = (text: string) => {
+    // Re-spelled before it is stored or shown, so a formatted field owns one
+    // version of its text: the digits the user typed in, the colon on screen,
+    // and what the parent parses all agree. `pending` holds the same string, so
+    // the echo it comes back as still matches.
+    const emitted = format(text);
     setBuffer((current) => ({
       ...current,
-      draft: text,
+      draft: emitted,
       // Capped, because a keystroke that never echoes only leaves the queue
       // when a later echo matches past it.
-      pending: [...current.pending, text].slice(-12),
+      pending: [...current.pending, emitted].slice(-12),
     }));
-    onChangeText?.(text);
+    onChangeText?.(emitted);
   };
 
   const handleBlur: BlurHandler = (event) => {

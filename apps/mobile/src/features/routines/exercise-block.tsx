@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
   formatDuration,
+  formatDurationDraft,
   fromDisplayDistance,
   fromDisplayWeight,
   isWorkingSet,
@@ -388,7 +389,11 @@ function SetRow({
             }
             placeholder="—"
             normalize={normalizeDuration}
-            keyboardType="numbers-and-punctuation"
+            // A number pad rather than `numbers-and-punctuation`, which is
+            // iOS-only and opens the full alphabetical keyboard on Android.
+            // The colon it would have typed is inserted by `format`.
+            keyboardType="number-pad"
+            format={formatDurationDraft}
             accessibilityLabel={`Set ${ordinal}, target time`}
             style={styles.field}
             onChangeText={(text) => {

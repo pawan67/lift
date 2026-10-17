@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   formatDistance,
   formatDuration,
+  formatDurationDraft,
   formatWeight,
   fromDisplayDistance,
   fromDisplayWeight,
@@ -994,8 +995,12 @@ export const SetRow = memo(function SetRow({
               value={set.durationSeconds == null ? '' : formatDuration(set.durationSeconds)}
               onChangeText={handleDurationChange}
               normalize={normalizeDuration}
+              // A number pad rather than `numbers-and-punctuation`, which is
+              // iOS-only and opens the full alphabetical keyboard on Android.
+              // The colon it would have typed is inserted by `format`.
+              keyboardType="number-pad"
+              format={formatDurationDraft}
               accessibilityLabel={`${setName}, time`}
-              keyboardType="numbers-and-punctuation"
               placeholder={
                 previous?.durationSeconds != null
                   ? formatDuration(previous.durationSeconds)

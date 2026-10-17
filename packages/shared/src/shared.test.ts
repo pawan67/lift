@@ -20,6 +20,7 @@ import { clampUpdatedAt, CLOCK_SKEW_TOLERANCE_MS, shouldOverwrite } from './sync
 import { TRACKING_TYPES, USES_BODYWEIGHT } from './types.ts';
 import {
   formatDuration,
+  formatDurationDraft,
   formatWeight,
   fromDisplayWeight,
   kgToLb,
@@ -115,6 +116,25 @@ describe('units', () => {
     assert.equal(parseDuration('1:02:03'), 3723);
     assert.equal(parseDuration('abc'), null);
     assert.equal(parseDuration(''), null);
+  });
+
+  it('spells typed digits as a clock while a duration is entered', () => {
+    assert.equal(formatDurationDraft('1'), '1');
+    assert.equal(formatDurationDraft('90'), '90');
+    assert.equal(formatDurationDraft('130'), '1:30');
+    assert.equal(formatDurationDraft('2500'), '25:00');
+    assert.equal(formatDurationDraft('12345'), '1:23:45');
+    // Idempotent over its own output, so appending a digit keeps working.
+    assert.equal(formatDurationDraft('1:30'), '1:30');
+    assert.equal(formatDurationDraft('1:300'), '13:00');
+    // A seventh digit would build a fourth group, which parseDuration rejects.
+    assert.equal(formatDurationDraft('1234567'), '12:34:56');
+  });
+
+  it('only ever spells a duration the parser can read back', () => {
+    for (const digits of ['0', '5', '45', '130', '2500', '123456']) {
+      assert.notEqual(parseDuration(formatDurationDraft(digits)), null);
+    }
   });
 });
 

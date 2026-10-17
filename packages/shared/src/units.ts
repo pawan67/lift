@@ -135,6 +135,37 @@ export function parseDuration(input: string): number | null {
   return Number.isFinite(seconds) ? seconds : null;
 }
 
+/**
+ * Re-spells a run of typed digits as a clock while a duration is entered, so a
+ * time can be filled from a numeric keypad.
+ *
+ * The last two digits are seconds, the two before them minutes, and anything
+ * left over is hours: typing "2500" reads "25:00" and "130" reads "1:30". This
+ * is the convention every stopwatch and timer uses, and it exists because no
+ * mobile keyboard offers digits *and* a colon at once. `numbers-and-punctuation`
+ * is iOS-only and falls back to the full alphabetical keyboard on Android, so
+ * the field asks for a number pad and inserts the colon itself.
+ *
+ * Non-digits are dropped first, which is what makes the transform idempotent
+ * over its own output: appending a digit to the displayed "1:30" hands back
+ * "1:300", which re-reads as "13:00". Capped at six digits, the most
+ * `parseDuration` accepts; a seventh would build a fourth group and parse as
+ * null, stranding the keystroke.
+ */
+export function formatDurationDraft(input: string): string {
+  const digits = input.replace(/\D/g, '').slice(0, 6);
+  if (digits.length <= 2) return digits;
+
+  const groups: string[] = [];
+  let rest = digits;
+  while (rest.length > 2) {
+    groups.unshift(rest.slice(-2));
+    rest = rest.slice(0, -2);
+  }
+  groups.unshift(rest);
+  return groups.join(':');
+}
+
 // ---------------------------------------------------------------------------
 // Volume
 // ---------------------------------------------------------------------------

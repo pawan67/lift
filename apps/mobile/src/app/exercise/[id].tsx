@@ -18,8 +18,8 @@ import {
   type WeightUnit,
 } from '@lift/shared';
 import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { LineChart, type DataPoint } from '@/components/charts/line-chart';
@@ -222,6 +222,24 @@ export default function ExerciseDetailScreen() {
     };
   }, [id]);
 
+  /*
+   * The row again, each time the screen comes back into view: the edit form is
+   * pushed on top of it, and the name, muscle and equipment it changed are all
+   * drawn here. The history below does not change with an edit and is not
+   * re-read.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getExercise(id).then((row) => {
+        if (!cancelled && row) setExercise(row);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [id]),
+  );
+
   // Above the loading guard, because hooks cannot be conditional.
   const trend = useMemo(() => {
     if (!exercise) return null;
@@ -253,16 +271,13 @@ export default function ExerciseDetailScreen() {
     ? splitMeasure(formatWeight(trend.latestKg, weightUnit, { decimals: 1 }))
     : ['', undefined];
 
-  const confirmDelete = () => {
-    const isCustom = exercise.isCustom;
-
+  // Built-ins only: a custom exercise is deleted from its edit form.
+  const confirmArchive = () => {
     void (async () => {
       const confirmed = await showConfirm({
-        title: isCustom ? 'Delete exercise' : 'Archive exercise',
-        message: isCustom
-          ? 'This removes the exercise. Past workouts keep their history.'
-          : 'Built-in exercises are archived rather than deleted, so they stay out of pickers.',
-        confirmLabel: isCustom ? 'Delete' : 'Archive',
+        title: 'Archive exercise',
+        message: 'Built-in exercises are archived rather than deleted, so they stay out of pickers.',
+        confirmLabel: 'Archive',
       });
       if (!confirmed) return;
 
@@ -276,14 +291,26 @@ export default function ExerciseDetailScreen() {
       <Stack.Screen
         options={{
           title: exercise.name,
-          headerRight: () => (
-            <HeaderAction
-              label={exercise.isCustom ? 'Delete exercise' : 'Archive exercise'}
-              title={exercise.isCustom ? 'Delete' : 'Archive'}
-              tone="danger"
-              onPress={confirmDelete}
-            />
-          ),
+          // A custom exercise is the user's own and opens in its form, where
+          // Delete also lives. A built-in belongs to the catalog: it can only
+          // be archived out of the pickers.
+          headerRight: () =>
+            exercise.isCustom ? (
+              <HeaderAction
+                label="Edit exercise"
+                title="Edit"
+                onPress={() =>
+                  router.push({ pathname: '/exercise/edit/[id]', params: { id: exercise.id } })
+                }
+              />
+            ) : (
+              <HeaderAction
+                label="Archive exercise"
+                title="Archive"
+                tone="danger"
+                onPress={confirmArchive}
+              />
+            ),
         }}
       />
 

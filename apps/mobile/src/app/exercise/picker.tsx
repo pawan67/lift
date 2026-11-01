@@ -35,6 +35,7 @@ import {
   type ExerciseListItem,
 } from '@/features/exercises/repository';
 import { useDebounced } from '@/hooks/use-debounced';
+import { useKeyboardOverlap } from '@/hooks/use-keyboard-overlap';
 import { useScrollToTopOn } from '@/hooks/use-scroll-to-top-on';
 import { useExercisePicker } from '@/store/exercise-picker';
 import { spacing } from '@/theme';
@@ -108,6 +109,11 @@ export default function ExercisePickerScreen() {
   const scrollEdge = useScrollEdge();
 
   const insets = useSafeAreaInsets();
+
+  // The list and the confirm bar, measured as one box so the bar can be lifted
+  // clear of the keyboard. See `useKeyboardOverlap`.
+  const body = useRef<View>(null);
+  const keyboard = useKeyboardOverlap(body);
 
   const [search, setSearch] = useState('');
   const [muscles, setMuscles] = useState<MuscleGroup[]>([]);
@@ -286,52 +292,69 @@ export default function ExercisePickerScreen() {
         </View>
       </View>
 
-      <FlashList
-        ref={listRef}
-        {...scrollEdge.list}
-        data={visible}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ItemSeparatorComponent={ListSeparator}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
-          showSuggestions ? (
-            <Suggestions
-              exercises={suggestions}
-              fromContext={context.length > 0}
-              selected={selected}
-              order={order}
-              onPress={handlePress}
-            />
-          ) : null
-        }
-        ListEmptyComponent={
-          // Only once the query has reported. Seeded to `[]` it would otherwise
-          // announce that 6,800 exercises don't exist for the first frame.
-          ready ? (
-            <EmptyState
-              icon="search"
-              title="No matches"
-              description="Try a different search, or create a custom exercise."
-            />
-          ) : null
-        }
-      />
+      <View ref={body} style={styles.body}>
+        <FlashList
+          ref={listRef}
+          {...scrollEdge.list}
+          data={visible}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ItemSeparatorComponent={ListSeparator}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            showSuggestions ? (
+              <Suggestions
+                exercises={suggestions}
+                fromContext={context.length > 0}
+                selected={selected}
+                order={order}
+                onPress={handlePress}
+              />
+            ) : null
+          }
+          ListEmptyComponent={
+            // Only once the query has reported. Seeded to `[]` it would otherwise
+            // announce that 6,800 exercises don't exist for the first frame.
+            ready ? (
+              <EmptyState
+                icon="search"
+                title="No matches"
+                description="Try a different search, or create a custom exercise."
+              />
+            ) : null
+          }
+        />
 
-      {selected.size > 0 && (
-        // The confirm bar is the lowest thing on screen, so it carries the
-        // system navigation inset itself rather than padding the whole Screen
-        // (which would leave a dead strip under the list when the bar is
-        // hidden).
-        <View style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}>
-          <Button
-            title={`Add ${selected.size} ${selected.size === 1 ? 'exercise' : 'exercises'}`}
-            fullWidth
-            size="lg"
-            onPress={confirm}
-          />
-        </View>
-      )}
+        {selected.size > 0 && (
+          /*
+           * The confirm bar is the lowest thing on screen, so it carries the
+           * system navigation inset itself rather than padding the whole Screen
+           * (which would leave a dead strip under the list when the bar is
+           * hidden).
+           *
+           * With the keyboard up it rides on top of it in a slimmer form. Search
+           * opens focused, so picking an exercise usually happens with the
+           * keyboard still out, and a bar hidden behind it meant closing the
+           * keyboard just to reach Add. Slim because the keyboard already takes
+           * half the screen and the list is what is being read.
+           */
+          <View
+            style={[
+              styles.footer,
+              keyboard.visible
+                ? { paddingVertical: spacing.sm, marginBottom: keyboard.overlap }
+                : { paddingBottom: spacing.lg + insets.bottom },
+            ]}
+          >
+            <Button
+              title={`Add ${selected.size} ${selected.size === 1 ? 'exercise' : 'exercises'}`}
+              fullWidth
+              size={keyboard.visible ? 'md' : 'lg'}
+              onPress={confirm}
+            />
+          </View>
+        )}
+      </View>
     </Screen>
   );
 }
@@ -340,5 +363,6 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.md },
   filters: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   suggestionNote: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  body: { flex: 1 },
   footer: { padding: spacing.lg },
 });

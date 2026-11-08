@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
  * the noise between sections, and the page read as nine slots with the same
  * component dropped into each.
  *
- * So the kinetic setting is now rationed to the four sections that are load
- * bearing, `screens`, `offline`, `privacy` and `self-host`, which are the tour
- * and the three claims the page exists to make. Everything else opens on this.
+ * So the kinetic setting is now rationed to the five sections that are load
+ * bearing, `screens`, `web`, `offline`, `privacy` and `self-host`, which are
+ * the tour, the browser, and the three claims the page exists to make. Everything else opens on this.
  *
  * It is a different register rather than a smaller version of the same one,
  * which is the whole point: a chapter opens on a rule and a sentence, a pillar

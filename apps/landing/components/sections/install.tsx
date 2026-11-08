@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Monitor } from "lucide-react";
 
 import {
   Accordion,
@@ -10,7 +10,7 @@ import { GitHubMark } from "@/components/site/icons";
 import { LinkButton } from "@/components/site/link-button";
 import { Mark } from "@/components/site/mark";
 import { formatBytes, type Release } from "@/lib/release";
-import { links } from "@/lib/site";
+import { links, webAppHost } from "@/lib/site";
 
 /*
  * The one lime surface on the page.
@@ -39,7 +39,7 @@ const CAVEATS = [
   },
   {
     q: "Is there a web version?",
-    a: "Yes, the same app laid out for a window instead of a phone, with your log kept in the browser the way it is kept on the phone. Notifications are the one thing it cannot do, so rest is a countdown on screen rather than an alert while you are in another tab.",
+    a: `Yes, at ${webAppHost}. It is the desk half of Lift: statistics, history, records, the exercise library, routines and measurements, read from the log your phone syncs. It has no workout screen, so sets are still logged on the phone, and it needs the account the phone signs in with.`,
   },
 ];
 
@@ -81,9 +81,9 @@ export function Install({ release }: { release: Release | null }) {
                 <Download />
                 {release ? `Download ${release.tag}` : "Download the APK"}
               </LinkButton>
-              <LinkButton size="hero" variant="wire-ink" href={links.repo}>
-                <GitHubMark />
-                Build it yourself
+              <LinkButton size="hero" variant="wire-ink" href={links.webApp}>
+                <Monitor />
+                Open the web app
               </LinkButton>
             </div>
 
@@ -96,6 +96,13 @@ export function Install({ release }: { release: Release | null }) {
               An Android install file
               {release?.apkBytes ? `, ${formatBytes(release.apkBytes)}` : ""},
               free software under the AGPL-3.0. Nothing to sign up for.
+              <a
+                href={links.repo}
+                className="underline-draw mt-3 flex w-fit items-center gap-1.5 font-medium text-volt-ink"
+              >
+                <GitHubMark className="size-3.5" />
+                Or build it yourself
+              </a>
             </p>
           </div>
         </div>

@@ -23,7 +23,7 @@ import { links } from "@/lib/site";
  */
 const SERVICES = [
   { name: "api", port: "3000", role: "the sync server the phone talks to" },
-  { name: "web", port: "80", role: "the same app, laid out for a browser" },
+  { name: "web", port: "3000", role: "the web app: stats, library, routines" },
   { name: "landing", port: "3000", role: "this page" },
 ];
 
@@ -79,14 +79,15 @@ export function SelfHost() {
                 reports healthy is one that can actually store a set.
               </p>
               <p>
-                Pointing the app at it is one variable at build time:{" "}
-                <span className="figure text-[0.9375rem] text-fg">API_URL</span>{" "}
-                for the APK,{" "}
+                Pointing the phone at it is one variable at build time,{" "}
+                <span className="figure text-[0.9375rem] text-fg">API_URL</span>,
+                compiled into the APK, so moving the server is a rebuild and
+                not a restart. The web app reads{" "}
                 <span className="figure text-[0.9375rem] text-fg">
-                  EXPO_PUBLIC_API_URL
+                  LIFT_API_URL
                 </span>{" "}
-                for the web build. Both are compiled in rather than read at runtime,
-                so moving the server is a rebuild and not a restart.
+                when it starts, and the compose file fills it in from the
+                server&rsquo;s own address.
               </p>
             </div>
 

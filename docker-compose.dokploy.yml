@@ -93,6 +93,10 @@ services:
         # or wrong and the page still looks perfect while every share preview
         # comes back blank.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?set NEXT_PUBLIC_SITE_URL to the landing page's public URL}
+        # Where "Open the web app" points: the `web` service's public URL.
+        # Optional; left empty, the page links to the address in
+        # apps/landing/lib/site.ts.
+        NEXT_PUBLIC_WEB_APP_URL: ${NEXT_PUBLIC_WEB_APP_URL:-}
     restart: unless-stopped
     expose:
       - '3000'

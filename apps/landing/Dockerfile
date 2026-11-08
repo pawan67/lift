@@ -61,6 +61,11 @@ FROM deps AS build
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
+# Where the page's "Open the web app" links go. Optional: empty means the
+# address in `apps/landing/lib/site.ts`.
+ARG NEXT_PUBLIC_WEB_APP_URL
+ENV NEXT_PUBLIC_WEB_APP_URL=$NEXT_PUBLIC_WEB_APP_URL
+
 # Refused rather than defaulted, and refused here rather than discovered in
 # somebody's Slack. Unset, `metadataBase` falls back to localhost and every
 # share preview resolves its image against a machine that is not the one the

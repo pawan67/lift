@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { ArrowUpRight, Download, Monitor } from "lucide-react";
 
 import { GitHubMark } from "@/components/site/icons";
 import { LinkButton } from "@/components/site/link-button";
@@ -77,7 +77,8 @@ export function Hero({ release }: { release: Release | null }) {
                   <Tick />
                 </>
               ) : null}
-              <span>Android</span>
+              {/* One fact rather than two, so the row stays a 2x2 on a phone. */}
+              <span>Android + Web</span>
               <Tick />
               <span>AGPL-3.0</span>
               <Tick />
@@ -149,9 +150,16 @@ export function Hero({ release }: { release: Release | null }) {
                 <Download />
                 Download the APK
               </LinkButton>
-              <LinkButton size="hero" variant="wire" href={links.repo}>
-                <GitHubMark />
-                Read the source
+              {/*
+                The browser is the second door now, and it is a real one: it
+                opens on the same log rather than on a description of the app.
+                The source moved down into the line under the pair, where it is
+                still one click away and no longer competing with two things a
+                reader can actually start using.
+              */}
+              <LinkButton size="hero" variant="wire" href={links.webApp}>
+                <Monitor />
+                Open the web app
               </LinkButton>
             </div>
 
@@ -161,6 +169,14 @@ export function Hero({ release }: { release: Release | null }) {
             >
               No account, no ads, no trackers, no subscription, nothing to
               unlock.
+              <a
+                href={links.repo}
+                className="underline-draw mt-3 flex w-fit items-center gap-1.5 text-fg-2 transition-colors hover:text-fg"
+              >
+                <GitHubMark className="size-3.5" />
+                Read the source
+                <ArrowUpRight className="size-3.5" />
+              </a>
             </p>
           </div>
 

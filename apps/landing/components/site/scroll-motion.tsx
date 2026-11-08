@@ -421,6 +421,35 @@ export function ScrollMotion() {
       });
 
       /*
+       * The browser window rising off the desk as it scrolls in.
+       *
+       * Hinged on its bottom edge (see `.desk-frame`) and tipped back 16
+       * degrees, it stands up to face the reader over the first two thirds of
+       * the screen it travels, and is flat and still by the time it is the
+       * thing being looked at. Nothing moves once it is: a window that keeps
+       * tilting while somebody tries to read a chart on it is the effect
+       * getting in the way of the picture.
+       */
+      gsap.utils.toArray<HTMLElement>("[data-desk]").forEach((frame) => {
+        gsap.fromTo(
+          frame,
+          { rotateX: 16, scale: 0.92, autoAlpha: 0.35 },
+          {
+            rotateX: 0,
+            scale: 1,
+            autoAlpha: 1,
+            ease: "none",
+            scrollTrigger: {
+              trigger: frame,
+              start: "top bottom",
+              end: "top 22%",
+              scrub: SCRUB.parallax,
+            },
+          },
+        );
+      });
+
+      /*
        * Parallax on the devices, and deliberately barely any.
        *
        * A phone drifting 4% of its own height against the column beside it is

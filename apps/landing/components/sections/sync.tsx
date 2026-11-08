@@ -53,8 +53,8 @@ export function Sync() {
         <Reveal className="mt-14 max-w-[46rem] sm:mt-16">
           <div className="space-y-6 text-[1.0625rem] leading-[1.7] text-fg-2 sm:text-lg">
             <p>
-              Signing in adds a backup and the same log on a second phone. It
-              adds nothing else and it is not a tier.
+              Signing in adds a backup, the same log on a second phone, and
+              the web app at a desk. It adds nothing else and it is not a tier.
             </p>
             <p>
               Workouts are written on the phone and sent afterwards, so losing

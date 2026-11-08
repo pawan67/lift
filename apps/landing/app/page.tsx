@@ -11,6 +11,7 @@ import { Privacy } from "@/components/sections/privacy";
 import { Screens } from "@/components/sections/screens";
 import { SelfHost } from "@/components/sections/self-host";
 import { Sync } from "@/components/sections/sync";
+import { Web } from "@/components/sections/web";
 import { ScrollMotion } from "@/components/site/scroll-motion";
 import { latestRelease } from "@/lib/release";
 
@@ -32,7 +33,7 @@ import { latestRelease } from "@/lib/release";
  *
  * Both of those are carried now. Each section declares one of three gaps,
  * `pt-close`, `pt-step` or `pt-turn` (see `app/globals.css`), and opens on one
- * of two headings: `KineticHeading` for the four that are load bearing, and
+ * of two headings: `KineticHeading` for the five that are load bearing, and
  * `ChapterHeading` for the five that support them. Where a comment here claims
  * two sections belong together, the gap between them is `close` and the second
  * one opens quietly; where it claims the subject changes, the gap is `turn`.
@@ -40,7 +41,8 @@ import { latestRelease } from "@/lib/release";
  *   hero -> details        close   the first screen, then six things about it
  *   details -> appearance  close   the same screens, in eight palettes
  *   appearance -> screens  step    the tour                        [kinetic]
- *   screens -> opinion     turn    writing down -> reading back
+ *   screens -> web         step    the same log, on a bigger screen [kinetic]
+ *   web -> opinion         turn    writing down -> reading back
  *   opinion -> offline     turn    the thesis                      [kinetic]
  *   offline -> portable    close   what follows from it
  *   portable -> privacy    close   the ledger the two above build to [kinetic]
@@ -83,6 +85,7 @@ export default async function Home() {
         */}
         <Appearance />
         <Screens />
+        <Web />
 
         {/*
           Six features that had no place on the page before there was artwork

@@ -1,6 +1,8 @@
+import { Monitor } from "lucide-react";
+
 import { GitHubMark } from "@/components/site/icons";
 import { Wordmark } from "@/components/site/mark";
-import { links } from "@/lib/site";
+import { links, webAppHost } from "@/lib/site";
 
 /*
  * One row of four, down from three headed columns of ten.
@@ -13,7 +15,9 @@ import { links } from "@/lib/site";
  * over four links each is a sitemap for a repository with one page in it.
  *
  * What is left is the four a reader could not have reached by reading: the
- * repository, the list of builds, and the two licence documents.
+ * repository, the list of builds, and the two licence documents. The web app
+ * sits under the repository instead, by address, because it is the product
+ * rather than a document about it.
  *
  * `Third-party notices` is not an ordinary link and is not a candidate for the
  * next trim. The app's anatomical artwork and its volume-landmark model derive
@@ -44,6 +48,13 @@ export function Footer() {
             >
               <GitHubMark className="size-4" />
               github.com/pawan67/lift
+            </a>
+            <a
+              href={links.webApp}
+              className="underline-draw mt-3 flex w-fit items-center gap-2 text-sm text-fg-2 transition-colors hover:text-volt"
+            >
+              <Monitor className="size-4" />
+              {webAppHost}
             </a>
           </div>
 

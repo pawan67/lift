@@ -102,8 +102,9 @@ export const metadata: Metadata = {
   description:
     "Every workout, set, routine and record in a real database on the phone. " +
     "Works with no account and no network. No analytics, no trackers and no " +
-    "ads in the build. Sync is optional, and the server behind it is in the " +
-    "repository for you to run yourself.",
+    "ads in the build. Sync is optional, the server behind it is in the " +
+    "repository for you to run yourself, and a web app puts your statistics, " +
+    "routines and exercise library on a bigger screen.",
   applicationName: "Lift",
   keywords: [
     "workout tracker",
@@ -111,6 +112,7 @@ export const metadata: Metadata = {
     "offline workout tracker",
     "open source",
     "Android",
+    "web app",
     "gym log",
     "self-hosted",
     "self-hosted sync",

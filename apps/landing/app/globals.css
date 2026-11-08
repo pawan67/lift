@@ -642,3 +642,67 @@
     transform-origin: right;
   }
 }
+
+@layer components {
+  /*
+   * The browser window in `components/site/desk.tsx`.
+   *
+   * The perspective lives on the stage rather than in the transform so the
+   * scroll scrub in `scroll-motion.tsx` only has to move `rotateX` and `scale`
+   * on the frame. The origin is the bottom edge: the window rises the way a
+   * laptop lid does, hinged where it meets the desk, rather than tipping
+   * around its own middle.
+   */
+  .desk-stage {
+    perspective: 2400px;
+  }
+
+  .desk-frame {
+    transform-origin: 50% 100%;
+    box-shadow:
+      0 1px 0 0 rgb(255 255 255 / 0.05) inset,
+      0 50px 120px -40px rgb(0 0 0 / 0.95),
+      0 0 0 1px rgb(0 0 0 / 0.6);
+  }
+
+  /*
+   * The same cast the hero device throws, flattened for a wide screen: a
+   * window lights the desk under it in a band rather than a pool.
+   */
+  .desk-cast {
+    background: radial-gradient(
+      50% 38% at 50% 58%,
+      rgb(210 243 75 / 0.09) 0%,
+      rgb(210 243 75 / 0.03) 45%,
+      transparent 75%
+    );
+  }
+
+  /*
+   * The tab's bar as a clock. Linear, because it is a measure of time and an
+   * eased one would speed up and slow down for no reason anybody could name.
+   * Duration and play state are set inline by the component.
+   */
+  .desk-progress {
+    transform: scaleX(0);
+  }
+
+  .desk-progress-full {
+    transform: scaleX(1);
+  }
+
+  .desk-progress-run {
+    animation-name: desk-fill;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  @keyframes desk-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}

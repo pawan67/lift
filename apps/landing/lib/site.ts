@@ -2,8 +2,24 @@
 
 export const repo = "https://github.com/pawan67/lift";
 
+/*
+ * The web app: statistics, the library, routines and measurements in a
+ * browser, reading the same log the phone syncs.
+ *
+ * Read at build time like the site's own URL, so a self-hosted copy of this
+ * page can point at its own `web` service with `NEXT_PUBLIC_WEB_APP_URL`. `||`
+ * rather than `??`, because the compose file passes the variable through and
+ * an unset one arrives as an empty string.
+ */
+export const webApp =
+  process.env.NEXT_PUBLIC_WEB_APP_URL || "https://liftapp.000427.xyz";
+
+/** The web app's address as a person would type it. */
+export const webAppHost = webApp.replace(/^https?:\/\//, "").replace(/\/$/, "");
+
 export const links = {
   repo,
+  webApp,
   /** GitHub redirects this to whatever the newest tag published. */
   release: `${repo}/releases/latest`,
   releases: `${repo}/releases`,

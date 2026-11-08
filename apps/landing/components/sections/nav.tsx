@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Download } from "lucide-react";
+import { Download, Monitor } from "lucide-react";
 
 import { LinkButton } from "@/components/site/link-button";
 import { Wordmark } from "@/components/site/mark";
@@ -35,6 +35,7 @@ import { links } from "@/lib/site";
  */
 const SECTIONS = [
   { id: "screens", label: "Screens" },
+  { id: "web", label: "Web" },
   { id: "offline", label: "Offline" },
   { id: "self-host", label: "Self-host" },
 ];
@@ -147,10 +148,26 @@ export function Nav() {
             ))}
           </ul>
 
+          {/*
+            The web app beside the download from `lg`, where the row has the
+            width for both. Below that the hero's second button and the
+            `Web` link above carry it, and a header with two buttons on a
+            phone is a header that is mostly buttons.
+          */}
+          <LinkButton
+            size="touch"
+            variant="wire"
+            className="hidden lg:inline-flex"
+            href={links.webApp}
+          >
+            <Monitor />
+            Web app
+          </LinkButton>
+
           <LinkButton
             size="touch"
             variant="volt"
-            className="ml-auto sm:ml-0"
+            className="ml-auto sm:ml-0 lg:-ml-5"
             href={links.release}
           >
             <Download />

@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+/*
+ * The app's AMOLED palette, values copied from `apps/mobile/src/theme/tokens.ts`
+ * by way of the landing page (`apps/landing/app/globals.css`), which explains
+ * why they stay hex. True black, one saturated colour.
+ */
+:root {
+  color-scheme: dark;
+
+  --ink: #000000;
+  --surface: #0c0c0f;
+  --surface-2: #16161a;
+  --surface-3: #1e1e24;
+  --surface-4: #26262e;
+  --line: #22222a;
+  --line-strong: #3a3a46;
+
+  --fg: #f5f5f7;
+  --fg-2: #a1a1ac;
+  --fg-3: #84848f;
+
+  --volt: #d2f34b;
+  --volt-deep: #b6d634;
+  --volt-ink: #12180a;
+  --volt-tint: rgb(210 243 75 / 0.14);
+
+  --record: #f5c445;
+  --signal: #63cc5a;
+  --warn: #e8913c;
+  --alarm: #ec5a62;
+  --info: #6aa8f7;
+  --violet: #a78bfa;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-volt: var(--volt);
+  --color-volt-deep: var(--volt-deep);
+  --color-volt-ink: var(--volt-ink);
+  --color-volt-tint: var(--volt-tint);
+  --color-record: var(--record);
+  --color-signal: var(--signal);
+  --color-warn: var(--warn);
+  --color-alarm: var(--alarm);
+  --color-info: var(--info);
+  --color-violet: var(--violet);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-card: 1rem;
+}
+
+html,
+body {
+  background: var(--ink);
+  color: var(--fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Figures line up in tables and stat tiles. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--volt);
+  color: var(--volt-ink);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-4) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+
+/* Recharts draws a focus box around the chart surface on click. */
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

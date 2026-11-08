@@ -102,9 +102,9 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
-      # Six files carry the version and nothing used to compare them. It
+      # Seven files carry the version and nothing used to compare them. It
       # matters here in particular because `Stage APK` below names the release
-      # asset from app.json and reads none of the other five: a bump that
+      # asset from app.json and reads none of the other six: a bump that
       # missed app.json ships `lift-0.14.1-...apk` for what is really 0.15.0,
       # and a bump that touched only app.json leaves five manifests behind.
       # Neither shows up as anything but a green build.

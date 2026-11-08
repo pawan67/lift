@@ -2,7 +2,7 @@
 /**
  * One source for the version, and a CHANGELOG built from the commits.
  *
- * Six files carry the version and nothing has ever compared them:
+ * Seven files carry the version and nothing has ever compared them:
  *
  *   package.json                 the workspace root, and the source of truth
  *   apps/mobile/package.json     the app's own manifest
@@ -10,6 +10,7 @@
  *                                names the release asset after
  *   apps/api/package.json
  *   apps/landing/package.json
+ *   apps/web/package.json
  *   packages/shared/package.json
  *
  * Drift is silent in both directions. `lift-0.14.1-29-abc1234.apk` is named
@@ -24,9 +25,9 @@
  * along, just never collected.
  *
  *   node scripts/release.mjs                    same as check
- *   node scripts/release.mjs check              verify the six agree
+ *   node scripts/release.mjs check              verify the seven agree
  *   node scripts/release.mjs check --expect 0.15.0
- *   node scripts/release.mjs set 0.15.0         rewrite the six, then CHANGELOG
+ *   node scripts/release.mjs set 0.15.0         rewrite the seven, then CHANGELOG
  *   node scripts/release.mjs set minor          bump from the root manifest
  *   node scripts/release.mjs changelog          regenerate CHANGELOG.md alone
  *   node scripts/release.mjs notes v0.15.0      print one section, for gh release
@@ -34,7 +35,7 @@
  *
  * `set` and `changelog` take --dry-run, which prints the same output and writes
  * nothing. Nothing here commits, tags or pushes: cutting a release is still
- * `set`, read the diff, commit, tag. This only removes the six-file edit and
+ * `set`, read the diff, commit, tag. This only removes the seven-file edit and
  * the changelog from that list.
  *
  * Writes are surgical string replacements, not JSON.stringify. Round-tripping
@@ -49,13 +50,14 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// The six, root first: it is the source `set` reads a bare bump from.
+// The seven, root first: it is the source `set` reads a bare bump from.
 const MANIFESTS = [
   { file: 'package.json', path: ['version'] },
   { file: 'apps/mobile/package.json', path: ['version'] },
   { file: 'apps/mobile/app.json', path: ['expo', 'version'] },
   { file: 'apps/api/package.json', path: ['version'] },
   { file: 'apps/landing/package.json', path: ['version'] },
+  { file: 'apps/web/package.json', path: ['version'] },
   { file: 'packages/shared/package.json', path: ['version'] },
 ];
 
@@ -85,10 +87,10 @@ if (argv.includes('--help') || argv.includes('-h') || argv[0] === 'help') {
     [
       'Usage: node scripts/release.mjs [command]',
       '',
-      '  check [--expect <version>]  Verify the six version fields agree.',
+      '  check [--expect <version>]  Verify the seven version fields agree.',
       '                              Reads only. This is what CI runs.',
       '  set <version|major|minor|patch>',
-      '                              Rewrite all six, then regenerate CHANGELOG.md.',
+      '                              Rewrite all seven, then regenerate CHANGELOG.md.',
       '  changelog                   Regenerate CHANGELOG.md alone.',
       '  notes <version>             Print that release\'s CHANGELOG section to',
       '                              stdout. Reads only. android.yml feeds it to',
@@ -99,7 +101,7 @@ if (argv.includes('--help') || argv.includes('-h') || argv[0] === 'help') {
       'The default command is check, so running this with no arguments never',
       'modifies anything.',
       '',
-      'The six files:',
+      'The seven files:',
       ...MANIFESTS.map((m) => `  ${m.file}  (${m.path.join('.')})`),
     ].join('\n'),
   );
@@ -169,10 +171,10 @@ function check() {
     if (!expected) die('--expect needs a version.');
     if (expected !== root) {
       die(
-        `The six manifests agree on ${root}, but this build is for ${expected}. The tag and the tree have to name the same release: run 'node scripts/release.mjs set ${expected}', commit, and re-tag.`,
+        `The seven manifests agree on ${root}, but this build is for ${expected}. The tag and the tree have to name the same release: run 'node scripts/release.mjs set ${expected}', commit, and re-tag.`,
       );
     }
-    console.log(`\nAll six agree on ${root}, which is the version being built.`);
+    console.log(`\nAll seven agree on ${root}, which is the version being built.`);
 
     // A warning rather than a failure: an absent entry makes for an empty
     // release note, which is the gap this script exists to close, but it is
@@ -185,7 +187,7 @@ function check() {
     return;
   }
 
-  console.log(`\nAll six agree on ${root}.`);
+  console.log(`\nAll seven agree on ${root}.`);
 }
 
 // ---------------------------------------------------------------- set ------

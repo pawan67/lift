@@ -7,11 +7,12 @@
 # is used as-is. Nothing is published: Traefik reaches both services over
 # dokploy-network, which is also how the database hostname resolves.
 #
-# Three services means three domains in Dokploy:
+# Four services means four domains in Dokploy:
 #
 #   api       port 3000
-#   web       port 80
+#   web       port 80     (the phone app exported for a browser)
 #   landing   port 3000   (its own container, so it does not clash with api)
+#   webapp    port 3000   (the Next.js web app; see apps/web)
 #
 # The first two have to know about each other:
 #
@@ -95,6 +96,26 @@ services:
         # comes back blank.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?set NEXT_PUBLIC_SITE_URL to the landing page's public URL}
     restart: unless-stopped
+    expose:
+      - '3000'
+    networks:
+      - dokploy-network
+
+  # The web app: statistics, the exercise library, routines and body
+  # measurements in a browser, built with Next.js rather than exported from the
+  # phone app. See apps/web/Dockerfile.
+  #
+  # It reaches the API from its own server (sign-in and sync are proxied), so its
+  # origin does not need to be in TRUSTED_ORIGINS. LIFT_API_URL defaults to
+  # BETTER_AUTH_URL, which is the API's public address: the proxy presents that
+  # address as its Origin, and better-auth always trusts its own base URL.
+  webapp:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      LIFT_API_URL: ${LIFT_API_URL:-${BETTER_AUTH_URL:?set BETTER_AUTH_URL}}
     expose:
       - '3000'
     networks:

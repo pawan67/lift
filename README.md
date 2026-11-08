@@ -91,6 +91,7 @@ lift/
 ├── apps/mobile      Expo SDK 57 · React Native 0.86 · expo-router
 ├── apps/api         NestJS 11 · Postgres · better-auth
 ├── apps/landing     Next 16 · Tailwind v4 · the marketing page
+├── apps/web         Next 16 · Tailwind v4 · statistics, library and routines in a browser
 └── packages/shared  domain logic: no React, no database, fully tested
 ```
 
@@ -110,8 +111,8 @@ Cut the version first, rather than editing the files by hand:
 node scripts/release.mjs set 0.15.0   # or major/minor/patch
 ```
 
-Six files carry the version and CI fails if they disagree. That command
-rewrites all six and regenerates `CHANGELOG.md` from the commit log, which is
+Seven files carry the version and CI fails if they disagree. That command
+rewrites all seven and regenerates `CHANGELOG.md` from the commit log, which is
 also where the release notes come from: `--generate-notes` derives them from
 merged pull requests and this repository has none, so tags cut before this
 existed have empty notes. `node scripts/release.mjs` on its own only checks.
@@ -144,8 +145,8 @@ On Dokploy:
 
 1. Create a **Postgres** service and copy the connection URL it hands back.
 2. Create a **Compose** application from this repository and set the compose
-   path to `docker-compose.dokploy.yml`. That file defines the API, the web app
-   and the landing page. The database is the service from step 1, not a
+   path to `docker-compose.dokploy.yml`. That file defines the API, the two web
+   apps and the landing page. The database is the service from step 1, not a
    container of its own.
 3. Supply `DATABASE_URL` from step 1, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`
    as the public `https://` address including scheme, `TRUSTED_ORIGINS`, which
@@ -155,16 +156,18 @@ On Dokploy:
    required; the stack refuses to start without them rather than inventing
    defaults. `TELEGRAM_BOT_TOKEN` is optional and turns on the Telegram bot
    (see [Training reports and the Telegram bot](#training-reports-and-the-telegram-bot)).
-4. Add three domains, one per service:
+4. Add four domains, one per service:
 
-   | Service   | Port   | What it is             |
-   | --------- | ------ | ---------------------- |
-   | `api`     | `3000` | sync server            |
-   | `web`     | `80`   | the app in a browser   |
-   | `landing` | `3000` | the marketing page     |
+   | Service   | Port   | What it is                                     |
+   | --------- | ------ | ---------------------------------------------- |
+   | `api`     | `3000` | sync server                                    |
+   | `web`     | `80`   | the phone app, exported for a browser          |
+   | `webapp`  | `3000` | the Next.js web app: statistics and the library |
+   | `landing` | `3000` | the marketing page                             |
 
-   `api` and `landing` both name port 3000 and do not clash: they are separate
-   containers, and the number is the port inside each one.
+   `api`, `webapp` and `landing` all name port 3000 and do not clash: they are
+   separate containers, and the number is the port inside each one. `webapp`
+   needs nothing in `TRUSTED_ORIGINS`; see [Web app](#web-app).
 5. Add the `web` domain's origin to `TRUSTED_ORIGINS`.
    `lift://,https://app.example.com`. Without it the browser can load the app
    and then fails every request it makes, which reads as a broken sign-in
@@ -387,6 +390,41 @@ cd android && ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8
 generated is committed. The hand-written native code lives under
 `apps/mobile/modules` — `workout-live`, `app-icon` and `home-widgets` — as local
 Expo modules that prebuild links rather than overwrites.
+
+### Web app
+
+`apps/web` is a separate web app built with Next.js, for the things a browser is
+good at: statistics, the exercise library, routines and body measurements. It
+has no workout tracker. Sessions are logged on the phone, and the web app reads
+them through sync.
+
+```bash
+echo 'LIFT_API_URL=http://localhost:3000' > apps/web/.env.local
+pnpm --filter @lift/web dev      # http://localhost:3200
+```
+
+Sign in with the account the phone syncs to. How it is put together:
+
+- **It is a sync client, not a second database.** The browser pulls the log over
+  the same `/api/sync` protocol the phone uses, keeps a copy in IndexedDB, and
+  pushes routines, custom exercises and measurements back the same way:
+  last-write-wins per row, soft deletes, client-generated UUIDv7 ids. A returning
+  visitor sees their numbers from disk before any network request.
+- **The browser never talks to the API directly.** `app/api/auth` and
+  `app/api/sync` proxy from the Next server, which keeps the session token in an
+  httpOnly cookie. So the API does not need this origin in `TRUSTED_ORIGINS`.
+  The proxy presents the API's own address as its Origin, which better-auth
+  always trusts.
+- **Statistics are computed in memory.** The tables are joined once per change
+  (`lib/data/model.ts`), and each screen derives what it shows with `useMemo`.
+  A pull of thousands of rows is one render, where the Expo build re-ran its
+  queries once per row.
+- **The exercise catalog ships with the app**, as its own chunk, because only
+  custom exercises sync. Built-ins share ids across every device.
+
+`LIFT_API_URL` is read at runtime, so pointing the app at another API means a
+restart, not a rebuild. In `docker-compose.dokploy.yml` it is the `webapp`
+service, on port 3000, and defaults to `BETTER_AUTH_URL`.
 
 ### Desktop web
 

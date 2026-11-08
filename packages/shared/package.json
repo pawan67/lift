@@ -17,6 +17,11 @@
       "types": "./dist/exercises/index.d.ts",
       "default": "./dist/exercises/index.js"
     },
+    "./exercises/search": {
+      "react-native": "./src/exercises/search.ts",
+      "types": "./dist/exercises/search.d.ts",
+      "default": "./dist/exercises/search.js"
+    },
     "./report": {
       "react-native": "./src/report/index.ts",
       "types": "./dist/report/index.d.ts",

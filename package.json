@@ -13,6 +13,7 @@
     "ios": "pnpm --filter @lift/mobile ios",
     "api": "pnpm --filter @lift/api start:dev",
     "landing": "pnpm --filter @lift/landing dev",
+    "web": "pnpm --filter @lift/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

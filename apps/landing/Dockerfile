@@ -32,6 +32,7 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/landing/package.json apps/landing/
+COPY apps/web/package.json apps/web/
 
 # The patch file `pnpm-workspace.yaml` names under `patchedDependencies`. pnpm
 # hashes every patch it is told about at install time, before it knows whether

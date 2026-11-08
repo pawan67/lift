@@ -44,7 +44,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Six files carry the version and nothing used to compare them, so drift
+      # Seven files carry the version and nothing used to compare them, so drift
       # was invisible until a release asset came out named after the wrong one.
       # Pure Node, no install, so it answers in seconds and answers first.
       # scripts/release.mjs is also what writes those six and CHANGELOG.md.
@@ -97,17 +97,19 @@ jobs:
       - name: Build the shared package
         run: pnpm --filter @lift/shared build
 
-      # apps/landing's tsconfig includes `.next/types/**/*.ts`, and `.next/` is
+      # apps/landing's and apps/web's tsconfigs include `.next/types/**/*.ts`, and `.next/` is
       # gitignored. `LayoutProps` and the route types live only there, so on a
       # clean checkout `tsc` fails on names that exist on every developer
       # machine. Cheap: `typegen` writes the types without doing a build.
       - name: Generate Next types
-        run: pnpm --filter @lift/landing exec next typegen
+        run: |
+          pnpm --filter @lift/landing exec next typegen
+          pnpm --filter @lift/web exec next typegen
 
       - name: Typecheck
         run: pnpm -r typecheck
 
-      # Reaches apps/mobile and apps/landing only. apps/api and packages/shared
+      # Reaches apps/mobile, apps/landing and apps/web only. apps/api and packages/shared
       # define no `lint` script and carry no eslint dependency, so `pnpm -r lint`
       # skips them silently rather than failing. Said out loud here because a
       # green lint job that covered half the repo would otherwise read as full

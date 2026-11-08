@@ -6,7 +6,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 
 import { CHART_COLORS, SERIES_COLORS, monthTicks, niceScale } from "@/components/charts/charts";
 
-const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-mono)" };
+const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-sans)", style: { fontVariantNumeric: "tabular-nums" } };
 
 export interface ProgressSeries {
   id: string;
@@ -78,7 +78,7 @@ export function ProgressChart({
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
               return (
-                <div className="rounded-xl border border-line-strong bg-surface-3/95 px-3 py-2 shadow-xl">
+                <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
                   <div className="mb-1 text-[11px] text-fg-3">
                     {new Date(Number(label)).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                   </div>

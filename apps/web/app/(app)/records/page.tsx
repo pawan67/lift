@@ -3,10 +3,10 @@
 import { PR_KIND_LABELS, PR_KINDS, type PrKind } from "@lift/shared";
 import { Search, Trophy } from "lucide-react";
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState, type CSSProperties } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Segmented, Select } from "@/components/ui/primitives";
+import { Button, Card, EmptyState, Input, PageHeader, Segmented, Select } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";
 import type { PersonalRecordRow } from "@/lib/data/types";
@@ -81,6 +81,10 @@ export default function RecordsPage() {
     });
   }, [entries, kind, search, sort]);
 
+  // The columns on screen: one per record type, estimated 1RM last as the headline, or only the type filtered to.
+  const headlineKind: PrKind = kind || (kindsPresent.includes("best_1rm") ? "best_1rm" : (kindsPresent[0] ?? "best_1rm"));
+  const columns: PrKind[] = kind ? [kind] : [...kindsPresent.filter((k) => k !== headlineKind), headlineKind];
+
   const recentCount = useMemo(() => entries.filter((entry) => entry.latestAt >= now - RECENT_DAYS * 86_400_000).length, [entries, now]);
 
   if (entries.length === 0) {
@@ -111,8 +115,8 @@ export default function RecordsPage() {
         subtitle={`${integer(entries.length)} exercises with records, ${recentCount} improved in the last ${RECENT_DAYS} days`}
       />
 
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+      <div className="mb-6">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_13rem_auto]">
           <div className="relative">
             <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-3" />
             <Input
@@ -142,40 +146,53 @@ export default function RecordsPage() {
               </option>
             ))}
           </Select>
-          <Segmented value={sort} options={sortOptions} onChange={setSort} className="justify-self-start" />
+          <Segmented value={sort} options={sortOptions} onChange={setSort} className="self-center justify-self-start" />
         </div>
-      </Card>
+      </div>
 
       {visible.length === 0 ? (
         <Card>
           <EmptyState title="No records match" body="Try another search or record type." />
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden" style={{ "--record-cols": `repeat(${columns.length}, 6.5rem)` } as CSSProperties}>
+          {/* Column headers only where the figures line up in columns; on a phone each figure carries its own label. */}
+          <div className="hidden gap-x-4 border-b border-line px-5 py-2 text-xs text-fg-3 sm:grid sm:grid-cols-[minmax(0,1fr)_var(--record-cols)]">
+            <span>Exercise</span>
+            {columns.map((k) => (
+              <span key={k} className={cn("text-right", k === headlineKind && "text-fg-2")}>
+                {SHORT_LABELS[k]}
+              </span>
+            ))}
+          </div>
           {visible.slice(0, limit).map((entry) => {
-            const headline = (kind ? entry.bests.find((record) => record.kind === kind) : undefined) ??
-              entry.bests.find((record) => record.kind === "best_1rm") ??
-              entry.bests[0]!;
-            const others = kind ? [] : entry.bests.filter((record) => record !== headline);
             const fresh = entry.latestAt >= now - RECENT_DAYS * 86_400_000;
             return (
-              <div key={entry.exercise.id} className="flex flex-col gap-3 border-t border-line px-5 py-4 first:border-t-0 sm:flex-row sm:items-center">
-                <Link href={`/exercises/${encodeURIComponent(entry.exercise.id)}`} className="group flex min-w-0 flex-1 items-center gap-3">
-                  <ExerciseThumb exercise={entry.exercise} size={44} />
+              <div
+                key={entry.exercise.id}
+                className="flex flex-col gap-2 border-t border-line px-5 py-2.5 sm:grid sm:grid-cols-[minmax(0,1fr)_var(--record-cols)] sm:items-center sm:gap-x-4 [&:nth-child(2)]:border-t-0"
+              >
+                <Link href={`/exercises/${encodeURIComponent(entry.exercise.id)}`} className="group flex min-w-0 items-center gap-3">
+                  <ExerciseThumb exercise={entry.exercise} size={36} />
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium text-fg group-hover:text-volt">{entry.exercise.name}</span>
-                      {fresh ? <Badge tone="record">New</Badge> : null}
+                    <div className="truncate text-sm font-medium text-fg transition-colors duration-150 group-hover:text-volt">{entry.exercise.name}</div>
+                    <div className="tabular text-xs text-fg-3">
+                      Latest <span className={fresh ? "text-fg-2" : undefined}>{formatDateShort(entry.latestAt)}</span>
+                      {fresh ? <span className="sr-only">, improved in the last {RECENT_DAYS} days</span> : null}
                     </div>
-                    <div className="mt-0.5 text-xs text-fg-3">Latest {formatDateShort(entry.latestAt)}</div>
                   </div>
                 </Link>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {/* The headline leads on a phone, where the row wraps, and closes the row on a wide screen. */}
-                  <RecordChip record={headline} label={SHORT_LABELS[headline.kind]} value={f.record(headline.kind, headline.value)} headline />
-                  {others.map((record) => (
-                    <RecordChip key={record.kind} record={record} label={SHORT_LABELS[record.kind]} value={f.record(record.kind, record.value)} />
-                  ))}
+                <div className="grid grid-cols-4 gap-x-3 gap-y-2 sm:contents">
+                  {columns.map((k) => {
+                    const record = entry.bests.find((best) => best.kind === k);
+                    return record ? (
+                      <RecordFigure key={k} record={record} label={SHORT_LABELS[k]} value={f.record(k, record.value)} headline={k === headlineKind} />
+                    ) : (
+                      <span key={k} className="hidden text-right text-sm text-fg-3/50 sm:block" aria-hidden>
+                        –
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -194,21 +211,22 @@ export default function RecordsPage() {
   );
 }
 
-/** One best: what it is, how much, and a link to the session it was set in. */
-function RecordChip({ record, label, value, headline = false }: { record: PersonalRecordRow; label: string; value: string; headline?: boolean }) {
+/** One best: how much, when, and a link to the session it was set in. The label only shows on a phone, where there are no column headers. */
+function RecordFigure({ record, label, value, headline }: { record: PersonalRecordRow; label: string; value: string; headline: boolean }) {
   const body = (
     <>
-      <span className={cn("font-mono text-[10px] tracking-wide uppercase", headline ? "text-record/80" : "text-fg-3")}>{label}</span>
-      <span className={cn("tabular font-semibold", headline ? "text-base text-record" : "text-sm text-fg")}>{value}</span>
-      <span className="text-[10px] text-fg-3">{formatDateShort(record.achievedAt)}</span>
+      <span className="text-[11px] text-fg-3 sm:hidden">{label}</span>
+      <span className={cn("tabular text-sm transition-colors duration-150 group-hover:text-volt", headline ? "font-semibold text-fg" : "text-fg-2")}>{value}</span>
+      <span className="tabular text-[11px] text-fg-3">{formatDateShort(record.achievedAt)}</span>
     </>
   );
-  const className = cn(
-    "flex min-w-[92px] flex-col rounded-xl border px-3 py-1.5 transition-colors",
-    headline ? "border-record/30 bg-record/10 sm:order-last" : "border-line bg-surface-2",
-  );
+  const className = "flex flex-col leading-tight sm:items-end";
   return record.workoutId ? (
-    <Link href={`/history/${record.workoutId}`} className={cn(className, "hover:border-line-strong")} title={`${PR_KIND_LABELS[record.kind]}: open the session`}>
+    <Link
+      href={`/history/${record.workoutId}`}
+      className={cn(className, "group")}
+      title={`${PR_KIND_LABELS[record.kind]}: open the session`}
+    >
       {body}
     </Link>
   ) : (

@@ -14,18 +14,19 @@ import {
   type MuscleGroup,
   type VolumeLandmarks,
 } from "@lift/shared";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { BodyPartRadar, WeeklySetsChart, type WeekPoint } from "@/components/stats/muscle-charts";
+import { quietChange, toneClass } from "@/components/stats/delta";
 import { RangePicker } from "@/components/stats/range-picker";
+import { Section, TH } from "@/components/stats/section";
 import { StatsNav } from "@/components/stats/stats-nav";
 import { ZONE_COLORS, ZONE_DESCRIPTIONS } from "@/components/stats/zones";
-import { Badge, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Card, CardBody, CardHeader, Chip, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
-import { changeLabel, compactNumber, integer, useFormat } from "@/lib/format";
+import { compactNumber, integer, useFormat } from "@/lib/format";
 import { useSettings } from "@/lib/settings";
 import {
   setsPerWeek,
@@ -147,16 +148,16 @@ export default function MusclesPage() {
               subtitle={`Average over ${round1(weeks)} ${weeks === 1 ? "week" : "weeks"}. A secondary muscle counts half a set.`}
             />
             <CardBody>
-              <div className="mb-5 flex flex-wrap gap-x-4 gap-y-2">
+              <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2">
                 {VOLUME_ZONES.map((zone) => (
                   <div key={zone} className="flex items-center gap-1.5 text-xs text-fg-3" title={ZONE_DESCRIPTIONS[zone]}>
-                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: ZONE_COLORS[zone] }} />
+                    <span className="h-2 w-2 rounded-full" style={{ background: ZONE_COLORS[zone] }} />
                     {VOLUME_ZONE_LABELS[zone]}
                     <span className="tabular text-fg-2">{zoneCounts.get(zone) ?? 0}</span>
                   </div>
                 ))}
               </div>
-              <ul className="grid gap-x-10 gap-y-3.5 lg:grid-cols-2">
+              <ul className="grid gap-x-12 gap-y-1 lg:grid-cols-2">
                 {rows.map((row) => (
                   <LandmarkRow
                     key={row.muscle}
@@ -168,9 +169,9 @@ export default function MusclesPage() {
                   />
                 ))}
               </ul>
-              <p className="mt-5 text-xs text-fg-3">
+              <p className="mt-4 text-xs leading-relaxed text-fg-3">
                 MEV is the minimum that grows a muscle, MAV the top of the most productive band, MRV the most that most
-                people recover from. Change the training level in <Link href="/settings" className="text-fg-2 underline-offset-2 hover:underline">Settings</Link>.
+                people recover from. Change the training level in <Link href="/settings" className="text-fg-2 underline decoration-line-strong underline-offset-2 transition-colors duration-150 hover:text-fg">Settings</Link>.
               </p>
             </CardBody>
           </Card>
@@ -216,9 +217,9 @@ export default function MusclesPage() {
                   currentLabel={previousSpan ? "This period" : "All time"}
                   previousLabel={previousSpan ? "Previous" : null}
                 />
-                <ul className="mt-2 divide-y divide-line text-sm">
+                <ul className="mt-2 divide-y divide-line border-t border-line text-sm">
                   {radar.map((point) => {
-                    const delta = point.previous !== null ? changeLabel(point.current, point.previous) : null;
+                    const delta = point.previous !== null ? quietChange(point.current, point.previous) : null;
                     return (
                       <li key={point.part} className="flex items-center justify-between gap-3 py-2">
                         <span className="text-fg-2">{point.axis}</span>
@@ -228,7 +229,7 @@ export default function MusclesPage() {
                           </span>
                           <span className="tabular font-medium text-fg">{formatAxis(point.current)}</span>
                           {delta ? (
-                            <span className={cn("tabular w-16 text-right text-xs whitespace-nowrap", delta.tone === "up" ? "text-signal" : delta.tone === "down" ? "text-alarm" : "text-fg-3")}>
+                            <span className={cn("tabular w-16 text-right text-xs whitespace-nowrap", toneClass(delta.tone))}>
                               {delta.text}
                             </span>
                           ) : previousSpan ? (
@@ -243,38 +244,37 @@ export default function MusclesPage() {
             </Card>
           </div>
 
-          <Card>
-            <CardHeader title="Every muscle trained" subtitle="Totals for the range" />
-            <div className="overflow-x-auto px-2 pt-3 pb-3">
+          <Section title="Every muscle trained" meta={`${detail.length} muscles`}>
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
-                  <tr className="text-left font-mono text-[11px] tracking-wider text-fg-3 uppercase">
-                    <th className="px-3 py-2 font-normal">Muscle</th>
-                    <th className="px-3 py-2 text-right font-normal">Direct sets</th>
-                    <th className="px-3 py-2 text-right font-normal">Weighted</th>
-                    <th className="px-3 py-2 text-right font-normal">Reps</th>
-                    <th className="px-3 py-2 text-right font-normal">Volume</th>
-                    <th className="px-3 py-2 text-right font-normal">Exercises</th>
+                  <tr className="text-left">
+                    <th className={cn(TH, "pr-3")}>Muscle</th>
+                    <th className={cn(TH, "px-3 text-right")}>Direct sets</th>
+                    <th className={cn(TH, "px-3 text-right")}>Weighted</th>
+                    <th className={cn(TH, "px-3 text-right")}>Reps</th>
+                    <th className={cn(TH, "px-3 text-right")}>Volume</th>
+                    <th className={cn(TH, "pl-3 text-right")}>Exercises</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.map((tally: MuscleTally) => (
                     <tr key={tally.muscle} className="border-t border-line">
-                      <td className="px-3 py-2.5 text-fg">
+                      <td className="py-2 pr-3 text-fg">
                         {MUSCLE_GROUP_LABELS[tally.muscle]}
                         <span className="ml-2 text-xs text-fg-3">{BODY_PART_LABELS[tally.bodyPart]}</span>
                       </td>
-                      <td className="tabular px-3 py-2.5 text-right text-fg">{integer(tally.directSets)}</td>
-                      <td className="tabular px-3 py-2.5 text-right text-fg-2">{round1(tally.sets)}</td>
-                      <td className="tabular px-3 py-2.5 text-right text-fg-2">{integer(tally.reps)}</td>
-                      <td className="tabular px-3 py-2.5 text-right text-fg-2">{tally.volumeKg > 0 ? f.volume(tally.volumeKg) : "–"}</td>
-                      <td className="tabular px-3 py-2.5 text-right text-fg-2">{tally.exercises}</td>
+                      <td className="tabular px-3 py-2 text-right font-medium text-fg">{integer(tally.directSets)}</td>
+                      <td className="tabular px-3 py-2 text-right text-fg-2">{round1(tally.sets)}</td>
+                      <td className="tabular px-3 py-2 text-right text-fg-2">{integer(tally.reps)}</td>
+                      <td className="tabular px-3 py-2 text-right text-fg-2">{tally.volumeKg > 0 ? f.volume(tally.volumeKg) : <span className="text-fg-3">–</span>}</td>
+                      <td className="tabular py-2 pl-3 text-right text-fg-2">{tally.exercises}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </Card>
+          </Section>
 
         </>
       )}
@@ -288,54 +288,40 @@ function VolumeAdvice({ gaps }: { gaps: ReturnType<typeof findVolumeGaps> }) {
 
   if (gaps.length === 0) {
     return (
-      <Card className="mb-6 border-signal/30">
-        <CardBody className="flex items-start gap-3 pt-5">
-          <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-signal" />
-          <div>
-            <p className="text-sm font-medium text-fg">Every muscle is inside its productive range</p>
-            <p className="mt-0.5 text-sm text-fg-3">No muscle is under its minimum or past what it can recover from.</p>
-          </div>
-        </CardBody>
-      </Card>
+      <p className="mb-6 flex items-center gap-2 text-sm text-fg-2">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-signal" />
+        Every muscle is between its minimum and what it can recover from.
+      </p>
     );
   }
 
+  const summary = [
+    short.length ? `${short.length} ${short.length === 1 ? "muscle" : "muscles"} under the minimum` : null,
+    over.length ? `${over.length} past the recoverable maximum` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    <Card className="mb-6">
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-warn" /> Volume check
-          </span>
-        }
-        subtitle={[
-          short.length ? `${short.length} ${short.length === 1 ? "muscle" : "muscles"} under the minimum` : null,
-          over.length ? `${over.length} past the recoverable maximum` : null,
-        ]
-          .filter(Boolean)
-          .join(", ")}
-      />
-      <CardBody className="pt-3">
-        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {gaps.slice(0, 9).map((gap) => (
-            <li key={gap.muscle} className="flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3.5 py-2.5">
-              <div className="min-w-0">
-                <div className="truncate text-sm text-fg">{MUSCLE_GROUP_LABELS[gap.muscle]}</div>
-                <div className="tabular text-xs text-fg-3">
-                  {round1(gap.setsPerWeek)} sets/week,{" "}
-                  {gap.shortfall > 0 ? `MEV ${gap.landmarks.mev}` : `MRV ${gap.landmarks.mrv}`}
-                </div>
-              </div>
-              {gap.shortfall > 0 ? (
-                <Badge tone="warn">+{gap.shortfall} sets</Badge>
-              ) : (
-                <Badge tone="alarm">−{gap.excess} sets</Badge>
-              )}
-            </li>
-          ))}
-        </ul>
-      </CardBody>
-    </Card>
+    <div className="mb-6 rounded-(--radius-card) border border-line px-5 py-4">
+      <p className="flex items-center gap-2 text-sm font-medium text-fg">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
+        {summary.charAt(0).toUpperCase() + summary.slice(1)}
+      </p>
+      <ul className="mt-2 grid gap-x-10 sm:grid-cols-2 xl:grid-cols-3">
+        {gaps.slice(0, 9).map((gap) => (
+          <li key={gap.muscle} className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
+            <span className="min-w-0 truncate text-fg-2">{MUSCLE_GROUP_LABELS[gap.muscle]}</span>
+            <span className="tabular shrink-0 text-xs text-fg-3">
+              {round1(gap.setsPerWeek)} sets/week, {gap.shortfall > 0 ? `MEV ${gap.landmarks.mev}` : `MRV ${gap.landmarks.mrv}`}
+              <span className={cn("ml-2 font-medium", gap.shortfall > 0 ? "text-warn" : "text-alarm")}>
+                {gap.shortfall > 0 ? `+${gap.shortfall}` : `−${gap.excess}`} sets
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -354,33 +340,48 @@ function LandmarkRow({
 }) {
   const zone = volumeZone(value, landmarks);
   const scale = Math.max(landmarks.mrv * 1.25, value * 1.05, 1);
-  const at = (sets: number) => `${Math.min(100, (sets / scale) * 100)}%`;
+  const fraction = (sets: number) => Math.min(1, sets / scale);
+  const at = (sets: number) => `${fraction(sets) * 100}%`;
 
   return (
     <li>
-      <button type="button" onClick={onSelect} className="group block w-full text-left" aria-pressed={selected}>
+      <button
+        type="button"
+        onClick={onSelect}
+        className="group -mx-2 block w-[calc(100%+1rem)] rounded-md px-2 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70"
+        aria-pressed={selected}
+      >
         <div className="mb-1.5 flex items-baseline justify-between gap-3">
-          <span className={cn("truncate text-sm", selected ? "font-medium text-volt" : "text-fg-2 group-hover:text-fg")}>
+          <span
+            className={cn(
+              "truncate text-sm transition-colors duration-150",
+              selected ? "font-medium text-volt" : zone === "untrained" ? "text-fg-3 group-hover:text-fg-2" : "text-fg-2 group-hover:text-fg",
+            )}
+          >
             {MUSCLE_GROUP_LABELS[muscle]}
           </span>
-          <span className="flex items-baseline gap-2">
-            <span className="text-[11px]" style={{ color: ZONE_COLORS[zone] }}>
-              {VOLUME_ZONE_LABELS[zone]}
-            </span>
-            <span className="tabular text-sm font-medium text-fg">{round1(value)}</span>
+          <span className="flex items-baseline gap-2.5">
+            <span className="text-xs text-fg-3">{VOLUME_ZONE_LABELS[zone]}</span>
+            <span className={cn("tabular w-8 text-right text-sm font-medium", zone === "untrained" ? "text-fg-3" : "text-fg")}>{round1(value)}</span>
           </span>
         </div>
-        <div className="relative h-2 rounded-full bg-surface-3">
-          {/* The productive band, MEV to MRV, drawn faintly behind the fill. */}
-          <div
-            className="absolute inset-y-0 rounded-full bg-volt/10"
-            style={{ left: at(landmarks.mev), width: `calc(${at(landmarks.mrv)} - ${at(landmarks.mev)})` }}
-          />
-          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: at(value), background: ZONE_COLORS[zone] }} />
+        <div className="relative h-1.5">
+          <div className="absolute inset-0 overflow-hidden rounded-full bg-surface-3">
+            {/* The productive band, MEV to MRV, drawn faintly behind the fill. */}
+            <div
+              className="absolute inset-y-0 bg-volt/8"
+              style={{ left: at(landmarks.mev), width: `calc(${at(landmarks.mrv)} - ${at(landmarks.mev)})` }}
+            />
+            {/* Scaled, not sized, so a change of range glides on the compositor. */}
+            <div
+              className="bar-fill absolute inset-0 rounded-full"
+              style={{ transform: `scaleX(${fraction(value)})`, background: ZONE_COLORS[zone] }}
+            />
+          </div>
           {[landmarks.mev, landmarks.mav, landmarks.mrv].map((mark, index) => (
             <div
               key={index}
-              className="absolute -top-0.5 h-3 w-px bg-fg-3/70"
+              className="absolute -top-0.5 h-2.5 w-px bg-fg-3/60"
               style={{ left: at(mark) }}
               title={["MEV", "MAV", "MRV"][index]}
             />

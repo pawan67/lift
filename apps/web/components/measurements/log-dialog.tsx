@@ -127,7 +127,7 @@ function LogForm({ kinds, onDone }: { kinds?: readonly MeasurementKind[]; onDone
         {groups.map(({ group, kinds: groupKinds }) => (
           <section key={group}>
             {single ? null : (
-              <h3 className="mb-3 font-mono text-[11px] tracking-wider text-fg-3 uppercase">{MEASUREMENT_GROUP_LABELS[group]}</h3>
+              <h3 className="mb-3 text-sm font-semibold tracking-tight text-fg">{MEASUREMENT_GROUP_LABELS[group]}</h3>
             )}
             <div className={cn("grid gap-3", !single && "sm:grid-cols-2")}>
               {groupKinds.map((kind) => {

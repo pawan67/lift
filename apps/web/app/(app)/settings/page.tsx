@@ -22,10 +22,11 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { confirm, toast } from "@/components/ui/dialog";
-import { Badge, Button, Card, CardHeader, Input, Segmented, Select } from "@/components/ui/primitives";
+import { Badge, Button, Card, Input, PageHeader, Segmented, Select } from "@/components/ui/primitives";
 import { signOut } from "@/components/shell/app-shell";
 import { useData } from "@/lib/data/store";
 import { fullResync, retryRejected, syncNow } from "@/lib/data/sync";
+import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { parseDecimal } from "@/lib/measurements/actions";
 import { useSettings } from "@/lib/settings";
@@ -37,12 +38,43 @@ import { useSettings } from "@/lib/settings";
  */
 const FORMULA_REFERENCE = { weight: 100, reps: 8 } as const;
 
-function Row({ label, description, children, id }: { label: ReactNode; description?: ReactNode; children: ReactNode; id?: string }) {
+/**
+ * A titled group of rows, the way a system settings pane reads: the heading
+ * sits above the box, an optional note sits below it, and the rows inside
+ * carry the label on the left and the control on the right.
+ */
+function Group({ title, note, id, children }: { title: ReactNode; note?: ReactNode; id?: string; children: ReactNode }) {
   return (
-    <div id={id} className="flex flex-col gap-3 border-t border-line px-5 py-4 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <section id={id} className="scroll-mt-8">
+      <h2 className="mb-2 px-1 text-[13px] font-medium text-fg-3">{title}</h2>
+      <Card>{children}</Card>
+      {note ? <p className="mt-2 px-1 text-xs leading-relaxed text-fg-3">{note}</p> : null}
+    </section>
+  );
+}
+
+function Row({
+  label,
+  description,
+  children,
+  stack = false,
+}: {
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  /** Wide controls (selects) drop under the label on a phone; small ones stay on the right. */
+  stack?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex gap-x-6 gap-y-2.5 border-t border-line px-4 py-3 first:border-t-0",
+        stack ? "flex-col sm:flex-row sm:items-center sm:justify-between" : "items-center justify-between",
+      )}
+    >
       <div className="min-w-0">
-        <div className="text-sm font-medium text-fg">{label}</div>
-        {description ? <div className="mt-0.5 text-xs text-fg-3">{description}</div> : null}
+        <div className="text-sm text-fg">{label}</div>
+        {description ? <div className="mt-0.5 text-xs leading-relaxed text-fg-3">{description}</div> : null}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -54,114 +86,103 @@ export default function SettingsPage() {
   const update = settings.update;
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-[28px]">Settings</h1>
-        <p className="mt-1 text-sm text-fg-2">Preferences for this browser. Your data is stored in kilograms and centimetres, so switching units never changes it.</p>
-      </header>
+    <div className="mx-auto max-w-2xl">
+      <PageHeader title="Settings" subtitle="Saved in this browser." />
 
-      <div className="space-y-6">
-        <Card>
-          <CardHeader title="Units" />
-          <div className="mt-3">
-            <Row label="Weight" description="Sets, volume, records and bodyweight.">
-              <Segmented<WeightUnit>
-                value={settings.weightUnit}
-                onChange={(weightUnit) => update({ weightUnit })}
-                options={[
-                  { value: "kg", label: "kg" },
-                  { value: "lb", label: "lb" },
-                ]}
-              />
-            </Row>
-            <Row label="Distance" description="Runs, carries and other distance sets.">
-              <Segmented<DistanceUnit>
-                value={settings.distanceUnit}
-                onChange={(distanceUnit) => update({ distanceUnit })}
-                options={[
-                  { value: "km", label: "km" },
-                  { value: "mi", label: "mi" },
-                ]}
-              />
-            </Row>
-            <Row label="Body measurements" description="Tape measurements and your height.">
-              <Segmented<MeasurementUnit>
-                value={settings.measurementUnit}
-                onChange={(measurementUnit) => update({ measurementUnit })}
-                options={[
-                  { value: "cm", label: "cm" },
-                  { value: "in", label: "in" },
-                ]}
-              />
-            </Row>
-            <Row label="First day of the week" description="Where weekly totals and the calendar start.">
-              <Segmented<"1" | "0">
-                value={String(settings.firstDayOfWeek) as "1" | "0"}
-                onChange={(value) => update({ firstDayOfWeek: value === "1" ? 1 : 0 })}
-                options={[
-                  { value: "1", label: "Monday" },
-                  { value: "0", label: "Sunday" },
-                ]}
-              />
-            </Row>
-          </div>
-        </Card>
+      <div className="space-y-8">
+        <Group title="Units" note="Your log is stored in kilograms and centimetres, so switching units never changes it.">
+          <Row label="Weight" description="Sets, volume, records and bodyweight.">
+            <Segmented<WeightUnit>
+              value={settings.weightUnit}
+              onChange={(weightUnit) => update({ weightUnit })}
+              options={[
+                { value: "kg", label: "kg" },
+                { value: "lb", label: "lb" },
+              ]}
+            />
+          </Row>
+          <Row label="Distance" description="Runs, carries and other distance sets.">
+            <Segmented<DistanceUnit>
+              value={settings.distanceUnit}
+              onChange={(distanceUnit) => update({ distanceUnit })}
+              options={[
+                { value: "km", label: "km" },
+                { value: "mi", label: "mi" },
+              ]}
+            />
+          </Row>
+          <Row label="Body measurements" description="Tape measurements and your height.">
+            <Segmented<MeasurementUnit>
+              value={settings.measurementUnit}
+              onChange={(measurementUnit) => update({ measurementUnit })}
+              options={[
+                { value: "cm", label: "cm" },
+                { value: "in", label: "in" },
+              ]}
+            />
+          </Row>
+          <Row label="First day of the week" description="Where weekly totals and the calendar start.">
+            <Segmented<"1" | "0">
+              value={String(settings.firstDayOfWeek) as "1" | "0"}
+              onChange={(value) => update({ firstDayOfWeek: value === "1" ? 1 : 0 })}
+              options={[
+                { value: "1", label: "Monday" },
+                { value: "0", label: "Sunday" },
+              ]}
+            />
+          </Row>
+        </Group>
 
-        <Card>
-          <CardHeader title="Calculations" />
-          <div className="mt-3">
-            <Row
-              label="1RM formula"
-              description={`Used for every estimated one-rep max. In brackets: what each gives for ${FORMULA_REFERENCE.reps} reps at ${FORMULA_REFERENCE.weight}. They diverge past about 12 reps.`}
+        <Group title="Calculations">
+          <Row
+            stack
+            label="1RM formula"
+            description={`Used for every estimated one-rep max. In brackets: what each gives for ${FORMULA_REFERENCE.reps} reps at ${FORMULA_REFERENCE.weight}. They diverge past about 12 reps.`}
+          >
+            <Select
+              className="h-9 w-full sm:w-52"
+              value={settings.oneRepMaxFormula}
+              onChange={(e) => update({ oneRepMaxFormula: e.target.value as OneRepMaxFormula })}
             >
-              <Select
-                className="w-full sm:w-56"
-                value={settings.oneRepMaxFormula}
-                onChange={(e) => update({ oneRepMaxFormula: e.target.value as OneRepMaxFormula })}
-              >
-                {ONE_REP_MAX_FORMULAS.map((formula) => (
-                  <option key={formula} value={formula}>
-                    {ONE_REP_MAX_FORMULA_LABELS[formula]} ({estimateOneRepMax(FORMULA_REFERENCE.weight, FORMULA_REFERENCE.reps, formula).toFixed(1)})
-                  </option>
-                ))}
-              </Select>
-            </Row>
-            <Row label="Training level" description="Sets the weekly volume ranges (MEV to MRV) each muscle is judged against.">
-              <Select
-                className="w-full sm:w-56"
-                value={settings.trainingLevel}
-                onChange={(e) => update({ trainingLevel: e.target.value as TrainingLevel })}
-              >
-                {TRAINING_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {TRAINING_LEVEL_LABELS[level]}
-                  </option>
-                ))}
-              </Select>
-            </Row>
-          </div>
-        </Card>
+              {ONE_REP_MAX_FORMULAS.map((formula) => (
+                <option key={formula} value={formula}>
+                  {ONE_REP_MAX_FORMULA_LABELS[formula]} ({estimateOneRepMax(FORMULA_REFERENCE.weight, FORMULA_REFERENCE.reps, formula).toFixed(1)})
+                </option>
+              ))}
+            </Select>
+          </Row>
+          <Row stack label="Training level" description="Sets the weekly volume ranges (MEV to MRV) each muscle is judged against.">
+            <Select
+              className="h-9 w-full sm:w-52"
+              value={settings.trainingLevel}
+              onChange={(e) => update({ trainingLevel: e.target.value as TrainingLevel })}
+            >
+              {TRAINING_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {TRAINING_LEVEL_LABELS[level]}
+                </option>
+              ))}
+            </Select>
+          </Row>
+        </Group>
 
-        <Card id="body">
-          <CardHeader title="Body" subtitle="Used for BMI, waist-to-height and the body-fat estimate. Kept in this browser only." />
-          <div className="mt-3">
-            <HeightRow />
-            <Row label="Sex" description="The body-fat estimate uses a different formula for each.">
-              <Select
-                className="w-full sm:w-56"
-                value={settings.sex ?? ""}
-                onChange={(e) => update({ sex: (e.target.value || null) as Sex | null })}
-              >
-                <option value="">Not set</option>
-                {SEXES.map((sex) => (
-                  <option key={sex} value={sex}>
-                    {SEX_LABELS[sex]}
-                  </option>
-                ))}
-              </Select>
-            </Row>
-          </div>
-        </Card>
+        <Group id="body" title="Body" note="Used for BMI, waist-to-height and the body-fat estimate. Kept in this browser only.">
+          <HeightRow />
+          <Row stack label="Sex" description="The body-fat estimate uses a different formula for each.">
+            <Select
+              className="h-9 w-full sm:w-52"
+              value={settings.sex ?? ""}
+              onChange={(e) => update({ sex: (e.target.value || null) as Sex | null })}
+            >
+              <option value="">Not set</option>
+              {SEXES.map((sex) => (
+                <option key={sex} value={sex}>
+                  {SEX_LABELS[sex]}
+                </option>
+              ))}
+            </Select>
+          </Row>
+        </Group>
 
         <SyncCard />
         <AccountCard />
@@ -200,7 +221,7 @@ function HeightRow() {
         <Input
           aria-label="Height"
           inputMode="decimal"
-          className="tabular w-28 text-right"
+          className="tabular h-9 w-24 text-right"
           value={value}
           placeholder={unit === "cm" ? "180" : "71"}
           onChange={(e) => setDraft(e.target.value)}
@@ -209,7 +230,7 @@ function HeightRow() {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
         />
-        <span className="w-6 text-sm text-fg-3">{unit}</span>
+        <span className="w-5 text-sm text-fg-3">{unit}</span>
       </div>
     </Row>
   );
@@ -240,59 +261,56 @@ function SyncCard() {
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="Sync"
-        subtitle="Changes upload within a second and the log refreshes every minute while this tab is open."
-        action={
-          <Button size="sm" onClick={() => void syncNow()} disabled={syncing}>
-            <RefreshCw size={14} className={syncing ? "animate-spin" : undefined} /> Sync now
-          </Button>
+    <Group title="Sync" note="Changes upload within a second, and the log refreshes every minute while this tab is open.">
+      <Row
+        label="Last synced"
+        description={
+          syncError ? (
+            <span className="text-alarm">{syncError}</span>
+          ) : (
+            <span className="tabular">{syncing ? "Syncing…" : lastSyncedAt ? formatDateTime(lastSyncedAt) : "Not yet"}</span>
+          )
         }
-      />
-      <div className="mt-3">
-        <Row label="Last synced" description={syncError ? <span className="text-alarm">{syncError}</span> : undefined}>
-          <span className="tabular text-sm text-fg-2">{syncing ? "Syncing…" : lastSyncedAt ? formatDateTime(lastSyncedAt) : "Not yet"}</span>
-        </Row>
-        <Row label="Waiting to upload" description="Changes made here that the server has not confirmed yet.">
-          <span className="tabular text-sm text-fg-2">{pending}</span>
-        </Row>
-        {rejected.count > 0 ? (
-          <Row
-            label={
-              <span className="inline-flex items-center gap-2">
-                Refused by the server <Badge tone="alarm">{rejected.count}</Badge>
-              </span>
-            }
-            description={rejected.reason ?? undefined}
-          >
-            <Button size="sm" variant="outline" onClick={() => void retryRejected()}>
-              Retry
-            </Button>
-          </Row>
-        ) : null}
-        <Row label="Download everything again" description="For when something here looks different from your phone.">
-          <Button size="sm" variant="outline" onClick={() => void resync()} disabled={resyncing || syncing}>
-            {resyncing ? "Downloading…" : "Download again"}
+      >
+        <Button size="sm" onClick={() => void syncNow()} disabled={syncing}>
+          <RefreshCw size={14} className={syncing ? "animate-spin" : undefined} /> Sync now
+        </Button>
+      </Row>
+      <Row label="Waiting to upload" description="Changes made here that the server has not confirmed yet.">
+        <span className="tabular text-sm text-fg-2">{pending}</span>
+      </Row>
+      {rejected.count > 0 ? (
+        <Row
+          label={
+            <span className="inline-flex items-center gap-2">
+              Refused by the server <Badge tone="alarm">{rejected.count}</Badge>
+            </span>
+          }
+          description={rejected.reason ?? undefined}
+        >
+          <Button size="sm" variant="outline" onClick={() => void retryRejected()}>
+            Retry
           </Button>
         </Row>
-      </div>
-    </Card>
+      ) : null}
+      <Row label="Download everything again" description="For when something here looks different from your phone.">
+        <Button size="sm" variant="outline" onClick={() => void resync()} disabled={resyncing || syncing}>
+          {resyncing ? "Downloading…" : "Download again"}
+        </Button>
+      </Row>
+    </Group>
   );
 }
 
 function AccountCard() {
   const user = useData((s) => s.user);
   return (
-    <Card>
-      <CardHeader title="Account" />
-      <div className="mt-3">
-        <Row label={user?.name || "Signed in"} description={user?.email}>
-          <Button size="sm" variant="danger" onClick={() => void signOut()}>
-            <LogOut size={14} /> Sign out
-          </Button>
-        </Row>
-      </div>
-    </Card>
+    <Group title="Account">
+      <Row label={user?.name || "Signed in"} description={user?.email}>
+        <Button size="sm" variant="outline" onClick={() => void signOut()}>
+          <LogOut size={14} /> Sign out
+        </Button>
+      </Row>
+    </Group>
   );
 }

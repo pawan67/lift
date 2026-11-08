@@ -18,7 +18,7 @@ import { useMemo, useState } from "react";
 import { EditEntryDialog } from "@/components/measurements/entry-dialog";
 import { MeasurementHistoryChart } from "@/components/measurements/history-chart";
 import { LogMeasurementsDialog } from "@/components/measurements/log-dialog";
-import { Button, Card, CardBody, CardHeader, EmptyState, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
+import { Button, Card, EmptyState, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
 import { useModel } from "@/lib/data/model";
 import type { BodyMeasurementRow } from "@/lib/data/types";
 import { formatDate, formatDateTime, useFormat } from "@/lib/format";
@@ -79,8 +79,9 @@ function KindView({ kind }: { kind: MeasurementKind }) {
         actions={
           <>
             {counterpart ? (
-              <Link href={`/measurements/${counterpart}`} className="text-sm text-fg-3 hover:text-fg">
+              <Link href={`/measurements/${counterpart}`} className="group mr-2 inline-flex items-center gap-1 text-sm text-fg-3 transition-colors duration-150 hover:text-fg">
                 {MEASUREMENT_KIND_LABELS[counterpart]}
+                <span aria-hidden className="transition-transform duration-150 ease-out group-hover:translate-x-0.5">→</span>
               </Link>
             ) : null}
             <Button variant="primary" onClick={() => setLogging(true)}>
@@ -104,7 +105,7 @@ function KindView({ kind }: { kind: MeasurementKind }) {
           />
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
               <div className="text-sm text-fg-2">
@@ -125,45 +126,47 @@ function KindView({ kind }: { kind: MeasurementKind }) {
             </div>
           </Card>
 
-          <Card>
-            <CardHeader title="Entries" subtitle="Newest first. Select one to edit or delete it." />
-            <CardBody className="px-0 pb-2">
-              <ul>
-                {newestFirst.slice(0, shown).map((row, index) => {
-                  const previous = newestFirst[index + 1];
-                  const delta = previous ? row.value - previous.value : null;
-                  return (
-                    <li key={row.id} className="border-t border-line first:border-t-0">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(row)}
-                        className="group flex w-full items-center gap-4 px-5 py-3 text-left transition-colors hover:bg-surface-2"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm text-fg">{formatDateTime(row.measuredAt)}</div>
-                          {row.notes ? <div className="mt-0.5 truncate text-xs text-fg-3">{row.notes}</div> : null}
-                        </div>
-                        <div className="tabular w-20 text-right text-xs text-fg-3">
-                          {delta === null || isNegligibleChange(kind, delta, prefs) ? "" : formatMeasurementDelta(kind, delta, prefs)}
-                        </div>
-                        <div className="tabular w-24 text-right text-sm font-semibold text-fg">
-                          {formatMeasurementValue(kind, row.value, prefs)}
-                        </div>
-                        <Pencil size={14} className="shrink-0 text-fg-3 opacity-0 transition-opacity group-hover:opacity-100" />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {newestFirst.length > shown ? (
-                <div className="border-t border-line px-5 pt-3">
-                  <Button variant="ghost" size="sm" onClick={() => setShown((count) => count + PAGE_SIZE)}>
-                    Show {Math.min(PAGE_SIZE, newestFirst.length - shown)} more
-                  </Button>
-                </div>
-              ) : null}
-            </CardBody>
-          </Card>
+          {/* Entries sit on the page as a plain table; the chart above is the one card. */}
+          <section>
+            <div className="mb-1 flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold tracking-tight text-fg">Entries</h2>
+              <span className="text-xs text-fg-3">Newest first</span>
+            </div>
+            <ul className="border-t border-line">
+              {newestFirst.slice(0, shown).map((row, index) => {
+                const previous = newestFirst[index + 1];
+                const delta = previous ? row.value - previous.value : null;
+                return (
+                  <li key={row.id} className="border-b border-line">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(row)}
+                      className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-4 rounded-md px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-2/70 active:bg-surface-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-fg">{formatDateTime(row.measuredAt)}</div>
+                        {row.notes ? <div className="mt-0.5 truncate text-xs text-fg-3">{row.notes}</div> : null}
+                      </div>
+                      <div className="tabular w-20 text-right text-xs text-fg-3">
+                        {delta === null || isNegligibleChange(kind, delta, prefs) ? "" : formatMeasurementDelta(kind, delta, prefs)}
+                      </div>
+                      <div className="tabular w-24 text-right text-sm font-semibold text-fg">
+                        {formatMeasurementValue(kind, row.value, prefs)}
+                      </div>
+                      <Pencil size={14} className="shrink-0 text-fg-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {newestFirst.length > shown ? (
+              <div className="pt-2">
+                <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setShown((count) => count + PAGE_SIZE)}>
+                  Show {Math.min(PAGE_SIZE, newestFirst.length - shown)} more
+                </Button>
+              </div>
+            ) : null}
+          </section>
         </div>
       )}
 

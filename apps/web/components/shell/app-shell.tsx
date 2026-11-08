@@ -28,6 +28,7 @@ import { useState, type ReactNode } from "react";
 import { ConfirmHost, ToastHost } from "@/components/ui/dialog";
 import { Button, Skeleton } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
+import { usePresence } from "@/lib/use-presence";
 import { wipeDatabase } from "@/lib/data/idb";
 import { useData } from "@/lib/data/store";
 import { hardNavigate, syncNow } from "@/lib/data/sync";
@@ -109,7 +110,7 @@ function SyncStatus({ compact = false }: { compact?: boolean }) {
       onClick={() => void syncNow()}
       title={syncError ?? "Sync now"}
       className={cn(
-        "flex items-center gap-2 rounded-lg text-xs transition-colors hover:bg-surface-2",
+        "press flex items-center gap-2 rounded-md text-xs hover:bg-surface-2",
         compact ? "p-2" : "w-full px-3 py-2",
         syncError ? "text-alarm" : "text-fg-3 hover:text-fg",
       )}
@@ -122,10 +123,10 @@ function SyncStatus({ compact = false }: { compact?: boolean }) {
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 space-y-6 overflow-y-auto px-3">
+    <nav className="flex-1 space-y-5 overflow-y-auto px-3">
       {NAV.map((group) => (
         <div key={group.heading}>
-          <div className="mb-1.5 px-3 font-mono text-[10px] tracking-widest text-fg-3 uppercase">{group.heading}</div>
+          <div className="mb-1 px-3 text-xs font-medium text-fg-3/80">{group.heading}</div>
           <ul className="space-y-0.5">
             {group.items.map((item) => {
               const active = isActive(pathname, item);
@@ -135,12 +136,14 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                   <Link
                     href={item.href}
                     onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                      "relative flex items-center gap-3 rounded-md px-3 py-[7px] text-sm transition-colors duration-150",
                       active ? "bg-surface-3 font-medium text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
                     )}
                   >
-                    <Icon size={17} className={active ? "text-volt" : undefined} />
+                    {active ? <span className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-volt" aria-hidden /> : null}
+                    <Icon size={16} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-volt" : "text-fg-3"} />
                     {item.label}
                   </Link>
                 </li>
@@ -163,14 +166,14 @@ function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
         href="/settings"
         onClick={onNavigate}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-          pathname.startsWith("/settings") ? "bg-surface-3 text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
+          "flex items-center gap-3 rounded-md px-3 py-[7px] text-sm transition-colors duration-150",
+          pathname.startsWith("/settings") ? "bg-surface-3 font-medium text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
         )}
       >
-        <Settings size={17} /> Settings
+        <Settings size={16} strokeWidth={1.75} className={pathname.startsWith("/settings") ? "text-volt" : "text-fg-3"} /> Settings
       </Link>
       <div className="flex items-center gap-2 px-3 pt-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-semibold text-fg-2 uppercase">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface-2 text-xs font-semibold text-fg-2 uppercase">
           {(user?.name || user?.email || "?").slice(0, 1)}
         </div>
         <div className="min-w-0 flex-1">
@@ -181,9 +184,10 @@ function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
           type="button"
           onClick={() => void signOut()}
           title="Sign out"
-          className="rounded-lg p-2 text-fg-3 transition-colors hover:bg-surface-2 hover:text-fg"
+          aria-label="Sign out"
+          className="press rounded-md p-2 text-fg-3 hover:bg-surface-2 hover:text-fg"
         >
-          <LogOut size={16} />
+          <LogOut size={15} />
         </button>
       </div>
     </div>
@@ -226,7 +230,7 @@ function FirstSyncBanner() {
   const empty = useData((s) => s.tables.workouts.size === 0 && s.tables.body_measurements.size === 0);
   if (!syncing || lastSyncedAt || !empty) return null;
   return (
-    <div className="mb-6 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-fg-2">
+    <div className="mb-6 flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-fg-2">
       <RefreshCw size={15} className="animate-spin text-volt" />
       Downloading your training log…
     </div>
@@ -237,15 +241,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const status = useData((s) => s.status);
   const [drawer, setDrawer] = useState(false);
+  const drawerPresence = usePresence(drawer, 220);
 
   return (
     <DataProvider>
-      <div className="min-h-dvh lg:pl-64">
+      <div className="min-h-dvh lg:pl-60">
         {/* Desktop rail */}
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface lg:flex">
-          <Link href="/" className="flex items-center gap-2.5 px-6 pt-6 pb-7">
-            <LiftMark className="h-7 w-7" />
-            <span className="text-lg font-semibold tracking-tight">Lift</span>
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-ink lg:flex">
+          <Link href="/" className="flex items-center gap-2.5 px-6 pt-6 pb-6">
+            <LiftMark className="h-6 w-6" />
+            <span className="text-[17px] font-semibold tracking-tight">Lift</span>
           </Link>
           <NavLinks pathname={pathname} />
           <AccountFooter />
@@ -259,20 +264,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-1">
             <SyncStatus compact />
-            <button type="button" onClick={() => setDrawer(true)} className="rounded-lg p-2 text-fg-2 hover:bg-surface-2" aria-label="Menu">
+            <button type="button" onClick={() => setDrawer(true)} className="press rounded-lg p-2 text-fg-2 hover:bg-surface-2" aria-label="Menu">
               <Menu size={20} />
             </button>
           </div>
         </header>
 
         {/* Phone drawer */}
-        {drawer ? (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="absolute inset-0 bg-black/70" onClick={() => setDrawer(false)} aria-hidden />
-            <div className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-line bg-surface">
+        {drawerPresence.mounted ? (
+          <div
+            className={cn("fixed inset-0 z-50 lg:hidden", drawerPresence.closing && "pointer-events-none")}
+            data-closing={drawerPresence.closing || undefined}
+          >
+            <div className="overlay-backdrop absolute inset-0 bg-black/70" onClick={() => setDrawer(false)} aria-hidden />
+            <div className="drawer-panel absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-line bg-surface">
               <div className="flex items-center justify-between px-5 py-4">
                 <span className="font-semibold">Menu</span>
-                <button type="button" onClick={() => setDrawer(false)} className="rounded-lg p-1.5 text-fg-3 hover:bg-surface-2" aria-label="Close menu">
+                <button type="button" onClick={() => setDrawer(false)} className="press rounded-lg p-1.5 text-fg-3 hover:bg-surface-2" aria-label="Close menu">
                   <X size={18} />
                 </button>
               </div>
@@ -303,9 +311,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className={cn("flex flex-col items-center gap-1 py-2.5 text-[10px]", active ? "text-volt" : "text-fg-3")}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex flex-col items-center gap-1 pt-2.5 pb-2 text-[10px] font-medium transition-[transform,color] duration-150 ease-out active:scale-95",
+                      active ? "text-fg" : "text-fg-3",
+                    )}
                   >
-                    <Icon size={20} />
+                    <Icon size={20} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-volt" : undefined} />
                     {item.label}
                   </Link>
                 </li>

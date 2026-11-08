@@ -56,9 +56,33 @@
   --color-violet: var(--violet);
 
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
-  --radius-card: 1rem;
+  --radius-card: 0.75rem;
+}
+
+/*
+ * Motion. Tailwind's own `ease-out` and `ease-in-out` are too soft to read as
+ * intentional, so these replace them app-wide; `ease-drawer` is the iOS sheet
+ * curve, for anything that slides in from an edge.
+ */
+@theme {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/*
+ * Press feedback for anything clickable that is button-sized: a small scale on
+ * `:active` tells the hand the click landed before anything else changes.
+ * Colour still eases on hover; the scale is the only motion.
+ */
+@utility press {
+  transition-property: transform, background-color, border-color, color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 }
 
 html,
@@ -88,9 +112,15 @@ body {
   scrollbar-color: var(--surface-4) transparent;
 }
 
-:focus-visible {
-  outline: 2px solid var(--volt);
-  outline-offset: 2px;
+/*
+ * In the base layer so utilities can override it: fields draw their own focus
+ * ring and would otherwise get this outline on top of it.
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--volt);
+    outline-offset: 2px;
+  }
 }
 
 /* Recharts draws a focus box around the chart surface on click. */
@@ -109,11 +139,143 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/*
+ * Overlays: dialogs, the phone drawer, menus and toasts.
+ *
+ * Entry uses `@starting-style`, so a freshly mounted element transitions in
+ * from its hidden state with no JS. Exit is the same transition run backwards:
+ * the component sets `data-closing` and unmounts once it has played (see
+ * `usePresence`). Transitions rather than keyframes, so a close that interrupts
+ * an opening reverses from where it is instead of jumping.
+ */
+.overlay-backdrop {
+  opacity: 1;
+  transition: opacity 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+[data-closing] .overlay-backdrop,
+.overlay-backdrop[data-closing] {
+  opacity: 0;
+  transition-duration: 150ms;
+}
+
+/* Centred dialogs scale up from the middle; there is no trigger to grow from. */
+.dialog-panel {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+[data-closing] .dialog-panel {
+  opacity: 0;
+  transform: scale(0.98);
+  transition-duration: 150ms;
+}
+
+/* On a phone the same dialog is a bottom sheet, so it rises from the edge. */
+@media (width < 40rem) {
+  .dialog-panel {
+    transition:
+      opacity 120ms linear,
+      transform 380ms var(--ease-drawer);
+    @starting-style {
+      opacity: 1;
+      transform: translateY(100%);
+    }
+  }
+  [data-closing] .dialog-panel {
+    opacity: 1;
+    transform: translateY(100%);
+    transition-duration: 220ms;
+  }
+}
+
+.drawer-panel {
+  transform: none;
+  transition: transform 340ms var(--ease-drawer);
+  @starting-style {
+    transform: translateX(100%);
+  }
+}
+[data-closing] .drawer-panel {
+  transform: translateX(100%);
+  transition-duration: 220ms;
+}
+
+/* Menus grow out of their trigger: `--origin` is set to the corner they hang from. */
+.menu-panel {
+  opacity: 1;
+  transform: none;
+  transform-origin: var(--origin, top right);
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+.menu-panel[data-closing] {
+  opacity: 0;
+  transform: scale(0.98);
+  transition-duration: 100ms;
+}
+
+.toast {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 260ms var(--ease-out),
+    transform 260ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+.toast[data-closing] {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition-duration: 160ms;
+}
+
+/* Bars that change length when a range or metric changes. */
+.bar-fill {
+  transform-origin: left center;
+  transition: transform 320ms var(--ease-out);
+}
+
+/*
+ * Reduced motion keeps the fades, which help, and drops the movement, which is
+ * what makes people queasy.
+ */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  .dialog-panel,
+  .drawer-panel,
+  .menu-panel,
+  .toast,
+  [data-closing] .dialog-panel,
+  [data-closing] .drawer-panel,
+  .menu-panel[data-closing],
+  .toast[data-closing] {
+    transform: none !important;
+    transition-property: opacity;
+  }
+  .drawer-panel {
+    @starting-style {
+      opacity: 0;
+    }
+  }
+  .bar-fill {
+    transition: none;
+  }
+  .press:active {
+    transform: none;
   }
 }

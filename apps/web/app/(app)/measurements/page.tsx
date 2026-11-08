@@ -19,7 +19,7 @@ import { useMemo, useState } from "react";
 import { MeasurementHistoryChart } from "@/components/measurements/history-chart";
 import { LogMeasurementsDialog } from "@/components/measurements/log-dialog";
 import { Sparkline } from "@/components/measurements/sparkline";
-import { Badge, Button, Card, CardBody, CardHeader, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Badge, Button, Card, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { useFormat } from "@/lib/format";
@@ -76,7 +76,7 @@ export default function MeasurementsPage() {
 
   return (
     <>
-      <PageHeader title="Measurements" subtitle="Bodyweight, tape measurements and what they add up to." actions={actions} />
+      <PageHeader title="Measurements" actions={actions} />
 
       {summaries.size === 0 ? (
         <Card>
@@ -88,7 +88,7 @@ export default function MeasurementsPage() {
           />
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-10">
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Bodyweight */}
             <Card className="lg:col-span-2">
@@ -108,73 +108,68 @@ export default function MeasurementsPage() {
               )}
             </Card>
 
-            {/* Derived figures */}
-            <Card>
-              <CardHeader title="Body figures" subtitle="Worked out from your latest readings" />
-              <CardBody className="space-y-4">
-                {figures.length === 0 && !hint ? <p className="text-sm text-fg-3">Log bodyweight and your waist to see these.</p> : null}
-                {figures.length > 0 ? (
-                  <ul className="divide-y divide-line">
-                    {figures.map((figure) => (
-                      <li key={figure.key} className="flex items-baseline justify-between gap-3 py-2.5 first:pt-0">
-                        <div className="min-w-0">
-                          <div className="text-sm text-fg-2">{figure.label}</div>
-                          <div
-                            className={cn(
-                              "mt-0.5 text-xs",
-                              figure.tone === "good" ? "text-signal" : figure.tone === "caution" ? "text-warn" : "text-fg-3",
-                            )}
-                          >
-                            {figure.detail}
-                          </div>
-                        </div>
-                        <div className="tabular shrink-0 text-lg font-semibold text-fg">{figure.value}</div>
+            {/* Derived figures: on the page, not in a second card, so the bodyweight chart is the one box up here. */}
+            <section className="lg:pt-5">
+              <h2 className="text-sm font-semibold tracking-tight text-fg">Body figures</h2>
+              {figures.length === 0 && !hint ? <p className="mt-3 text-sm text-fg-3">Log bodyweight and your waist to see these.</p> : null}
+              {figures.length > 0 ? (
+                <ul className="mt-2 divide-y divide-line">
+                  {figures.map((figure) => (
+                    <li key={figure.key} className="flex items-baseline justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="text-sm text-fg-2">{figure.label}</div>
+                        <div className={cn("mt-0.5 text-xs", figure.tone === "caution" ? "text-warn" : "text-fg-3")}>{figure.detail}</div>
+                      </div>
+                      <div className="tabular shrink-0 text-base font-semibold tracking-[-0.01em] text-fg">{figure.value}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {hint ? (
+                <p className="mt-2 border-t border-line pt-3 text-[13px] text-fg-3">
+                  {hint.message}{" "}
+                  {hint.action === "settings" ? (
+                    <Link href="/settings#body" className="font-medium whitespace-nowrap text-fg-2 underline decoration-line-strong underline-offset-2 transition-colors duration-150 hover:text-fg hover:decoration-fg-3">
+                      {hint.label}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLogging(hint.kind)}
+                      className="font-medium whitespace-nowrap text-fg-2 underline decoration-line-strong underline-offset-2 transition-colors duration-150 hover:text-fg hover:decoration-fg-3"
+                    >
+                      Log {MEASUREMENT_KIND_LABELS[hint.kind].toLowerCase()}
+                    </button>
+                  )}
+                </p>
+              ) : null}
+              {symmetryNotes.length > 0 ? (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold tracking-tight text-fg">Left and right</h3>
+                  <ul className="mt-2 divide-y divide-line">
+                    {symmetryNotes.map((note) => (
+                      <li key={note.label} className="flex justify-between gap-3 py-2 text-sm">
+                        <span className="text-fg-2">{note.label}</span>
+                        <span className={cn("tabular", note.notable ? "text-warn" : "text-fg")}>{note.summary}</span>
                       </li>
                     ))}
                   </ul>
-                ) : null}
-                {hint ? (
-                  <div className="rounded-xl border border-line bg-surface-2 px-3.5 py-3 text-sm text-fg-2">
-                    {hint.message}{" "}
-                    {hint.action === "settings" ? (
-                      <Link href="/settings#body" className="font-medium text-volt hover:underline">
-                        Open settings
-                      </Link>
-                    ) : (
-                      <button type="button" onClick={() => setLogging(hint.kind)} className="font-medium text-volt hover:underline">
-                        Log {MEASUREMENT_KIND_LABELS[hint.kind].toLowerCase()}
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-                {symmetryNotes.length > 0 ? (
-                  <div>
-                    <h3 className="mb-2 font-mono text-[11px] tracking-wider text-fg-3 uppercase">Left and right</h3>
-                    <ul className="space-y-1.5">
-                      {symmetryNotes.map((note) => (
-                        <li key={note.label} className="flex justify-between gap-3 text-sm">
-                          <span className="text-fg-2">{note.label}</span>
-                          <span className={cn("tabular", note.notable ? "text-warn" : "text-fg")}>{note.summary}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </CardBody>
-            </Card>
+                </div>
+              ) : null}
+            </section>
           </div>
 
           {/* Every kind */}
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-x-10 gap-y-8 lg:grid-cols-2">
             {MEASUREMENT_GROUPS.map((group) => (
-              <Card key={group}>
-                <CardHeader title={MEASUREMENT_GROUP_LABELS[group]} />
-                <ul className="mt-3">
+              <section key={group}>
+                <h2 className="mb-1 text-sm font-semibold tracking-tight text-fg">{MEASUREMENT_GROUP_LABELS[group]}</h2>
+                <ul className="border-t border-line">
                   {MEASUREMENT_GROUP_KINDS[group].map((kind) => (
                     <KindRow key={kind} kind={kind} summary={summaries.get(kind)} />
                   ))}
                 </ul>
-              </Card>
+              </section>
             ))}
           </div>
         </div>
@@ -196,8 +191,8 @@ function KindRow({ kind, summary }: { kind: MeasurementKind; summary: KindSummar
   const stale = summary ? summary.daysAgo > STALE_AFTER_DAYS : false;
   const change = summary?.sinceMonth ?? null;
   return (
-    <li className="border-t border-line first:border-t-0">
-      <Link href={`/measurements/${kind}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2">
+    <li className="border-b border-line">
+      <Link href={`/measurements/${kind}`} className="-mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors duration-150 hover:bg-surface-2/70 active:bg-surface-2">
         <div className="min-w-0 flex-1">
           <div className={cn("truncate text-sm", summary ? "text-fg" : "text-fg-3")}>{MEASUREMENT_KIND_LABELS[kind]}</div>
           <div className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-3">
@@ -216,7 +211,7 @@ function KindRow({ kind, summary }: { kind: MeasurementKind; summary: KindSummar
             </>
           ) : null}
         </div>
-        <ChevronRight size={16} className="shrink-0 text-fg-3" />
+        <ChevronRight size={15} className="shrink-0 text-fg-3/70" />
       </Link>
     </li>
   );
@@ -263,11 +258,11 @@ function BodyweightHero({
     <>
       <div className="flex flex-wrap items-start justify-between gap-4 px-5 pt-5">
         <div>
-          <Link href="/measurements/bodyweight" className="font-mono text-[11px] tracking-wider text-fg-3 uppercase hover:text-fg">
+          <Link href="/measurements/bodyweight" className="text-sm font-semibold tracking-tight text-fg transition-colors duration-150 hover:text-volt">
             Bodyweight
           </Link>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="tabular text-4xl font-semibold tracking-tight text-fg">
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="tabular text-4xl font-semibold tracking-[-0.02em] text-fg">
               {formatMeasurementValue("bodyweight", summary.latest.value, prefs, { withUnit: false })}
             </span>
             <span className="text-base text-fg-3">{format.weightUnit}</span>
@@ -280,19 +275,20 @@ function BodyweightHero({
         <Segmented size="sm" value={range} onChange={onRange} options={MEASUREMENT_RANGES} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 px-5 pt-5">
+      {/* Plain figures in a row: whether up or down is good depends on the goal, so neither gets a colour. */}
+      <dl className="flex gap-8 px-5 pt-4">
         {changes.map(({ days: windowDays, label, change }) => {
           const negligible = change ? isNegligibleChange("bodyweight", change.delta, prefs) : true;
           return (
-            <div key={windowDays} className="rounded-xl bg-surface-2 px-3 py-2.5">
-              <div className="text-[11px] text-fg-3">{label}</div>
-              <div className={cn("tabular mt-0.5 text-sm font-semibold", !change ? "text-fg-3" : negligible ? "text-fg" : change.delta > 0 ? "text-info" : "text-signal")}>
+            <div key={windowDays}>
+              <dt className="text-xs text-fg-3">{label}</dt>
+              <dd className={cn("tabular mt-0.5 text-sm font-medium", !change || negligible ? "text-fg-3" : "text-fg")}>
                 {!change ? "No data" : negligible ? "Steady" : formatMeasurementDelta("bodyweight", change.delta, prefs)}
-              </div>
+              </dd>
             </div>
           );
         })}
-      </div>
+      </dl>
 
       <div className="px-2 pt-4 pb-4 sm:px-3">
         <MeasurementHistoryChart kind="bodyweight" rows={rows} days={days} />

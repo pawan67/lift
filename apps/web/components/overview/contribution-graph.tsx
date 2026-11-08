@@ -77,8 +77,7 @@ export function ContributionGraph({
       <div className="flex gap-2">
         <div className="shrink-0 pt-[18px]" style={{ display: "grid", gridTemplateRows: `repeat(7, ${cell}px)`, rowGap: GAP }}>
           {headings.map((heading, i) => (
-            <span key={i} className="font-mono text-[9px] text-fg-3"
-              style={{ lineHeight: `${cell}px` }}>
+            <span key={i} className="text-[10px] text-fg-3" style={{ lineHeight: `${cell}px` }}>
               {i % 2 === 1 ? heading.short.slice(0, 3) : ""}
             </span>
           ))}
@@ -90,7 +89,7 @@ export function ContributionGraph({
                 label ? (
                   <span
                     key={i}
-                    className="absolute font-mono text-[9px] leading-3 text-fg-3"
+                    className="absolute text-[10px] leading-3 text-fg-3"
                     style={{ left: i * (cell + GAP) }}
                   >
                     {i === 0 && columns[0]![0]!.getDate() > 20 ? "" : label}
@@ -143,7 +142,7 @@ export function ContributionGraph({
           </div>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-3">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-3">
         <span className="tabular">
           {trainedDays} training day{trainedDays === 1 ? "" : "s"} in the last year
         </span>

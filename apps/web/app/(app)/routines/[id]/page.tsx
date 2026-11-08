@@ -10,7 +10,7 @@ import { ExerciseSelector } from "@/components/exercises/exercise-selector";
 import { ExerciseBlock, type DragHandlers } from "@/components/routines/exercise-block";
 import { DraftTextarea, TitleInput } from "@/components/routines/fields";
 import { confirm, toast } from "@/components/ui/dialog";
-import { Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, Field, Select, Stat } from "@/components/ui/primitives";
+import { Button, ButtonLink, Card, EmptyState, Select } from "@/components/ui/primitives";
 import { useModel } from "@/lib/data/model";
 import { useData } from "@/lib/data/store";
 import {
@@ -34,6 +34,9 @@ function RoutineEditor() {
   const [armed, setArmed] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [drop, setDrop] = useState<{ index: number; after: boolean } | null>(null);
+  // Blocks present when the routine first renders; anything added later gets a short entrance.
+  const [initialIds, setInitialIds] = useState<ReadonlySet<string> | null>(null);
+  if (routine && initialIds === null) setInitialIds(new Set(routine.exercises.map((block) => block.row.id)));
 
   const placements = useMemo(() => supersetPlacements(routine?.exercises.map((block) => block.row) ?? []), [routine]);
   const figures = useMemo(() => (routine ? routineFigures(routine) : null), [routine]);
@@ -125,16 +128,25 @@ function RoutineEditor() {
   return (
     <>
       <div className="mb-6">
-        <button type="button" onClick={() => router.push("/routines")} className="mb-2 inline-flex items-center gap-1 text-xs text-fg-3 hover:text-fg">
-          <span aria-hidden>←</span> Routines
+        <button
+          type="button"
+          onClick={() => router.push("/routines")}
+          className="group mb-3 inline-flex items-center gap-1 text-[13px] text-fg-3 transition-colors duration-150 hover:text-fg"
+        >
+          <span aria-hidden className="transition-transform duration-150 ease-out group-hover:-translate-x-0.5">←</span> Routines
         </button>
         <TitleInput aria-label="Routine name" value={routine.name} maxLength={80} onCommit={(name) => void updateRoutine(routine.id, { name })} />
-        <p className="mt-1 text-sm text-fg-3">
-          {lastDoneLabel(routine.lastPerformedAt)} · changes sync to your phone
+        <p className="tabular mt-1.5 text-sm text-fg-3">
+          <span className="text-fg-2">
+            {figures.exercises} exercise{figures.exercises === 1 ? "" : "s"} · {figures.sets} set{figures.sets === 1 ? "" : "s"}
+            {figures.minutes ? ` · ~${figures.minutes} min` : ""}
+          </span>
+          <span className="mx-2 text-fg-3/50">/</span>
+          {lastDoneLabel(routine.lastPerformedAt)}
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0 space-y-4">
           <DraftTextarea
             aria-label="Routine notes"
@@ -165,7 +177,7 @@ function RoutineEditor() {
                 const next = routine.exercises[index + 1];
                 const linkedToNext = placement !== undefined && next !== undefined && placements.get(next.row.id)?.group === placement.group;
                 return (
-                  <div key={block.row.id} className={linkedToNext ? "" : "mb-4"}>
+                  <div key={block.row.id} className={linkedToNext ? "" : "mb-3"}>
                     <ExerciseBlock
                       routineId={routine.id}
                       block={block}
@@ -176,6 +188,7 @@ function RoutineEditor() {
                       last={lasts.get(block.row.exerciseId) ?? null}
                       onMove={onMove}
                       drag={dragHandlers(index)}
+                      entering={initialIds !== null && !initialIds.has(block.row.id)}
                     />
                   </div>
                 );
@@ -183,60 +196,54 @@ function RoutineEditor() {
               <button
                 type="button"
                 onClick={() => setSelecting(true)}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-line-strong text-sm font-medium text-fg-2 transition-colors hover:border-volt hover:bg-volt-tint hover:text-volt"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-line-strong text-sm font-medium text-fg-2 transition-colors duration-150 hover:bg-surface-2 hover:text-fg active:bg-surface-3"
               >
-                <Plus size={17} /> Add exercises
+                <Plus size={16} /> Add exercises
               </button>
             </div>
           )}
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
-          <Card>
-            <CardBody className="grid grid-cols-3 gap-3">
-              <Stat label="Exercises" value={figures.exercises} />
-              <Stat label="Sets" value={figures.sets} />
-              <Stat label="Time" value={figures.minutes ? `~${figures.minutes}` : "–"} unit={figures.minutes ? "min" : undefined} />
-            </CardBody>
-          </Card>
-
+        {/* Sidebar: plain sections on the page, split by hairlines, so the exercise cards stay the only boxes. */}
+        <aside className="divide-y divide-line lg:sticky lg:top-8 lg:self-start">
           {muscles.length > 0 ? (
-            <Card>
-              <CardHeader title="Sets per muscle" subtitle="Working sets; secondary muscles count half" />
-              <CardBody>
-                <HBarList
-                  items={muscles.slice(0, 8).map((entry) => ({ key: entry.muscle, label: entry.label, value: entry.sets }))}
-                  format={(sets) => (Number.isInteger(sets) ? String(sets) : sets.toFixed(1))}
-                />
-              </CardBody>
-            </Card>
+            <section className="pb-5">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h2 className="text-sm font-semibold tracking-tight text-fg">Sets per muscle</h2>
+                <span className="text-xs text-fg-3">secondary count half</span>
+              </div>
+              <HBarList
+                items={muscles.slice(0, 8).map((entry) => ({ key: entry.muscle, label: entry.label, value: entry.sets }))}
+                format={(sets) => (Number.isInteger(sets) ? String(sets) : sets.toFixed(1))}
+              />
+            </section>
           ) : null}
 
-          <Card>
-            <CardBody className="space-y-4">
-              <Field label="Folder">
-                <Select
-                  value={routine.row.folderId && model.folders.some((folder) => folder.id === routine.row.folderId) ? routine.row.folderId : ""}
-                  onChange={(event) => void updateRoutine(routine.id, { folderId: event.target.value || null })}
-                >
-                  <option value="">No folder</option>
-                  {model.folders.map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" className="flex-1" onClick={() => void onDuplicate()}>
-                  <Copy size={14} /> Duplicate
-                </Button>
-                <Button variant="danger" size="sm" className="flex-1" onClick={() => void onDelete()}>
-                  <Trash2 size={14} /> Delete
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
+          <section className="space-y-3 py-5 first:pt-0">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-[13px] text-fg-2">Folder</span>
+              <Select
+                className="h-8 w-44 rounded-md text-[13px]"
+                value={routine.row.folderId && model.folders.some((folder) => folder.id === routine.row.folderId) ? routine.row.folderId : ""}
+                onChange={(event) => void updateRoutine(routine.id, { folderId: event.target.value || null })}
+              >
+                <option value="">No folder</option>
+                {model.folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" className="flex-1" onClick={() => void onDuplicate()}>
+                <Copy size={14} /> Duplicate
+              </Button>
+              <Button variant="danger" size="sm" className="flex-1" onClick={() => void onDelete()}>
+                <Trash2 size={14} /> Delete
+              </Button>
+            </div>
+          </section>
         </aside>
       </div>
 

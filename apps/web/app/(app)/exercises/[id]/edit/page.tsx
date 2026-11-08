@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 
 import { ExerciseForm } from "@/components/exercises/exercise-form";
-import { ButtonLink, Card, CardBody, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { ButtonLink, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { useModel } from "@/lib/data/model";
 
 export default function EditExercisePage() {
@@ -27,14 +27,10 @@ export default function EditExercisePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-3xl">
       <PageHeader title="Edit exercise" back={{ href: detail, label: exercise.name }} />
-      <Card>
-        <CardBody className="pt-5">
-          {/* Keyed so a sync that changes the row mid-edit does not leave stale defaults behind a re-render. */}
-          <ExerciseForm key={exercise.id} exercise={exercise} onSaved={() => router.replace(detail)} onCancel={() => router.back()} />
-        </CardBody>
-      </Card>
+      {/* Keyed so a sync that changes the row mid-edit does not leave stale defaults behind a re-render. */}
+      <ExerciseForm key={exercise.id} exercise={exercise} onSaved={() => router.replace(detail)} onCancel={() => router.back()} />
     </div>
   );
 }

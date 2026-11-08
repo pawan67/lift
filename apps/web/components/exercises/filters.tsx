@@ -22,7 +22,7 @@ import {
   type Equipment,
   type MuscleGroup,
 } from "@lift/shared";
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { forwardRef, useState, type KeyboardEvent } from "react";
 
 import { Chip } from "@/components/ui/primitives";
@@ -60,8 +60,9 @@ export const SearchBox = forwardRef<
         autoComplete="off"
         spellCheck={false}
         className={cn(
-          "h-10 w-full rounded-xl border border-line bg-surface-2 pr-9 pl-9 text-sm text-fg placeholder:text-fg-3",
-          "transition-colors hover:border-line-strong focus:border-volt focus:outline-none",
+          "h-10 w-full rounded-lg border border-line bg-surface-2 pr-9 pl-9 text-sm text-fg placeholder:text-fg-3",
+          "transition-[border-color,box-shadow] duration-150 ease-out hover:border-line-strong",
+          "focus:border-volt/60 focus:shadow-[0_0_0_3px_rgb(210_243_75/0.12)] focus:outline-none focus-visible:outline-none",
           "[&::-webkit-search-cancel-button]:hidden",
         )}
       />
@@ -70,7 +71,7 @@ export const SearchBox = forwardRef<
           type="button"
           onClick={() => onChange("")}
           aria-label="Clear search"
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-fg-3 hover:bg-surface-3 hover:text-fg"
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-fg-3 transition-colors duration-150 hover:bg-surface-3 hover:text-fg"
         >
           <X size={14} />
         </button>
@@ -90,6 +91,16 @@ function summary(labels: string[], fallback: string): string {
 }
 
 type Panel = "muscle" | "equipment" | null;
+
+/*
+ * The open panel eases in so the chips appear to come from the trigger rather
+ * than pushing the list down in one frame. Entry only: closing is instant, the
+ * list below takes the space back at once.
+ */
+const PANEL = cn(
+  "mt-3 rounded-xl border border-line bg-surface-2/40 p-3",
+  "transition-[opacity,transform] duration-200 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0",
+);
 
 export function ExerciseFilters({
   muscles,
@@ -116,12 +127,16 @@ export function ExerciseFilters({
       aria-expanded={panel === key}
       onClick={() => setPanel((current) => (current === key ? null : key))}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium whitespace-nowrap transition-colors",
-        active ? "border-volt bg-volt-tint text-volt" : "border-line bg-surface-2 text-fg-2 hover:border-line-strong hover:text-fg",
+        "press inline-flex h-8 items-center gap-1.5 rounded-lg border pr-2 pl-3 text-xs font-medium whitespace-nowrap",
+        active ? "border-volt/50 bg-volt-tint text-volt" : "border-line bg-surface-2 text-fg-2 hover:border-line-strong hover:text-fg",
+        panel === key && !active && "border-line-strong text-fg",
       )}
     >
       {label}
-      <ChevronDown size={13} className={cn("transition-transform", panel === key && "rotate-180")} />
+      <ChevronDown
+        size={13}
+        className={cn("opacity-70 transition-transform duration-150 ease-out motion-reduce:transition-none", panel === key && "rotate-180")}
+      />
     </button>
   );
 
@@ -130,7 +145,6 @@ export function ExerciseFilters({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-2">
-        <SlidersHorizontal size={14} className="text-fg-3" aria-hidden />
         {trigger("muscle", summary(muscles.map((m) => MUSCLE_GROUP_LABELS[m]), "Muscle"), muscles.length > 0)}
         {trigger("equipment", summary(equipment.map((e) => EQUIPMENT_LABELS[e]), "Equipment"), equipment.length > 0)}
         {anything ? (
@@ -140,7 +154,7 @@ export function ExerciseFilters({
               onMusclesChange([]);
               onEquipmentChange([]);
             }}
-            className="h-8 rounded-full px-2 text-xs text-fg-3 hover:text-fg"
+            className="h-8 rounded-lg px-2 text-xs text-fg-3 transition-colors duration-150 hover:text-fg"
           >
             Clear filters
           </button>
@@ -148,10 +162,10 @@ export function ExerciseFilters({
       </div>
 
       {panel === "muscle" ? (
-        <div className="mt-3 space-y-3 rounded-xl border border-line bg-surface-2/50 p-3">
+        <div className={cn(PANEL, "space-y-2.5")}>
           {MUSCLES_BY_PART.map((group) => (
             <div key={group.part} className="sm:flex sm:items-start sm:gap-3">
-              <div className="mb-1.5 w-20 shrink-0 pt-2 font-mono text-[10px] tracking-wider text-fg-3 uppercase sm:mb-0">
+              <div className="mb-1.5 w-20 shrink-0 text-xs text-fg-3 sm:mb-0 sm:pt-2">
                 {BODY_PART_LABELS[group.part]}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -168,7 +182,7 @@ export function ExerciseFilters({
       ) : null}
 
       {panel === "equipment" ? (
-        <div className="mt-3 flex flex-wrap gap-1.5 rounded-xl border border-line bg-surface-2/50 p-3">
+        <div className={cn(PANEL, "flex flex-wrap gap-1.5")}>
           {EQUIPMENT.map((item) => (
             <Chip key={item} selected={equipment.includes(item)} onClick={() => onEquipmentChange(toggle(equipment, item))}>
               {EQUIPMENT_LABELS[item]}

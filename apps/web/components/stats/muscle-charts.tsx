@@ -25,11 +25,11 @@ import {
 
 import { CHART_COLORS } from "@/components/charts/charts";
 
-const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-mono)" };
+const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-sans)", style: { fontVariantNumeric: "tabular-nums" } };
 
 function Box({ title, rows }: { title: string; rows: { label: string; value: string; color: string }[] }) {
   return (
-    <div className="rounded-xl border border-line-strong bg-surface-3/95 px-3 py-2 shadow-xl">
+    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
       <div className="mb-1 text-[11px] text-fg-3">{title}</div>
       {rows.map((row) => (
         <div key={row.label} className="flex items-center gap-2 text-sm">
@@ -141,7 +141,7 @@ export function WeeklySetsChart({ data, landmarks }: { data: WeekPoint[]; landma
               <ReferenceLine y={landmarks.mrv} stroke="#e8913c" strokeDasharray="4 4" label={{ value: "MRV", position: "right", fill: "#e8913c", fontSize: 10 }} />
             </>
           ) : null}
-          <Bar dataKey="value" radius={[5, 5, 2, 2]} maxBarSize={32} isAnimationActive={false}>
+          <Bar dataKey="value" radius={[4, 4, 1, 1]} maxBarSize={32} isAnimationActive={false}>
             {data.map((point, index) => (
               <Cell key={index} fill={point.color} />
             ))}

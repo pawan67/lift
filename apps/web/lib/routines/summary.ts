@@ -80,3 +80,8 @@ export function lastDoneLabel(at: number | null): string {
   if (text === "Today" || text === "Yesterday") return `Last done ${text.toLowerCase()}`;
   return text.endsWith("ago") ? `Last done ${text}` : `Last done on ${text}`;
 }
+
+/** The same, for a narrow column: "Today", "3 days ago", "12 Oct", "Never". */
+export function lastDoneShort(at: number | null): string {
+  return at ? relativeDay(at) : "Never";
+}

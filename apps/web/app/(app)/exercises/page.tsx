@@ -1,7 +1,7 @@
 "use client";
 
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 
@@ -61,7 +61,7 @@ export default function ExercisesPage() {
     <>
       <PageHeader
         title="Exercises"
-        subtitle={`${model.exerciseList.length.toLocaleString()} in the library · ${trainedCount} trained · ${customCount} custom`}
+        subtitle={`${model.exerciseList.length.toLocaleString()} in the library · ${trainedCount} trained${customCount ? ` · ${customCount} custom` : ""}`}
         actions={
           <ButtonLink href="/exercises/new" variant="primary">
             <Plus size={16} /> New exercise
@@ -85,11 +85,12 @@ export default function ExercisesPage() {
       </div>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-line px-5 py-2.5 font-mono text-[11px] tracking-wider text-fg-3 uppercase">
-          <span>
+        <div className="flex items-center gap-3 border-b border-line px-4 py-2 text-xs text-fg-3 sm:px-5">
+          <span className="tabular flex-1">
             {rows.length.toLocaleString()} exercise{rows.length === 1 ? "" : "s"}
           </span>
-          <span className="hidden sm:inline">Sessions · last trained</span>
+          <span className="hidden w-16 text-right sm:block">Sessions</span>
+          <span className="hidden w-24 text-right sm:block">Last trained</span>
         </div>
 
         <div ref={listRef}>
@@ -117,24 +118,28 @@ export default function ExercisesPage() {
                   key={item.key}
                   href={`/exercises/${encodeURIComponent(exercise.id)}`}
                   style={{ transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`, height: ROW_HEIGHT }}
-                  className="absolute inset-x-0 top-0 flex items-center gap-3 border-b border-line px-5 transition-colors hover:bg-surface-2"
+                  className="absolute inset-x-0 top-0 flex items-center gap-3 border-b border-line px-4 transition-colors duration-150 hover:bg-surface-2/70 active:bg-surface-2 sm:px-5"
                 >
-                  <ExerciseThumb exercise={exercise} size={42} />
+                  <ExerciseThumb exercise={exercise} size={40} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-sm text-fg">{exercise.name}</span>
+                      <span className="truncate text-sm font-medium text-fg">{exercise.name}</span>
                       {exercise.isCustom ? <Badge>Custom</Badge> : null}
                       {exercise.isArchived ? <Badge tone="warn">Archived</Badge> : null}
                     </div>
-                    <div className="truncate text-xs text-fg-3">{exerciseSubtitle(exercise)}</div>
+                    <div className="mt-0.5 truncate text-xs text-fg-3">{exerciseSubtitle(exercise)}</div>
                   </div>
                   {usage ? (
-                    <div className="shrink-0 text-right">
-                      <div className="tabular text-sm text-fg">{usage.uses}×</div>
-                      <div className="text-xs text-fg-3">{relativeDay(usage.lastUsedAt)}</div>
-                    </div>
+                    <>
+                      {/* Phone: one stacked figure. Desktop: two columns under the header labels. */}
+                      <div className="shrink-0 text-right sm:hidden">
+                        <div className="tabular text-sm text-fg">{usage.uses}×</div>
+                        <div className="text-xs text-fg-3">{relativeDay(usage.lastUsedAt)}</div>
+                      </div>
+                      <span className="tabular hidden w-16 shrink-0 text-right text-sm text-fg sm:block">{usage.uses}</span>
+                      <span className="hidden w-24 shrink-0 text-right text-[13px] text-fg-2 sm:block">{relativeDay(usage.lastUsedAt)}</span>
+                    </>
                   ) : null}
-                  <ChevronRight size={16} className="shrink-0 text-fg-3" />
                 </Link>
               );
             })}

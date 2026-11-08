@@ -42,11 +42,11 @@ export const CHART_COLORS = {
 /** A categorical ramp for series that need telling apart. */
 export const SERIES_COLORS = ["#d2f34b", "#6aa8f7", "#f5c445", "#a78bfa", "#63cc5a", "#e8913c", "#ec5a62", "#5eead4"];
 
-const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-mono)" };
+const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-sans)", style: { fontVariantNumeric: "tabular-nums" } };
 
 function TooltipBox({ title, rows }: { title: ReactNode; rows: { label: ReactNode; value: ReactNode; color?: string }[] }) {
   return (
-    <div className="rounded-xl border border-line-strong bg-surface-3/95 px-3 py-2 shadow-xl backdrop-blur">
+    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
       <div className="mb-1 text-[11px] text-fg-3">{title}</div>
       {rows.map((row, index) => (
         <div key={index} className="flex items-center gap-2 text-sm">
@@ -115,7 +115,7 @@ export function BarChart({
           {average !== undefined && average > 0 ? (
             <ReferenceLine y={average} stroke={CHART_COLORS.axis} strokeDasharray="4 4" />
           ) : null}
-          <Bar dataKey="value" radius={[5, 5, 2, 2]} maxBarSize={36}>
+          <Bar dataKey="value" radius={[4, 4, 1, 1]} maxBarSize={36} isAnimationActive={false}>
             {data.map((point, index) => (
               <Cell key={index} fill={point.highlight === false ? CHART_COLORS.voltDim : color} />
             ))}
@@ -337,9 +337,10 @@ export function HBarList({
             </span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
+            {/* Scaled, not sized, so a change of range glides on the compositor. */}
             <div
-              className="h-full rounded-full"
-              style={{ width: `${Math.max(1.5, (item.value / top) * 100)}%`, background: item.color ?? color }}
+              className="bar-fill h-full rounded-full"
+              style={{ transform: `scaleX(${Math.max(0.015, item.value / top)})`, background: item.color ?? color }}
             />
           </div>
         </li>

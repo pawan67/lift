@@ -94,6 +94,7 @@ export function ExerciseBlock({
   last,
   onMove,
   drag,
+  entering = false,
 }: {
   routineId: string;
   block: RoutineExerciseView;
@@ -105,6 +106,8 @@ export function ExerciseBlock({
   last: LastPerformance | null;
   onMove: (from: number, to: number) => void;
   drag: DragHandlers;
+  /** Added since the editor opened: fades and lifts in once. Blocks there on load just appear. */
+  entering?: boolean;
 }) {
   const f = useFormat();
   const exercise = block.exercise;
@@ -122,7 +125,11 @@ export function ExerciseBlock({
 
   return (
     <div
-      className={cn("relative", drag.dragging && "opacity-40")}
+      className={cn(
+        "relative",
+        drag.dragging && "opacity-40",
+        entering && "transition-[opacity,transform] duration-200 ease-out starting:translate-y-1.5 starting:opacity-0 motion-reduce:starting:translate-y-0",
+      )}
       draggable={drag.draggable}
       onDragStart={drag.onDragStart}
       onDragOver={drag.onDragOver}
@@ -134,27 +141,27 @@ export function ExerciseBlock({
 
       <Card className={cn("overflow-visible", placement && "border-l-2 border-l-volt")}>
         {/* Header */}
-        <div className="flex items-start gap-3 px-4 pt-4 sm:px-5">
+        <div className="flex items-center gap-3 px-3 pt-3 sm:px-4">
           <button
             type="button"
             aria-label={`Drag to reorder ${name}`}
             onPointerDown={drag.onArm}
-            className="-ml-1.5 hidden cursor-grab self-center rounded p-1 text-fg-3 hover:text-fg active:cursor-grabbing sm:block"
+            className="-mr-1 hidden h-8 w-5 cursor-grab items-center justify-center rounded-md text-fg-3 transition-colors duration-150 hover:text-fg active:cursor-grabbing sm:flex"
           >
-            <GripVertical size={16} />
+            <GripVertical size={15} />
           </button>
-          {exercise ? <ExerciseThumb exercise={exercise} size={44} /> : <ExerciseThumb exercise={{ name, thumbnailUrl: null }} size={44} />}
+          {exercise ? <ExerciseThumb exercise={exercise} size={40} /> : <ExerciseThumb exercise={{ name, thumbnailUrl: null }} size={40} />}
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {exercise ? (
-                <Link href={`/exercises/${exercise.id}`} className="line-clamp-2 text-[15px] leading-snug font-semibold text-fg hover:text-volt">
+                <Link href={`/exercises/${exercise.id}`} className="line-clamp-2 text-[15px] leading-snug font-semibold tracking-tight text-fg transition-colors duration-150 hover:text-volt">
                   {name}
                 </Link>
               ) : (
-                <span className="truncate text-[15px] font-semibold text-fg-3">{name}</span>
+                <span className="truncate text-[15px] font-semibold tracking-tight text-fg-3">{name}</span>
               )}
               {placement ? (
-                <span className="rounded-md bg-volt-tint px-1.5 py-0.5 font-mono text-[11px] font-medium text-volt">
+                <span className="tabular rounded-md bg-volt-tint px-1.5 py-px text-[11px] font-medium text-volt">
                   Superset {placement.label}
                   {placement.index}
                 </span>
@@ -172,7 +179,7 @@ export function ExerciseBlock({
               aria-label="Move up"
               disabled={index === 0}
               onClick={() => onMove(index, index - 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-surface-3 hover:text-fg disabled:opacity-30"
+              className="press flex h-8 w-8 items-center justify-center rounded-lg text-fg-3 hover:bg-surface-3 hover:text-fg disabled:opacity-30"
             >
               <ArrowUp size={16} />
             </button>
@@ -181,7 +188,7 @@ export function ExerciseBlock({
               aria-label="Move down"
               disabled={index === count - 1}
               onClick={() => onMove(index, index + 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-surface-3 hover:text-fg disabled:opacity-30"
+              className="press flex h-8 w-8 items-center justify-center rounded-lg text-fg-3 hover:bg-surface-3 hover:text-fg disabled:opacity-30"
             >
               <ArrowDown size={16} />
             </button>
@@ -193,10 +200,10 @@ export function ExerciseBlock({
         </div>
 
         {/* Rest and notes */}
-        <div className="mt-3 flex flex-col gap-2 px-4 sm:flex-row sm:px-5">
+        <div className="mt-3 flex flex-col gap-1.5 px-3 sm:flex-row sm:px-4">
           <Select
             aria-label="Rest between sets"
-            className="h-9 text-xs sm:w-40"
+            className="h-8 rounded-md text-xs sm:w-36"
             value={block.row.restSeconds === null ? "" : String(block.row.restSeconds)}
             onChange={(event) =>
               void updateRoutineExercise(block.row.id, { restSeconds: event.target.value === "" ? null : Number(event.target.value) })
@@ -211,7 +218,7 @@ export function ExerciseBlock({
           </Select>
           <DraftInput
             aria-label="Exercise notes"
-            className="h-9 text-xs"
+            className="h-8 rounded-md text-xs"
             value={block.row.notes ?? ""}
             placeholder="Add a note, e.g. seat height 4, pause at the bottom"
             maxLength={500}
@@ -220,7 +227,7 @@ export function ExerciseBlock({
         </div>
 
         {lastSummary ? (
-          <p className="mt-2.5 truncate px-4 text-xs text-fg-3 sm:px-5" title={lastSummary}>
+          <p className="mt-2 truncate px-3 text-xs text-fg-3 sm:px-4" title={lastSummary}>
             Last time, {formatDateShort(last!.at)}: <span className="tabular text-fg-2">{lastSummary}</span>
           </p>
         ) : null}
@@ -230,7 +237,7 @@ export function ExerciseBlock({
       </Card>
 
       {linkedToNext ? (
-        <div className="flex h-3 justify-start pl-10" aria-hidden>
+        <div className="flex h-2.5 justify-start pl-[33px] sm:pl-[65px]" aria-hidden>
           <div className="w-0.5 bg-volt" />
         </div>
       ) : null}
@@ -299,7 +306,8 @@ function SetTable({
   columns.push({ key: "remove", heading: "" });
 
   const template = columns
-    .map((column) => (column.key === "set" ? "2.75rem" : column.key === "remove" ? "2rem" : column.key === "rpe" ? "minmax(0,0.7fr)" : "minmax(0,1fr)"))
+    // Capped: a three-digit target does not need a 200px cell, and short cells keep the eye on the numbers.
+    .map((column) => (column.key === "set" ? "2.25rem" : column.key === "remove" ? "1.75rem" : column.key === "rpe" ? "minmax(0,4.5rem)" : "minmax(0,6.5rem)"))
     .join(" ");
 
   // Working sets are numbered 1, 2, 3; warm-ups wear a W and do not count.
@@ -309,16 +317,16 @@ function SetTable({
   }, []);
 
   return (
-    <div className="px-4 pt-3 pb-4 sm:px-5">
-      <div className="grid gap-2 pb-1.5 font-mono text-[10px] tracking-wider text-fg-3 uppercase" style={{ gridTemplateColumns: template }}>
+    <div className="px-3 pt-3 pb-2 sm:px-4">
+      <div className="grid gap-1.5 pb-1 text-xs text-fg-3" style={{ gridTemplateColumns: template }}>
         {columns.map((column) => (
-          <div key={column.key} className={cn(column.key !== "set" && "text-center")}>
+          <div key={column.key} className="text-center">
             {column.heading}
           </div>
         ))}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {block.sets.map((set, index) => {
           const ordinal = ordinals[index]!;
           const hint = set.setType === "warmup" ? undefined : last?.sets[ordinal - 1];
@@ -339,7 +347,7 @@ function SetTable({
       <button
         type="button"
         onClick={() => void addRoutineSet(block.row.id)}
-        className="mt-2.5 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-xs font-medium text-fg-2 transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-fg"
+        className="press mt-1 -ml-1.5 inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-fg-3 hover:bg-surface-2 hover:text-fg"
       >
         <Plus size={14} /> Add set
       </button>
@@ -367,7 +375,7 @@ function SetRow({
   const distanceText = (km: number) => trimZeros(toDisplayDistance(km, f.distanceUnit).toFixed(2));
 
   return (
-    <div className="grid items-center gap-2" style={{ gridTemplateColumns: template }}>
+    <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: template }}>
       <SetTypePicker setType={set.setType} ordinal={ordinal} onPick={(setType) => void updateRoutineSet(set.id, { setType })} />
 
       {fields.weight ? (
@@ -440,19 +448,20 @@ function SetRow({
         aria-label="Remove set"
         disabled={!canRemove}
         onClick={() => void deleteRoutineSet(set.id)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-alarm/10 hover:text-alarm disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-fg-3"
+        className="press flex h-7 w-7 items-center justify-center justify-self-center rounded-md text-fg-3 hover:bg-alarm/10 hover:text-alarm disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-fg-3"
       >
-        <X size={15} />
+        <X size={14} />
       </button>
     </div>
   );
 }
 
+/** A plain number for a working set; the special types wear their colour, since that is the point of them. */
 const SET_TYPE_TONE: Record<SetType, string> = {
-  normal: "bg-surface-3 text-fg",
-  warmup: "bg-warn/15 text-warn",
-  drop: "bg-info/15 text-info",
-  failure: "bg-alarm/15 text-alarm",
+  normal: "text-fg-2 hover:bg-surface-3 hover:text-fg",
+  warmup: "bg-warn/12 text-warn hover:bg-warn/20 hover:text-warn",
+  drop: "bg-info/12 text-info hover:bg-info/20 hover:text-info",
+  failure: "bg-alarm/12 text-alarm hover:bg-alarm/20 hover:text-alarm",
 };
 
 function SetTypePicker({ setType, ordinal, onPick }: { setType: SetType; ordinal: number; onPick: (type: SetType) => void }) {
@@ -460,12 +469,12 @@ function SetTypePicker({ setType, ordinal, onPick }: { setType: SetType; ordinal
     <ActionMenu
       align="left"
       label={`${SET_TYPE_LABELS[setType]}. Change set type`}
-      triggerClassName={cn("h-9 w-full font-mono text-sm font-semibold", SET_TYPE_TONE[setType], "hover:brightness-125")}
+      triggerClassName={cn("tabular h-8 w-full rounded-md text-[13px] font-semibold", SET_TYPE_TONE[setType])}
       trigger={SET_TYPE_BADGE[setType] ?? String(ordinal)}
       items={SET_TYPE_ORDER.map((type) => ({
         label: (
           <span className="flex items-center gap-2.5">
-            <span className={cn("flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs", SET_TYPE_TONE[type])}>
+            <span className={cn("tabular flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold", SET_TYPE_TONE[type], type === "normal" && "bg-surface-3")}>
               {SET_TYPE_BADGE[type] ?? "1"}
             </span>
             {SET_TYPE_LABELS[type]}

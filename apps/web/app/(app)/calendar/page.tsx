@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { SessionRow } from "@/components/overview/session-row";
-import { Button, Card, CardBody, CardHeader, EmptyState, PageHeader, Stat } from "@/components/ui/primitives";
+import { Button, Card, CardBody, EmptyState, PageHeader, Stat } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { integer, useFormat } from "@/lib/format";
@@ -70,12 +70,12 @@ function CalendarScreen() {
 
   return (
     <>
-      <PageHeader title="Calendar" subtitle="Which days you trained, shaded by volume against your typical session" />
+      <PageHeader title="Calendar" />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <div className="flex items-center justify-between gap-3 px-5 pt-5">
-            <h2 className="text-lg font-semibold">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
+            <h2 className="text-lg font-semibold tracking-tight">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
             <div className="flex items-center gap-1">
               {!atEnd ? (
                 <Button
@@ -100,7 +100,7 @@ function CalendarScreen() {
           <CardBody>
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               {headings.map((heading, i) => (
-                <div key={i} className="pb-1 text-center font-mono text-[10px] tracking-wider text-fg-3 uppercase">
+                <div key={i} className="pb-1 text-center text-xs text-fg-3">
                   <span className="sm:hidden">{heading.narrow}</span>
                   <span className="hidden sm:inline">{heading.short}</span>
                 </div>
@@ -123,10 +123,10 @@ function CalendarScreen() {
                       entry ? `, ${entry.sessions.length} session${entry.sessions.length === 1 ? "" : "s"}` : ""
                     }`}
                     className={cn(
-                      "relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm transition-[box-shadow,background-color] sm:rounded-xl",
+                      "press relative flex aspect-square flex-col items-center justify-center rounded-md text-sm sm:rounded-lg",
                       !entry && !future && "bg-surface-2 text-fg-2 hover:bg-surface-3",
                       future && "text-fg-3/50",
-                      isSelected && "ring-2 ring-fg",
+                      isSelected && "ring-2 ring-fg ring-offset-2 ring-offset-surface",
                       !isSelected && key === todayKey && "ring-1 ring-fg-3",
                     )}
                     style={entry ? { background: DAY_SHADES[step], color: DAY_SHADE_TEXT[step] } : undefined}
@@ -161,40 +161,48 @@ function CalendarScreen() {
           </CardBody>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader title="This month" subtitle={previous.sessions > 0 ? `Previous month: ${previous.sessions} sessions, ${f.volume(previous.volumeKg)}` : undefined} />
-            <CardBody className="grid grid-cols-2 gap-x-4 gap-y-5">
+        <div className="min-w-0 space-y-8">
+          <section>
+            <h2 className="mb-3 text-sm font-semibold tracking-tight text-fg">This month</h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
               <Stat label="Sessions" value={integer(summary.sessions)} />
               <Stat label="Active days" value={`${summary.activeDays}`} unit={`/ ${summary.daysInMonth}`} />
               <Stat label="Volume" value={f.volumeValue(summary.volumeKg)} unit={f.weightUnit} />
               <Stat label="Time" value={f.durationShort(summary.durationSeconds)} />
               <Stat label="Sets" value={integer(summary.sets)} />
               <Stat label="Records" value={integer(summary.prCount)} />
-            </CardBody>
-          </Card>
+            </div>
+            {previous.sessions > 0 ? (
+              <p className="tabular mt-4 border-t border-line pt-3 text-xs text-fg-3">
+                Previous month: {previous.sessions} sessions, {f.volume(previous.volumeKg)}
+              </p>
+            ) : null}
+          </section>
 
-          <Card className="overflow-hidden">
-            <CardHeader
-              title={selectedDate ? selectedDate.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) : "Pick a day"}
-              subtitle={
-                selectedDay
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold tracking-tight text-fg">
+                {selectedDate ? selectedDate.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) : "No day selected"}
+              </h2>
+              <span className="tabular shrink-0 text-[13px] text-fg-3">
+                {selectedDay
                   ? `${selectedDay.sessions.length} session${selectedDay.sessions.length === 1 ? "" : "s"}, ${f.volume(selectedDay.volumeKg)}`
                   : selectedDate
                     ? "Rest day"
-                    : "Select a day to see what you trained"
-              }
-            />
+                    : null}
+              </span>
+            </div>
             {selectedDay ? (
-              <div className="mt-3 border-t border-line">
+              // Keyed by day so a new pick fades in, which marks that the list below changed.
+              <Card key={selected} className="overflow-hidden transition-opacity duration-150 ease-out starting:opacity-0">
                 {selectedDay.sessions.map((session) => (
                   <SessionRow key={session.id} session={session} f={f} showDate={false} />
                 ))}
-              </div>
-            ) : (
-              <div className="pb-5" />
-            )}
-          </Card>
+              </Card>
+            ) : !selectedDate ? (
+              <p className="text-sm text-fg-3">Pick a day to see what you trained.</p>
+            ) : null}
+          </section>
         </div>
       </div>
     </>

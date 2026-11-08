@@ -1,18 +1,19 @@
 "use client";
 
 import { EQUIPMENT_LABELS, MUSCLE_GROUP_LABELS } from "@lift/shared";
-import { Medal } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
+import { quietChange, toneClass } from "@/components/stats/delta";
 import { ProgressChart, seriesColor } from "@/components/stats/progress-chart";
 import { RangePicker } from "@/components/stats/range-picker";
+import { Section, TH } from "@/components/stats/section";
 import { StatsNav } from "@/components/stats/stats-nav";
 import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
-import { changeLabel, formatDateShort, integer, useFormat } from "@/lib/format";
+import { formatDateShort, integer, useFormat } from "@/lib/format";
 import {
   LEADERBOARD_MIN_SESSIONS,
   leaderboard,
@@ -80,10 +81,10 @@ export default function LiftsPage() {
         </Card>
       ) : (
         <>
-          <Card className="mb-6">
+          <Card className="mb-10">
             <CardHeader
               title="Estimated 1RM"
-              subtitle={`Best set per session, ${f.weightUnit}. Pick up to ${MAX_SERIES} lifts.`}
+              subtitle={`Best set per session, ${f.weightUnit}. Up to ${MAX_SERIES} lifts.`}
             />
             <CardBody>
               <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
@@ -105,19 +106,18 @@ export default function LiftsPage() {
             </CardBody>
           </Card>
 
-          <Card className="mb-6">
-            <CardHeader title="Main exercises" subtitle="Most trained first. Change compares best est. 1RM with the previous period." />
-            <div className="overflow-x-auto pt-3">
+          <Section className="mb-12" title="Main exercises" meta="most trained first">
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
               <table className="w-full text-sm sm:min-w-[720px]">
                 <thead>
-                  <tr className="text-left font-mono text-[11px] tracking-wider text-fg-3 uppercase">
-                    <th className="py-2 pr-3 pl-5 font-normal">Exercise</th>
-                    <th className="px-2 py-2 text-right font-normal sm:px-3"><span className="sm:hidden">Sess.</span><span className="hidden sm:inline">Sessions</span></th>
-                    <th className="hidden px-3 py-2 text-right font-normal sm:table-cell">Sets</th>
-                    <th className="px-2 py-2 text-right font-normal whitespace-nowrap sm:px-3"><span className="sm:hidden">1RM</span><span className="hidden sm:inline">Est. 1RM</span></th>
-                    <th className="hidden px-3 py-2 text-right font-normal sm:table-cell">Heaviest</th>
-                    <th className="hidden px-3 py-2 text-right font-normal sm:table-cell">Volume</th>
-                    <th className="py-2 pr-5 pl-2 text-right font-normal sm:pl-3">Change</th>
+                  <tr className="text-left">
+                    <th className={cn(TH, "pr-3")}>Exercise</th>
+                    <th className={cn(TH, "px-2 text-right sm:px-3")}><span className="sm:hidden">Sess.</span><span className="hidden sm:inline">Sessions</span></th>
+                    <th className={cn(TH, "hidden px-3 text-right sm:table-cell")}>Sets</th>
+                    <th className={cn(TH, "px-2 text-right whitespace-nowrap sm:px-3")}><span className="sm:hidden">1RM</span><span className="hidden sm:inline">Est. 1RM</span></th>
+                    <th className={cn(TH, "hidden px-3 text-right sm:table-cell")}>Heaviest</th>
+                    <th className={cn(TH, "hidden px-3 text-right sm:table-cell")}>Volume</th>
+                    <th className={cn(TH, "pl-2 text-right whitespace-nowrap sm:pl-3")} title="Best est. 1RM against the previous period">Change</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -128,83 +128,75 @@ export default function LiftsPage() {
               </table>
             </div>
             {lifts.length > TABLE_PREVIEW ? (
-              <div className="border-t border-line px-5 py-3">
-                <Button variant="ghost" size="sm" onClick={() => setShowAll((value) => !value)}>
+              <div className="border-t border-line pt-2">
+                <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setShowAll((value) => !value)}>
                   {showAll ? "Show fewer" : `Show all ${lifts.length}`}
                 </Button>
               </div>
-            ) : (
-              <div className="h-3" />
-            )}
-          </Card>
+            ) : null}
+          </Section>
         </>
       )}
 
-      <Card>
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              <Medal size={16} className="text-record" /> Leaderboard
-            </span>
-          }
-          subtitle={
-            model.latestBodyweightKg
-              ? `Free-weight lifts by best est. 1RM, all time. Multiples use your latest bodyweight, ${f.weight(model.latestBodyweightKg)}.`
-              : "Free-weight lifts by best est. 1RM, all time. Log a bodyweight to see multiples."
-          }
-        />
+      <Section
+        title="Leaderboard"
+        meta={
+          model.latestBodyweightKg
+            ? `free weights, all time, multiples of ${f.weight(model.latestBodyweightKg)}`
+            : "free weights, all time"
+        }
+      >
         {board.qualified.length === 0 ? (
           <EmptyState
             title="Nothing qualifies yet"
             body={`A lift joins the board after ${LEADERBOARD_MIN_SESSIONS} sessions with a barbell, dumbbell, kettlebell, Smith machine or weighted bodyweight.`}
           />
         ) : (
-          <ol className="pt-3 pb-2">
-            {board.qualified.map((entry, index) => (
-              <li key={entry.exercise.id}>
-                <Link
-                  href={`/exercises/${entry.exercise.id}`}
-                  className="flex items-center gap-3 border-t border-line px-5 py-3 transition-colors first:border-t-0 hover:bg-surface-2"
-                >
-                  <span
-                    className={cn(
-                      "tabular w-6 shrink-0 text-center font-mono text-sm",
-                      index === 0 ? "text-record" : index < 3 ? "text-fg" : "text-fg-3",
-                    )}
+          <>
+            <div className={cn(TH, "flex gap-3")}>
+              <span className="flex-1 pl-20">Lift</span>
+              <span className="hidden w-16 text-right sm:inline">{model.latestBodyweightKg ? "× BW" : null}</span>
+              <span className="w-20 text-right">Est. 1RM</span>
+            </div>
+            <ol>
+              {board.qualified.map((entry, index) => (
+                <li key={entry.exercise.id}>
+                  <Link
+                    href={`/exercises/${entry.exercise.id}`}
+                    className="-mx-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors duration-150 hover:bg-surface-2"
                   >
-                    {index + 1}
-                  </span>
-                  <ExerciseThumb exercise={entry.exercise} size={36} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-fg">{entry.exercise.name}</div>
-                    <div className="truncate text-xs text-fg-3">
-                      {f.weight(entry.bestSetWeightKg)} × {entry.bestSetReps} on {formatDateShort(entry.achievedAt)} · {entry.sessions} sessions
-                    </div>
-                  </div>
-                  {entry.bodyweightMultiple !== null ? (
-                    <span className="tabular hidden rounded-md bg-surface-3 px-2 py-0.5 text-xs text-fg-2 sm:inline">
-                      {entry.bodyweightMultiple.toFixed(2)}× BW
+                    <span className={cn("tabular w-6 shrink-0 text-right text-sm", index < 3 ? "font-medium text-fg" : "text-fg-3")}>
+                      {index + 1}
                     </span>
-                  ) : null}
-                  <div className="w-20 text-right">
-                    <div className="tabular text-sm font-semibold text-fg">{f.weight(entry.bestOneRepMaxKg)}</div>
-                    <div className="text-[11px] text-fg-3">est. 1RM</div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ol>
+                    <ExerciseThumb exercise={entry.exercise} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm text-fg">{entry.exercise.name}</div>
+                      <div className="tabular truncate text-xs text-fg-3">
+                        {f.weight(entry.bestSetWeightKg)} × {entry.bestSetReps} on {formatDateShort(entry.achievedAt)}, {entry.sessions} sessions
+                      </div>
+                    </div>
+                    <span className="tabular hidden w-16 text-right text-sm text-fg-2 sm:inline">
+                      {entry.bodyweightMultiple !== null ? `${entry.bodyweightMultiple.toFixed(2)}×` : ""}
+                    </span>
+                    <span className={cn("tabular w-20 text-right text-sm font-semibold", index === 0 ? "text-volt" : "text-fg")}>
+                      {f.weight(entry.bestOneRepMaxKg)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
         {board.pending.length > 0 ? (
-          <div className="border-t border-line px-5 py-3">
-            <Button variant="ghost" size="sm" onClick={() => setShowPending((value) => !value)}>
+          <div className="mt-1 border-t border-line pt-2">
+            <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setShowPending((value) => !value)} aria-expanded={showPending}>
               {showPending ? "Hide" : "Show"} {board.pending.length} not yet on the board
             </Button>
             {showPending ? (
-              <ul className="mt-2 grid gap-x-6 sm:grid-cols-2">
+              <ul className="mt-1 grid gap-x-10 transition-[opacity,transform] duration-200 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:transform-none sm:grid-cols-2">
                 {board.pending.map((entry) => (
                   <li key={entry.exercise.id} className="flex items-center justify-between gap-3 border-t border-line py-2 text-sm">
-                    <Link href={`/exercises/${entry.exercise.id}`} className="truncate text-fg-2 hover:text-fg">
+                    <Link href={`/exercises/${entry.exercise.id}`} className="truncate text-fg-2 transition-colors duration-150 hover:text-fg">
                       {entry.exercise.name}
                     </Link>
                     <span className="tabular shrink-0 text-xs text-fg-3">
@@ -216,39 +208,34 @@ export default function LiftsPage() {
             ) : null}
           </div>
         ) : null}
-      </Card>
+      </Section>
     </>
   );
 }
 
 function LiftRow({ lift, previous, hasPrevious }: { lift: ExerciseSummary; previous: number | null; hasPrevious: boolean }) {
   const f = useFormat();
-  const delta = previous !== null && lift.bestOneRepMaxKg > 0 ? changeLabel(lift.bestOneRepMaxKg, previous) : null;
+  const delta = previous !== null && lift.bestOneRepMaxKg > 0 ? quietChange(lift.bestOneRepMaxKg, previous) : null;
 
   return (
-    <tr className="border-t border-line transition-colors hover:bg-surface-2">
-      <td className="w-full max-w-0 py-2.5 pr-2 pl-5 sm:w-auto sm:max-w-none sm:pr-3">
+    <tr className="border-t border-line transition-colors duration-150 hover:bg-surface-2/60">
+      <td className="w-full max-w-0 py-2 pr-2 sm:w-auto sm:max-w-none sm:pr-3">
         <Link href={`/exercises/${lift.exercise.id}`} className="flex items-center gap-3">
           <ExerciseThumb exercise={lift.exercise} size={32} />
           <span className="min-w-0">
             <span className="block truncate text-fg">{lift.exercise.name}</span>
             <span className="block truncate text-xs text-fg-3">
-              {MUSCLE_GROUP_LABELS[lift.exercise.primaryMuscle]} · {EQUIPMENT_LABELS[lift.exercise.equipment]}
+              {MUSCLE_GROUP_LABELS[lift.exercise.primaryMuscle]}, {EQUIPMENT_LABELS[lift.exercise.equipment].toLowerCase()}
             </span>
           </span>
         </Link>
       </td>
-      <td className="tabular px-2 py-2.5 text-right whitespace-nowrap text-fg sm:px-3">{lift.times}</td>
-      <td className="tabular hidden px-3 py-2.5 text-right text-fg-2 sm:table-cell">{lift.sets}</td>
-      <td className="tabular px-2 py-2.5 text-right font-medium whitespace-nowrap text-fg sm:px-3">{lift.bestOneRepMaxKg > 0 ? f.weight(lift.bestOneRepMaxKg) : "–"}</td>
-      <td className="tabular hidden px-3 py-2.5 text-right text-fg-2 sm:table-cell">{lift.heaviestKg > 0 ? f.weight(lift.heaviestKg) : "–"}</td>
-      <td className="tabular hidden px-3 py-2.5 text-right text-fg-2 sm:table-cell">{lift.volumeKg > 0 ? f.volume(lift.volumeKg) : "–"}</td>
-      <td
-        className={cn(
-          "tabular py-2.5 pr-5 pl-3 text-right text-xs whitespace-nowrap",
-          delta?.tone === "up" ? "text-signal" : delta?.tone === "down" ? "text-alarm" : "text-fg-3",
-        )}
-      >
+      <td className="tabular px-2 py-2 text-right whitespace-nowrap text-fg sm:px-3">{lift.times}</td>
+      <td className="tabular hidden px-3 py-2 text-right text-fg-2 sm:table-cell">{lift.sets}</td>
+      <td className="tabular px-2 py-2 text-right font-medium whitespace-nowrap text-fg sm:px-3">{lift.bestOneRepMaxKg > 0 ? f.weight(lift.bestOneRepMaxKg) : <span className="font-normal text-fg-3">–</span>}</td>
+      <td className="tabular hidden px-3 py-2 text-right text-fg-2 sm:table-cell">{lift.heaviestKg > 0 ? f.weight(lift.heaviestKg) : <span className="text-fg-3">–</span>}</td>
+      <td className="tabular hidden px-3 py-2 text-right text-fg-2 sm:table-cell">{lift.volumeKg > 0 ? f.volume(lift.volumeKg) : <span className="text-fg-3">–</span>}</td>
+      <td className={cn("tabular py-2 pl-3 text-right text-xs whitespace-nowrap", toneClass(delta?.tone))}>
         {delta ? delta.text : hasPrevious && previous === null && lift.bestOneRepMaxKg > 0 ? "New" : ""}
       </td>
     </tr>

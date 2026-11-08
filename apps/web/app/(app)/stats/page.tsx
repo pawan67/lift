@@ -1,18 +1,20 @@
 "use client";
 
 import { BODY_PART_LABELS, BODY_PARTS, type BodyPart } from "@lift/shared";
-import { CalendarDays, ChevronRight, FileText, History, LineChart, PieChart, Trophy, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { BarChart, HBarList, type SeriesPoint } from "@/components/charts/charts";
+import { rankColor } from "@/components/overview/body-parts";
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
 import { RangePicker } from "@/components/stats/range-picker";
 import { BodyControl, HeaderControl } from "@/components/stats/card-control";
+import { quietChange } from "@/components/stats/delta";
+import { MoreLink, Section, TH } from "@/components/stats/section";
 import { StatsNav } from "@/components/stats/stats-nav";
-import { Card, CardBody, CardHeader, EmptyState, ListRow, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
+import { Card, CardBody, CardHeader, EmptyState, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
 import { useModel } from "@/lib/data/model";
-import { changeLabel, compactNumber, integer, useFormat } from "@/lib/format";
+import { compactNumber, integer, useFormat } from "@/lib/format";
 import { useSettings } from "@/lib/settings";
 import {
   bucketSessions,
@@ -126,49 +128,43 @@ export default function StatsPage() {
 
   const topLifts = useMemo(() => summarizeExercises(model, span).slice(0, 5), [model, span]);
 
-  const change = (now: number, before: number | undefined) => (previous && before !== undefined ? changeLabel(now, before) : null);
   const stat = (label: string, value: string, unit: string | undefined, now: number, before: number | undefined) => {
-    const delta = change(now, before);
-    return (
-      <Stat
-        label={label}
-        value={value}
-        unit={unit}
-        hint={delta ? `${delta.text} vs previous` : previous ? "Nothing before" : undefined}
-        tone={delta?.tone}
-      />
-    );
+    const delta = previous && before !== undefined ? quietChange(now, before) : null;
+    return <Stat label={label} value={value} unit={unit} hint={delta ? delta.text : previous ? "Nothing before" : undefined} tone={delta?.tone} size="sm" />;
   };
 
   const empty = totals.sessions === 0;
+  const metricNote = metric === "volume" ? `Working-set volume, ${f.weightUnit}` : metric === "sets" ? "Working sets" : undefined;
 
   return (
     <>
-      <PageHeader title="Statistics" subtitle={window.label} actions={<RangePicker value={range} onChange={setRange} />} />
+      <PageHeader
+        title="Statistics"
+        subtitle={previous ? `${window.label}, against the ${window.label.replace(/^Last /, "").toLowerCase()} before` : window.label}
+        actions={<RangePicker value={range} onChange={setRange} />}
+      />
       <StatsNav />
 
-      <Card className="mb-6">
-        <CardBody className="grid grid-cols-2 gap-x-6 gap-y-6 pt-5 sm:grid-cols-4 xl:grid-cols-7">
-          {stat("Sessions", integer(totals.sessions), undefined, totals.sessions, previous?.sessions)}
-          {stat("Volume", f.volumeValue(totals.volumeKg), f.weightUnit, totals.volumeKg, previous?.volumeKg)}
-          {stat("Sets", integer(totals.sets), undefined, totals.sets, previous?.sets)}
-          {stat("Reps", integer(totals.reps), undefined, totals.reps, previous?.reps)}
-          {stat("Time", f.durationShort(totals.durationSeconds), undefined, totals.durationSeconds, previous?.durationSeconds)}
-          {stat(
-            "Avg session",
-            totals.sessions ? f.durationShort(avgSession(totals)) : "–",
-            undefined,
-            avgSession(totals),
-            previous ? avgSession(previous) : undefined,
-          )}
-          {stat("Records", integer(totals.records), undefined, totals.records, previous?.records)}
-        </CardBody>
-      </Card>
+      <div className="mb-8 grid grid-cols-2 gap-x-6 gap-y-5 border-b border-line pb-6 sm:grid-cols-4 xl:grid-cols-7">
+        {stat("Sessions", integer(totals.sessions), undefined, totals.sessions, previous?.sessions)}
+        {stat("Volume", f.volumeValue(totals.volumeKg), f.weightUnit, totals.volumeKg, previous?.volumeKg)}
+        {stat("Sets", integer(totals.sets), undefined, totals.sets, previous?.sets)}
+        {stat("Reps", integer(totals.reps), undefined, totals.reps, previous?.reps)}
+        {stat("Time", f.durationShort(totals.durationSeconds), undefined, totals.durationSeconds, previous?.durationSeconds)}
+        {stat(
+          "Avg session",
+          totals.sessions ? f.durationShort(avgSession(totals)) : "–",
+          undefined,
+          avgSession(totals),
+          previous ? avgSession(previous) : undefined,
+        )}
+        {stat("Records", integer(totals.records), undefined, totals.records, previous?.records)}
+      </div>
 
-      <Card className="mb-6">
+      <Card className="mb-10">
         <CardHeader
           title="Over time"
-          subtitle={metric === "volume" ? `Working-set volume, ${f.weightUnit}` : METRICS.find((m) => m.value === metric)?.label}
+          subtitle={metricNote}
           action={<HeaderControl><Segmented size="sm" value={metric} options={METRICS} onChange={setMetric} /></HeaderControl>}
         />
         <CardBody>
@@ -187,92 +183,59 @@ export default function StatsPage() {
         </CardBody>
       </Card>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
-        <Card>
-          <CardHeader
-            title="Where the sets went"
-            subtitle="Direct working sets by body part"
-            action={<SeeAll href="/stats/muscles" />}
-          />
-          <CardBody>
-            {bodyParts.every((entry) => entry.sets === 0) ? (
-              <EmptyState title="No working sets in this range" className="py-8" />
-            ) : (
+      <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2">
+        <Section title="Sets by body part" meta="direct working sets" action={<MoreLink href="/stats/muscles">Muscles</MoreLink>}>
+          {bodyParts.every((entry) => entry.sets === 0) ? (
+            <EmptyState title="No working sets in this range" className="py-8" />
+          ) : (
+            <div className="pt-3">
               <HBarList
-                items={bodyParts.map((entry) => ({
+                items={bodyParts.map((entry, rank) => ({
                   key: entry.part,
                   label: BODY_PART_LABELS[entry.part as BodyPart],
                   value: entry.sets,
+                  color: rankColor(rank),
                 }))}
-                format={(value) => `${integer(value)} sets`}
+                format={(value) => integer(value)}
               />
-            )}
-          </CardBody>
-        </Card>
+            </div>
+          )}
+        </Section>
 
-        <Card>
-          <CardHeader title="Most trained lifts" subtitle="By sessions in this range" action={<SeeAll href="/stats/lifts" />} />
-          <div className="pt-3 pb-2">
-            {topLifts.length === 0 ? (
-              <EmptyState title="No lifts in this range" className="py-8" />
-            ) : (
-              topLifts.map((lift) => (
-                <ListRow key={lift.exercise.id} href={`/exercises/${lift.exercise.id}`}>
-                  <ExerciseThumb exercise={lift.exercise} size={36} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-fg">{lift.exercise.name}</div>
-                    <div className="text-xs text-fg-3">
-                      {lift.times} {lift.times === 1 ? "session" : "sessions"} · {lift.sets} sets
-                    </div>
-                  </div>
-                  {lift.bestOneRepMaxKg > 0 ? (
-                    <div className="text-right">
-                      <div className="tabular text-sm font-medium text-fg">{f.weight(lift.bestOneRepMaxKg)}</div>
-                      <div className="text-[11px] text-fg-3">est. 1RM</div>
-                    </div>
-                  ) : null}
-                </ListRow>
-              ))
-            )}
-          </div>
-        </Card>
+        <Section title="Most trained lifts" meta="by sessions" action={<MoreLink href="/stats/lifts">Lifts</MoreLink>}>
+          {topLifts.length === 0 ? (
+            <EmptyState title="No lifts in this range" className="py-8" />
+          ) : (
+            <>
+              <div className={`flex justify-end ${TH}`}>Best est. 1RM</div>
+              <ul>
+                {topLifts.map((lift) => (
+                  <li key={lift.exercise.id}>
+                    <Link
+                      href={`/exercises/${lift.exercise.id}`}
+                      className="-mx-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors duration-150 hover:bg-surface-2"
+                    >
+                      <ExerciseThumb exercise={lift.exercise} size={32} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm text-fg">{lift.exercise.name}</div>
+                        <div className="tabular text-xs text-fg-3">
+                          {lift.times} {lift.times === 1 ? "session" : "sessions"}, {lift.sets} sets
+                        </div>
+                      </div>
+                      <div className="tabular text-sm font-medium text-fg">{lift.bestOneRepMaxKg > 0 ? f.weight(lift.bestOneRepMaxKg) : <span className="text-fg-3">–</span>}</div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Section>
       </div>
 
-      <h2 className="mb-3 font-mono text-[11px] tracking-widest text-fg-3 uppercase">Explore</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Explore href="/stats/muscles" icon={PieChart} title="Muscles" body="Weekly sets against growth landmarks, body-part balance" />
-        <Explore href="/stats/lifts" icon={LineChart} title="Lifts" body="Main exercises, estimated 1RM progress, leaderboard" />
-        <Explore href="/stats/monthly" icon={CalendarDays} title="Monthly report" body="One month against the twelve around it" />
-        <Explore href="/stats/report" icon={FileText} title="Training report" body="Last week, month or quarter, as a page or a PDF" />
-        <Explore href="/history" icon={History} title="History" body="Every session, set by set" />
-        <Explore href="/records" icon={Trophy} title="Personal records" body="Bests per exercise, by kind and date" />
+      <div className="mt-12 flex flex-wrap gap-x-6 gap-y-2 border-t border-line pt-4">
+        <MoreLink href="/history">Session history</MoreLink>
+        <MoreLink href="/records">Personal records</MoreLink>
       </div>
     </>
-  );
-}
-
-function SeeAll({ href }: { href: string }) {
-  return (
-    <Link href={href} className="inline-flex items-center gap-0.5 text-xs text-fg-3 hover:text-volt">
-      Details <ChevronRight size={14} />
-    </Link>
-  );
-}
-
-function Explore({ href, icon: Icon, title, body }: { href: string; icon: LucideIcon; title: string; body: string }) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-start gap-3 rounded-(--radius-card) border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-2"
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-volt-tint text-volt">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-fg">{title}</div>
-        <div className="mt-0.5 text-xs text-fg-3">{body}</div>
-      </div>
-      <ChevronRight size={16} className="mt-2 text-fg-3 transition-transform group-hover:translate-x-0.5" />
-    </Link>
   );
 }

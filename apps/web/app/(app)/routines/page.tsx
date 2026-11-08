@@ -23,7 +23,7 @@ import {
   moveRoutineToFolder,
   renameFolder,
 } from "@/lib/routines/repository";
-import { lastDoneLabel, routineFigures } from "@/lib/routines/summary";
+import { lastDoneLabel, lastDoneShort, routineFigures } from "@/lib/routines/summary";
 
 interface Group {
   folder: RoutineFolderRow | null;
@@ -122,16 +122,16 @@ export default function RoutinesPage() {
           />
         </Card>
       ) : (
-        <div className="space-y-10">
+        <div className="space-y-8">
           {groups.map((group, groupIndex) => {
             const folderIndex = group.folder ? groupIndex : -1;
             if (!group.folder && group.routines.length === 0) return null;
             return (
               <section key={group.folder?.id ?? "none"}>
                 {group.folder || hasFolders ? (
-                  <div className="mb-3 flex items-center gap-2">
-                    {group.folder ? <Folder size={16} className="text-fg-3" /> : null}
-                    <h2 className="text-sm font-semibold text-fg">{group.folder?.name ?? "Not in a folder"}</h2>
+                  <div className="mb-2 flex h-8 items-center gap-2">
+                    {group.folder ? <Folder size={15} className="text-fg-3" /> : null}
+                    <h2 className="text-sm font-semibold tracking-tight text-fg">{group.folder?.name ?? "Not in a folder"}</h2>
                     <span className="tabular text-xs text-fg-3">{group.routines.length}</span>
                     {group.folder ? (
                       <ActionMenu
@@ -165,7 +165,7 @@ export default function RoutinesPage() {
                 ) : null}
 
                 {group.routines.length === 0 ? (
-                  <div className="rounded-(--radius-card) border border-dashed border-line px-5 py-6 text-center text-sm text-fg-3">
+                  <div className="rounded-(--radius-card) border border-dashed border-line px-4 py-4 text-sm text-fg-3">
                     Empty folder.{" "}
                     <Link href={`/routines/new?folder=${group.folder?.id}`} className="text-volt hover:underline">
                       Create a routine in it
@@ -173,9 +173,9 @@ export default function RoutinesPage() {
                     or move one here.
                   </div>
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <Card className="overflow-visible">
                     {group.routines.map((routine, index) => (
-                      <RoutineCard
+                      <RoutineRow
                         key={routine.id}
                         routine={routine}
                         menu={[
@@ -194,7 +194,7 @@ export default function RoutinesPage() {
                         ]}
                       />
                     ))}
-                  </div>
+                  </Card>
                 )}
               </section>
             );
@@ -234,35 +234,48 @@ export default function RoutinesPage() {
   );
 }
 
-function RoutineCard({ routine, menu }: { routine: RoutineView; menu: Parameters<typeof ActionMenu>[0]["items"] }) {
+/**
+ * One routine as a row: name and its exercises on the left, the figures in
+ * aligned columns, when it was last done, then its menu. A table reads faster
+ * than a wall of identical cards once there are more than a handful.
+ */
+function RoutineRow({ routine, menu }: { routine: RoutineView; menu: Parameters<typeof ActionMenu>[0]["items"] }) {
   const figures = routineFigures(routine);
   const names = routine.exercises.map((block) => block.exercise?.name ?? "Unknown exercise");
-  const shown = names.slice(0, 4);
+  const done = lastDoneLabel(routine.lastPerformedAt);
 
   return (
-    <Card className="group relative transition-colors hover:border-line-strong">
-      <Link href={`/routines/${routine.id}`} className="block px-5 pt-4 pb-4" aria-label={`Edit ${routine.name}`}>
-        <div className="pr-10">
-          <h3 className="truncate text-[15px] font-semibold text-fg">{routine.name}</h3>
-          <p className="tabular mt-0.5 text-xs text-fg-3">
-            {figures.exercises} exercise{figures.exercises === 1 ? "" : "s"} · {figures.sets} set{figures.sets === 1 ? "" : "s"}
-            {figures.minutes ? ` · ~${figures.minutes} min` : ""}
+    <div className="relative border-t border-line first:border-t-0 [&:first-child>a]:rounded-t-xl [&:last-child>a]:rounded-b-xl">
+      <Link
+        href={`/routines/${routine.id}`}
+        aria-label={`Edit ${routine.name}`}
+        className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-1 py-3 pr-12 pl-4 transition-colors duration-150 hover:bg-surface-2/70 active:bg-surface-2 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_8.5rem] md:items-center"
+      >
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold tracking-tight text-fg">{routine.name}</h3>
+          <p className="mt-0.5 truncate text-[13px] text-fg-3" title={names.join(", ")}>
+            {names.length > 0 ? names.join(", ") : "No exercises yet"}
           </p>
         </div>
-        {shown.length > 0 ? (
-          <p className="mt-3 line-clamp-2 text-sm text-fg-2">
-            {shown.join(", ")}
-            {names.length > shown.length ? <span className="text-fg-3"> +{names.length - shown.length} more</span> : null}
-          </p>
-        ) : (
-          <p className="mt-3 text-sm text-fg-3">No exercises yet</p>
-        )}
-        <p className="mt-3 text-xs text-fg-3">
-          {lastDoneLabel(routine.lastPerformedAt)}
+        {/* Wide: one aligned column per figure. Narrow: a single line under the name. */}
+        <Figure value={figures.exercises} unit={figures.exercises === 1 ? "exercise" : "exercises"} short="ex" />
+        <Figure value={figures.sets} unit={figures.sets === 1 ? "set" : "sets"} short="sets" />
+        <Figure value={figures.minutes ? `~${figures.minutes}` : "–"} unit="min" short="min" />
+        <p className="hidden text-right text-xs text-fg-3 md:block">{lastDoneShort(routine.lastPerformedAt)}</p>
+        <p className="tabular text-xs text-fg-3 md:hidden">
+          {figures.exercises} exercise{figures.exercises === 1 ? "" : "s"} · {figures.sets} set{figures.sets === 1 ? "" : "s"}
+          {figures.minutes ? ` · ~${figures.minutes} min` : ""} · {done}
         </p>
       </Link>
-      <ActionMenu className="absolute top-3 right-3" label={`Actions for ${routine.name}`} items={menu} />
-    </Card>
+      <ActionMenu className="absolute top-1/2 right-2 -translate-y-1/2" label={`Actions for ${routine.name}`} items={menu} />
+    </div>
   );
 }
 
+function Figure({ value, unit, short }: { value: number | string; unit: string; short: string }) {
+  return (
+    <p className="tabular hidden text-right text-sm text-fg md:block" title={`${value} ${unit}`}>
+      {value} <span className="text-xs text-fg-3">{short}</span>
+    </p>
+  );
+}

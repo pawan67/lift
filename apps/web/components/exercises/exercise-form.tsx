@@ -165,7 +165,10 @@ export function ExerciseForm({
       </div>
 
       <div>
-        <span className="mb-1.5 block text-xs font-medium text-fg-2">Secondary muscles</span>
+        <span className="mb-1.5 flex items-baseline gap-2 text-[13px] font-medium text-fg-2">
+          Secondary muscles
+          {secondaryMuscles.length > 0 ? <span className="tabular text-xs font-normal text-fg-3">{secondaryMuscles.length} picked</span> : null}
+        </span>
         <div className="flex flex-wrap gap-1.5">
           {MUSCLE_GROUPS.filter((muscle) => muscle !== primaryMuscle).map((muscle) => (
             <Chip
@@ -184,11 +187,11 @@ export function ExerciseForm({
       </div>
 
       <div>
-        <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-fg-2">
+        <span className="mb-1.5 flex items-center gap-2 text-[13px] font-medium text-fg-2">
           Tracking
           {trackingLocked ? (
             <span className="inline-flex items-center gap-1 font-normal text-fg-3">
-              <Lock size={11} /> locked, this exercise has logged sets
+              <Lock size={11} /> Locked: this exercise has logged sets
             </span>
           ) : null}
         </span>
@@ -204,12 +207,12 @@ export function ExerciseForm({
                 aria-pressed={selected}
                 onClick={() => setTrackingType(type)}
                 className={cn(
-                  "rounded-xl border px-3 py-2.5 text-left transition-colors",
-                  selected ? "border-volt bg-volt-tint" : "border-line bg-surface-2 hover:border-line-strong",
+                  "press rounded-lg border px-3 py-2.5 text-left",
+                  selected ? "border-volt/50 bg-volt-tint" : "border-line bg-surface-2 hover:border-line-strong",
                   disabled && "cursor-not-allowed opacity-35",
                 )}
               >
-                <div className={cn("text-sm font-medium", selected ? "text-volt" : "text-fg")}>{TRACKING_LABELS[type]}</div>
+                <div className={cn("text-sm font-medium transition-colors duration-150", selected ? "text-volt" : "text-fg")}>{TRACKING_LABELS[type]}</div>
                 <div className="mt-0.5 text-xs text-fg-3">{TRACKING_HINTS[type]}</div>
               </button>
             );
@@ -234,7 +237,7 @@ export function ExerciseForm({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 pt-1">
+      <div className={cn("flex items-center justify-end gap-2", compact ? "pt-1" : "border-t border-line pt-5")}>
         {onCancel ? (
           <Button variant="ghost" onClick={onCancel}>
             Cancel

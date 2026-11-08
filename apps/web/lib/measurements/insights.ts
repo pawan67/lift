@@ -197,7 +197,7 @@ export function buildBodyFigures(input: BodyFigureInput): BodyFigure[] {
 }
 
 export type MissingInputHint =
-  | { message: string; action: "settings" }
+  | { message: string; action: "settings"; label: string }
   | { message: string; action: "measure"; kind: MeasurementKind };
 
 /** The single most useful thing still missing, so the figures above can fill in. */
@@ -206,23 +206,23 @@ export function missingInputHint(input: BodyFigureInput): MissingInputHint | nul
   if (summaries.size === 0) return null;
 
   if (heightCm == null) {
-    return { message: "Add your height in Settings for BMI and waist-to-height.", action: "settings" };
+    return { message: "BMI and waist-to-height need your height.", action: "settings", label: "Add it in Settings" };
   }
   if (!summaries.has("waist")) {
     return {
-      message: "Log your waist for waist-to-height, the most useful number a tape gives.",
+      message: "Waist-to-height needs a waist reading.",
       action: "measure",
       kind: "waist",
     };
   }
   if (sex == null) {
-    return { message: "Set your sex in Settings to estimate body fat from your tape measurements.", action: "settings" };
+    return { message: "The body-fat estimate needs your sex.", action: "settings", label: "Set it in Settings" };
   }
   if (!summaries.has("neck")) {
-    return { message: "Log your neck to estimate body fat from your measurements.", action: "measure", kind: "neck" };
+    return { message: "The body-fat estimate needs a neck reading.", action: "measure", kind: "neck" };
   }
   if (sex === "female" && !summaries.has("hips")) {
-    return { message: "Log your hips to complete the body-fat estimate.", action: "measure", kind: "hips" };
+    return { message: "The body-fat estimate for women also needs hips.", action: "measure", kind: "hips" };
   }
   return null;
 }

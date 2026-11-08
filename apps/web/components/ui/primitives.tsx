@@ -21,23 +21,23 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-volt text-volt-ink hover:bg-volt-deep font-semibold",
-  secondary: "bg-surface-3 text-fg hover:bg-surface-4",
-  outline: "border border-line-strong text-fg hover:bg-surface-2",
+  primary: "bg-volt text-volt-ink hover:bg-volt-deep font-semibold shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]",
+  secondary: "bg-surface-3 text-fg hover:bg-surface-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]",
+  outline: "border border-line-strong text-fg hover:bg-surface-2 hover:border-fg-3/40",
   ghost: "text-fg-2 hover:text-fg hover:bg-surface-2",
-  danger: "bg-alarm/15 text-alarm hover:bg-alarm/25",
+  danger: "bg-alarm/12 text-alarm hover:bg-alarm/20",
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs gap-1.5 rounded-lg",
-  md: "h-10 px-4 text-sm gap-2 rounded-xl",
-  lg: "h-12 px-5 text-base gap-2 rounded-xl",
+  sm: "h-8 px-3 text-xs gap-1.5 rounded-md",
+  md: "h-9 px-3.5 text-sm gap-2 rounded-lg",
+  lg: "h-11 px-5 text-[15px] gap-2 rounded-lg",
   icon: "h-9 w-9 rounded-lg",
 };
 
 export function buttonClass(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors select-none",
+    "press inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap select-none",
     "disabled:pointer-events-none disabled:opacity-40",
     BUTTON_VARIANTS[variant],
     BUTTON_SIZES[size],
@@ -83,7 +83,7 @@ export function ButtonLink({
 
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("rounded-(--radius-card) border border-line bg-surface", className)} {...props}>
+    <div className={cn("rounded-(--radius-card) border border-line bg-surface shadow-[inset_0_1px_0_rgb(255_255_255/0.025)]", className)} {...props}>
       {children}
     </div>
   );
@@ -103,8 +103,8 @@ export function CardHeader({
   return (
     <div className={cn("flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-5 pt-5", className)}>
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold text-fg">{title}</h2>
-        {subtitle ? <p className="mt-0.5 text-xs text-fg-3">{subtitle}</p> : null}
+        <h2 className="text-sm font-semibold tracking-tight text-fg">{title}</h2>
+        {subtitle ? <p className="mt-0.5 text-[13px] text-fg-3">{subtitle}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -134,14 +134,14 @@ export function PageHeader({
   return (
     <header className="mb-6">
       {back ? (
-        <Link href={back.href} className="mb-2 inline-flex items-center gap-1 text-xs text-fg-3 hover:text-fg">
-          <span aria-hidden>←</span> {back.label}
+        <Link href={back.href} className="group mb-3 inline-flex items-center gap-1 text-[13px] text-fg-3 transition-colors hover:text-fg">
+          <span aria-hidden className="transition-transform duration-150 ease-out group-hover:-translate-x-0.5">←</span> {back.label}
         </Link>
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-[28px]">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-fg-2">{subtitle}</p> : null}
+          <h1 className="text-[26px] leading-tight font-semibold tracking-[-0.02em] text-fg sm:text-[30px]">{title}</h1>
+          {subtitle ? <p className="mt-1.5 text-sm text-fg-3">{subtitle}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
@@ -159,10 +159,13 @@ export function Stat({
   unit,
   hint,
   tone,
+  size = "md",
   className,
 }: {
   label: ReactNode;
   value: ReactNode;
+  /** `sm` for long strips of figures, which wrap badly at full size on a phone. */
+  size?: "sm" | "md";
   unit?: ReactNode;
   /** A short second line, e.g. a change against the previous period. */
   hint?: ReactNode;
@@ -171,16 +174,16 @@ export function Stat({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="font-mono text-[11px] tracking-wider text-fg-3 uppercase">{label}</div>
-      <div className="mt-1.5 flex items-baseline gap-1">
-        <span className="tabular truncate text-2xl font-semibold text-fg">{value}</span>
+      <div className="text-[13px] text-fg-3">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className={cn("tabular truncate leading-tight font-semibold tracking-[-0.02em] text-fg", size === "sm" ? "text-xl" : "text-[26px]")}>{value}</span>
         {unit ? <span className="text-sm text-fg-3">{unit}</span> : null}
       </div>
       {hint ? (
         <div
           className={cn(
             "tabular mt-1 text-xs",
-            tone === "up" ? "text-signal" : tone === "down" ? "text-alarm" : "text-fg-3",
+            tone === "up" ? "text-signal" : tone === "down" ? "text-alarm/90" : "text-fg-3",
           )}
         >
           {hint}
@@ -219,8 +222,9 @@ export function Badge({ tone = "neutral", className, children }: { tone?: BadgeT
 // ---------------------------------------------------------------------------
 
 const FIELD = cn(
-  "w-full rounded-xl border border-line bg-surface-2 px-3 text-sm text-fg placeholder:text-fg-3",
-  "transition-colors hover:border-line-strong focus:border-volt focus:outline-none",
+  "w-full rounded-lg border border-line bg-surface-2 px-3 text-sm text-fg placeholder:text-fg-3",
+  "transition-[border-color,box-shadow] duration-150 ease-out hover:border-line-strong",
+  "focus:border-volt/60 focus:shadow-[0_0_0_3px_rgb(210_243_75/0.12)] focus:outline-none focus-visible:outline-none",
   "disabled:opacity-50",
 );
 
@@ -243,7 +247,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   ref,
 ) {
   return (
-    <select ref={ref} className={cn(FIELD, "h-10 cursor-pointer appearance-none pr-8", "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2384848f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")] bg-[right_0.75rem_center] bg-no-repeat", className)} {...props}>
+    <select ref={ref} className={cn(FIELD, "h-10 cursor-pointer appearance-none pr-8", "bg-[image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2384848f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")] bg-[position:right_0.75rem_center] bg-no-repeat", className)} {...props}>
       {children}
     </select>
   );
@@ -264,7 +268,7 @@ export function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-xs font-medium text-fg-2">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium text-fg-2">{label}</span>
       {children}
       {error ? <span className="mt-1 block text-xs text-alarm">{error}</span> : hint ? <span className="mt-1 block text-xs text-fg-3">{hint}</span> : null}
     </label>
@@ -289,7 +293,7 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" className={cn("inline-flex rounded-xl bg-surface-2 p-1", className)}>
+    <div role="radiogroup" className={cn("inline-flex rounded-lg border border-line bg-surface p-0.5", className)}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -300,9 +304,9 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "rounded-lg font-medium whitespace-nowrap transition-colors",
-              size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-sm",
-              active ? "bg-surface-4 text-fg shadow-sm" : "text-fg-3 hover:text-fg",
+              "press rounded-md font-medium whitespace-nowrap",
+              size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-[13px]",
+              active ? "bg-surface-3 text-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]" : "text-fg-3 hover:text-fg",
             )}
           >
             {option.label}
@@ -334,8 +338,8 @@ export function Chip({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium whitespace-nowrap transition-colors",
-        selected ? "border-volt bg-volt-tint text-volt" : "border-line bg-surface-2 text-fg-2 hover:border-line-strong hover:text-fg",
+        "press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium whitespace-nowrap",
+        selected ? "border-volt/50 bg-volt-tint text-volt" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg",
         className,
       )}
     >
@@ -363,7 +367,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cn("flex flex-col items-center justify-center px-6 py-14 text-center", className)}>
-      {icon ? <div className="mb-3 text-fg-3">{icon}</div> : null}
+      {icon ? <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-line text-fg-3">{icon}</div> : null}
       <p className="text-sm font-medium text-fg">{title}</p>
       {body ? <p className="mt-1 max-w-sm text-sm text-fg-3">{body}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
@@ -393,7 +397,7 @@ export function ListRow({
 }) {
   const classes = cn(
     "flex w-full items-center gap-3 border-t border-line px-5 py-3 text-left first:border-t-0",
-    href || onClick ? "transition-colors hover:bg-surface-2" : "",
+    href || onClick ? "transition-colors duration-150 hover:bg-surface-2/70 active:bg-surface-2" : "",
     className,
   );
   if (href) {

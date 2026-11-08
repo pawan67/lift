@@ -97,8 +97,8 @@ export function TitleInput({ value, onCommit, className, ...props }: TextProps) 
         if (event.key === "Enter") event.currentTarget.blur();
       }}
       className={cn(
-        "w-full rounded-lg border border-transparent bg-transparent px-2 py-1 -mx-2 text-2xl font-semibold tracking-tight text-fg sm:text-[28px]",
-        "transition-colors hover:border-line focus:border-volt focus:outline-none",
+        "-mx-2 w-full rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-[26px] leading-tight font-semibold tracking-[-0.02em] text-fg sm:text-[30px]",
+        "transition-colors duration-150 hover:border-line focus:border-volt/60 focus:outline-none focus-visible:outline-none",
         className,
       )}
     />
@@ -205,10 +205,11 @@ export function NumberCell({
           event.currentTarget.blur();
         }
       }}
+      // No transition: tabbing through a table of cells should land instantly.
       className={cn(
-        "tabular h-9 w-full min-w-0 rounded-lg border bg-surface-2 px-2 text-center text-sm text-fg placeholder:text-fg-3/70",
-        "transition-colors hover:border-line-strong focus:border-volt focus:outline-none",
-        invalid ? "border-alarm" : "border-line",
+        "tabular h-8 w-full min-w-0 rounded-md border bg-surface-2 px-2 text-center text-sm text-fg placeholder:text-fg-3/60",
+        "hover:border-line-strong focus:border-volt/70 focus:bg-surface-3 focus:outline-none focus-visible:outline-none",
+        invalid ? "border-alarm" : "border-transparent",
         className,
       )}
     />

@@ -150,9 +150,9 @@ function HistoryScreen() {
     <>
       <PageHeader title="History" subtitle={`${integer(model.sessions.length)} sessions since ${new Date(model.firstSessionAt!).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`} />
 
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="relative">
+      <div className="mb-8">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_13rem_13rem_auto]">
+          <div className="relative sm:col-span-2 xl:col-span-1">
             <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-3" />
             <Input
               value={query}
@@ -164,17 +164,6 @@ function HistoryScreen() {
               className="pl-9"
             />
           </div>
-          <Segmented
-            value={range}
-            options={RANGE_OPTIONS}
-            onChange={(value) => {
-              setRange(value);
-              setLimit(PAGE);
-            }}
-            className="justify-self-start"
-          />
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Select value={routineId} onChange={(event) => setParam("routine", event.target.value)} aria-label="Routine">
             <option value="">All routines</option>
             {routineOptions.map(([id, name]) => (
@@ -191,10 +180,20 @@ function HistoryScreen() {
               </option>
             ))}
           </Select>
+          <Segmented
+            value={range}
+            options={RANGE_OPTIONS}
+            onChange={(value) => {
+              setRange(value);
+              setLimit(PAGE);
+            }}
+            className="self-center justify-self-start sm:col-span-2 xl:col-span-1"
+          />
         </div>
         {filtering ? (
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4">
-            <div className="flex flex-wrap gap-x-8 gap-y-3">
+          // Fades in when the first filter is set, so the totals read as a result of it rather than a jump in the layout.
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-5 transition-[opacity,transform] duration-200 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0">
+            <div className="flex flex-wrap gap-x-10 gap-y-3">
               <Stat label="Sessions" value={integer(filtered.length)} />
               <Stat label="Volume" value={f.volumeValue(totals.volumeKg)} unit={f.weightUnit} />
               <Stat label="Sets" value={integer(totals.sets)} />
@@ -214,18 +213,18 @@ function HistoryScreen() {
             </Button>
           </div>
         ) : null}
-      </Card>
+      </div>
 
       {filtered.length === 0 ? (
         <Card>
           <EmptyState title="No sessions match" body="Try a wider range or a different search." />
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {groups.map((group) => (
             <section key={group.key}>
-              <div className="mb-2 flex items-baseline justify-between px-1">
-                <h2 className="text-sm font-semibold text-fg">{group.label}</h2>
+              <div className="mb-2.5 flex items-baseline justify-between gap-3">
+                <h2 className="text-sm font-semibold tracking-tight text-fg">{group.label}</h2>
                 <span className="tabular text-xs text-fg-3">
                   {monthCounts.get(group.key)} session{monthCounts.get(group.key) === 1 ? "" : "s"} · {f.volume(group.volumeKg)}
                 </span>

@@ -21,6 +21,7 @@ import {
   Badge,
   Button,
   ButtonLink,
+  buttonClass,
   Card,
   CardBody,
   CardHeader,
@@ -57,6 +58,12 @@ const RANGES: { value: Range; label: string; days: number | null }[] = [
 ];
 
 const HISTORY_PAGE = 10;
+
+/** "shoulders and triceps", "lats, biceps and forearms" */
+function listLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+}
 
 function metricFormatter(metric: ProgressMetric, f: Formatter): (value: number) => string {
   switch (metric) {
@@ -168,15 +175,13 @@ export default function ExerciseDetailPage() {
             <ExerciseThumb exercise={exercise} size={56} className="rounded-xl" />
             <span className="min-w-0">
               <span className="block truncate">{exercise.name}</span>
-              <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm font-normal tracking-normal">
+              <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-normal tracking-normal text-fg-3">
                 {exercise.isCustom ? <Badge>Custom</Badge> : null}
                 {exercise.isDeleted ? <Badge tone="alarm">Deleted</Badge> : exercise.isArchived ? <Badge tone="warn">Archived</Badge> : null}
-                <Badge tone="volt">{MUSCLE_GROUP_LABELS[exercise.primaryMuscle]}</Badge>
-                {muscles.slice(1).map((muscle) => (
-                  <Badge key={muscle}>{MUSCLE_GROUP_LABELS[muscle]}</Badge>
-                ))}
-                <span className="text-xs text-fg-3">
-                  {EQUIPMENT_LABELS[exercise.equipment]} · {TRACKING_LABELS[trackingType]}
+                <span>
+                  <span className="text-fg-2">{MUSCLE_GROUP_LABELS[exercise.primaryMuscle]}</span>
+                  {muscles.length > 1 ? `, with ${listLabels(muscles.slice(1).map((muscle) => MUSCLE_GROUP_LABELS[muscle].toLowerCase()))}` : null}
+                  {` · ${EQUIPMENT_LABELS[exercise.equipment]} · ${TRACKING_LABELS[trackingType]}`}
                 </span>
               </span>
             </span>
@@ -185,8 +190,8 @@ export default function ExerciseDetailPage() {
         actions={
           <>
             {exercise.videoUrl ? (
-              <a href={exercise.videoUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl bg-surface-3 px-4 text-sm font-medium text-fg hover:bg-surface-4">
-                <PlayCircle size={16} /> Watch demo
+              <a href={exercise.videoUrl} target="_blank" rel="noreferrer" className={buttonClass("secondary")}>
+                <PlayCircle size={15} /> Watch demo
               </a>
             ) : null}
             {custom ? (
@@ -210,17 +215,17 @@ export default function ExerciseDetailPage() {
       {exercise.notes ? <p className="-mt-2 mb-6 max-w-2xl text-sm whitespace-pre-line text-fg-2">{exercise.notes}</p> : null}
 
       {points.length === 0 ? (
-        <Card>
+        <div className="border-t border-line">
           <EmptyState
-            icon={<Trophy size={28} />}
+            className="items-start px-0 py-10 text-left"
             title="Not trained yet"
             body="Log it in a session on your phone and its progress, records and history show up here."
           />
-        </Card>
+        </div>
       ) : (
-        <div className="space-y-6">
-          <Card>
-            <CardBody className="grid grid-cols-2 gap-x-6 gap-y-5 pt-5 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="space-y-8">
+          {/* Headline figures sit on the page between hairlines: they are the summary, not a panel. */}
+          <section className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-line py-5 sm:grid-cols-3 lg:grid-cols-6">
               <Stat label="Sessions" value={totals.sessions} hint={`${totals.workingSets} working sets`} />
               {loaded && fields.reps ? (
                 <>
@@ -250,13 +255,12 @@ export default function ExerciseDetailPage() {
                 </>
               ) : null}
               <Stat label="Last trained" value={totals.lastAt ? relativeDay(totals.lastAt) : "Never"} hint={totals.firstAt ? `Since ${formatDate(totals.firstAt, { month: "short", year: "numeric" })}` : undefined} />
-            </CardBody>
-          </Card>
+          </section>
 
           <Card>
             <CardHeader
               title="Progress"
-              subtitle={`${METRIC_LABELS[metric]} per session`}
+              subtitle={metrics.length > 1 ? undefined : `${METRIC_LABELS[metric]} per session`}
               action={<Segmented size="sm" value={range} onChange={setRange} options={RANGES} />}
             />
             <CardBody>
@@ -286,26 +290,23 @@ export default function ExerciseDetailPage() {
             </CardBody>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader title="Personal records" subtitle="Best of each kind" />
-              <div className="mt-3">
+              <CardHeader title="Personal records" />
+              <div className="mt-2 pb-1">
                 {records.length === 0 ? (
                   <EmptyState className="py-8" title="No records yet" />
                 ) : (
                   records.map((record) => (
-                    <ListRow key={record.id} href={record.workoutId ? `/history/${record.workoutId}` : undefined}>
-                      <Trophy size={16} className="shrink-0 text-record" />
+                    <ListRow key={record.id} href={record.workoutId ? `/history/${record.workoutId}` : undefined} className="py-2.5">
                       <span className="flex-1 text-sm text-fg-2">{PR_KIND_LABELS[record.kind]}</span>
-                      <span className="text-right">
-                        <span className="tabular block text-sm font-medium text-fg">
-                          {f.record(record.kind, record.value)}
-                          {record.reps && (record.kind === "heaviest_weight" || record.kind === "best_set_volume") ? (
-                            <span className="text-fg-3"> × {record.reps}</span>
-                          ) : null}
-                        </span>
-                        <span className="block text-xs text-fg-3">{formatDateShort(record.achievedAt)}</span>
+                      <span className="tabular text-sm font-medium text-fg">
+                        {f.record(record.kind, record.value)}
+                        {record.reps && (record.kind === "heaviest_weight" || record.kind === "best_set_volume") ? (
+                          <span className="font-normal text-fg-3"> × {record.reps}</span>
+                        ) : null}
                       </span>
+                      <span className="tabular w-14 text-right text-xs text-fg-3">{formatDateShort(record.achievedAt)}</span>
                     </ListRow>
                   ))
                 )}
@@ -314,11 +315,11 @@ export default function ExerciseDetailPage() {
 
             {repMaxes.length > 0 ? (
               <Card>
-                <CardHeader title="Rep maxes" subtitle="Heaviest load lifted for at least this many reps" />
+                <CardHeader title="Rep maxes" subtitle="Heaviest load for at least this many reps" />
                 <div className="mt-3 px-5 pb-4">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="font-mono text-[10px] tracking-wider text-fg-3 uppercase">
+                      <tr className="text-xs text-fg-3">
                         <th className="pb-2 text-left font-normal">Reps</th>
                         <th className="pb-2 text-right font-normal">Best</th>
                         <th className="pb-2 text-right font-normal">Est. 1RM</th>
@@ -327,7 +328,7 @@ export default function ExerciseDetailPage() {
                     <tbody>
                       {repMaxes.map(([reps, kg]) => (
                         <tr key={reps} className="border-t border-line">
-                          <td className="tabular py-2 text-fg-2">{reps}</td>
+                          <td className="tabular py-2 text-fg-3">{reps}</td>
                           <td className="tabular py-2 text-right font-medium text-fg">{f.weight(kg)}</td>
                           <td className="tabular py-2 text-right text-fg-3">{f.weight(estimateOneRepMax(kg, reps, formula))}</td>
                         </tr>
@@ -339,16 +340,29 @@ export default function ExerciseDetailPage() {
             ) : null}
           </div>
 
-          <Card>
-            <CardHeader title="History" subtitle={`${points.length} session${points.length === 1 ? "" : "s"}, newest first`} />
-            <div className="mt-3">
-              {recentSessions.slice(0, historyShown).map((point) => {
+          {/* History is a long read, not a widget: plain heading, sessions split by hairlines. */}
+          <section>
+            <h2 className="flex items-baseline gap-2 border-b border-line pb-3 text-sm font-semibold tracking-tight text-fg">
+              History
+              <span className="tabular text-[13px] font-normal text-fg-3">
+                {points.length} session{points.length === 1 ? "" : "s"}
+              </span>
+            </h2>
+            <div>
+              {recentSessions.slice(0, historyShown).map((point, index) => {
                 const labels = setLabels(point.sets);
                 return (
-                  <div key={point.session.id} className="border-t border-line px-5 py-4 first:border-t-0">
+                  <div
+                    key={point.session.id}
+                    className={cn(
+                      "border-t border-line py-4 first:border-t-0",
+                      // Sessions revealed by "Show more" ease in; the first page renders as is.
+                      index >= HISTORY_PAGE && "transition-[opacity,transform] duration-200 ease-out starting:translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0",
+                    )}
+                  >
                     <Link href={`/history/${point.session.id}`} className="group mb-2 flex items-baseline justify-between gap-3">
-                      <span className="truncate text-sm font-medium text-fg group-hover:text-volt">{point.session.name}</span>
-                      <span className="shrink-0 text-xs text-fg-3">{formatDate(point.t, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                      <span className="truncate text-sm font-medium text-fg transition-colors duration-150 group-hover:text-volt">{point.session.name}</span>
+                      <span className="tabular shrink-0 text-xs text-fg-3">{formatDate(point.t, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
                     </Link>
                     {/* Column-major, so the sets read down the first column and then the second. */}
                     <ol
@@ -359,7 +373,7 @@ export default function ExerciseDetailPage() {
                         <li key={set.id} className={cn("flex items-center gap-3 text-sm", !set.isCompleted && "opacity-40")}>
                           <span
                             className={cn(
-                              "w-5 shrink-0 text-center font-mono text-xs",
+                              "tabular w-5 shrink-0 text-center text-xs font-medium",
                               set.setType === "warmup" ? "text-warn" : set.setType === "normal" ? "text-fg-3" : "text-info",
                             )}
                           >
@@ -377,14 +391,14 @@ export default function ExerciseDetailPage() {
                 );
               })}
               {historyShown < recentSessions.length ? (
-                <div className="border-t border-line px-5 py-3">
-                  <Button variant="ghost" size="sm" onClick={() => setHistoryShown((shown) => shown + HISTORY_PAGE * 2)}>
-                    Show more ({recentSessions.length - historyShown} left)
+                <div className="border-t border-line pt-3">
+                  <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setHistoryShown((shown) => shown + HISTORY_PAGE * 2)}>
+                    Show more <span className="tabular text-fg-3">{recentSessions.length - historyShown} left</span>
                   </Button>
                 </div>
               ) : null}
             </div>
-          </Card>
+          </section>
         </div>
       )}
     </>

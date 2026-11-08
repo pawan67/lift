@@ -64,6 +64,15 @@ const HEADER_HEIGHT = 36;
 const ROW_HEIGHT = 60;
 const SECTION_SIZE = 6;
 const NONE: readonly string[] = [];
+const MOD_KEY = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
+
+function Kbd({ children }: { children: string }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-line-strong/70 bg-surface-2 px-1 font-sans text-[11px] text-fg-2">
+      {children}
+    </kbd>
+  );
+}
 
 function SelectorBody({
   onClose,
@@ -225,7 +234,7 @@ function SelectorBody({
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-multiselectable={multiple} aria-label="Exercises">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">
-            <p className="text-sm font-medium text-fg">No exercise matches{search ? ` “${search}”` : " these filters"}</p>
+            <p className="text-sm font-medium text-fg">Nothing matches{search ? ` “${search}”` : " these filters"}</p>
             <p className="mt-1 text-sm text-fg-3">Check the spelling, clear a filter, or add it as your own.</p>
             <Button className="mt-4" variant="primary" onClick={() => setCreating(true)}>
               <Plus size={16} /> Create {search ? `“${search}”` : "custom exercise"}
@@ -240,7 +249,7 @@ function SelectorBody({
                   <div
                     key={row.key}
                     style={{ transform: `translateY(${row.start}px)`, height: row.size }}
-                    className="absolute inset-x-0 top-0 flex items-end px-5 pb-1.5 font-mono text-[10px] tracking-widest text-fg-3 uppercase"
+                    className="absolute inset-x-0 top-0 flex items-end px-5 pb-1.5 text-xs font-medium text-fg-3"
                   >
                     {item.label}
                   </div>
@@ -262,15 +271,16 @@ function SelectorBody({
                   onMouseMove={() => active !== row.index && setActive(row.index)}
                   style={{ transform: `translateY(${row.start}px)`, height: row.size }}
                   className={cn(
-                    "absolute inset-x-0 top-0 flex items-center gap-3 px-5 text-left transition-colors",
+                    "absolute inset-x-0 top-0 flex items-center gap-3 px-5 text-left",
                     active === row.index && !added && "bg-surface-2",
+                    order >= 0 && active !== row.index && "bg-volt-tint/40",
                     added && "cursor-default opacity-45",
                   )}
                 >
                   <ExerciseThumb exercise={exercise} size={40} />
                   <div className="min-w-0 flex-1">
-                    <div className={cn("truncate text-sm", order >= 0 ? "font-medium text-volt" : "text-fg")}>{exercise.name}</div>
-                    <div className="truncate text-xs text-fg-3">
+                    <div className="truncate text-sm font-medium text-fg">{exercise.name}</div>
+                    <div className="mt-0.5 truncate text-xs text-fg-3">
                       {exerciseSubtitle(exercise)}
                       {usage ? ` · ${usage.uses}× · ${relativeDay(usage.lastUsedAt)}` : ""}
                     </div>
@@ -281,11 +291,11 @@ function SelectorBody({
                   ) : multiple ? (
                     <span
                       className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular",
+                        "tabular flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors duration-100 ease-out",
                         order >= 0 ? "border-volt bg-volt text-volt-ink" : "border-line-strong text-transparent",
                       )}
                     >
-                      {order >= 0 ? order + 1 : <Check size={12} />}
+                      {order >= 0 ? order + 1 : <Check size={11} />}
                     </span>
                   ) : null}
                 </button>
@@ -295,8 +305,8 @@ function SelectorBody({
         )}
         {filtered.length > 0 && search ? (
           <div className="border-t border-line px-5 py-3">
-            <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-2 text-sm text-fg-2 hover:text-volt">
-              <Plus size={15} /> Not here? Create “{search}” as a custom exercise
+            <button type="button" onClick={() => setCreating(true)} className="inline-flex items-center gap-2 text-sm text-fg-2 transition-colors duration-150 hover:text-fg">
+              <Plus size={15} className="text-fg-3" /> Create “{search}” as a custom exercise
             </button>
           </div>
         ) : null}
@@ -306,8 +316,18 @@ function SelectorBody({
         <div className="flex items-center gap-3 border-t border-line bg-surface px-5 py-3">
           <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
             {picked.length === 0 ? (
-              <span className="text-sm text-fg-3">
-                Pick one or more<span className="hidden sm:inline">. They are added in the order you pick them.</span>
+              <span className="flex items-center gap-3 text-[13px] text-fg-3">
+                <span>Pick one or more</span>
+                <span className="hidden items-center gap-1 sm:inline-flex">
+                  <Kbd>↑</Kbd>
+                  <Kbd>↓</Kbd>
+                  <span className="mr-2 ml-0.5">move</span>
+                  <Kbd>↵</Kbd>
+                  <span className="mr-2 ml-0.5">pick</span>
+                  <Kbd>{MOD_KEY}</Kbd>
+                  <Kbd>↵</Kbd>
+                  <span className="ml-0.5">add</span>
+                </span>
               </span>
             ) : (
               picked.map((id, index) => {
@@ -317,10 +337,10 @@ function SelectorBody({
                     key={id}
                     type="button"
                     onClick={() => setPicked((current) => current.filter((entry) => entry !== id))}
-                    className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-surface-3 pr-2 pl-1 text-xs text-fg hover:bg-surface-4"
+                    className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-surface-3 pr-1.5 pl-1 text-xs text-fg hover:bg-surface-4"
                     title="Remove"
                   >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-volt text-[10px] font-semibold text-volt-ink">{index + 1}</span>
+                    <span className="tabular flex h-5 w-5 items-center justify-center rounded bg-volt text-[11px] font-semibold text-volt-ink">{index + 1}</span>
                     <span className="max-w-40 truncate">{exercise?.name ?? "Exercise"}</span>
                     <X size={12} className="text-fg-3" />
                   </button>
@@ -329,7 +349,12 @@ function SelectorBody({
             )}
           </div>
           <Button variant="primary" onClick={confirm} disabled={picked.length === 0}>
-            {confirmLabel ?? (picked.length > 1 ? `Add ${picked.length} exercises` : "Add exercise")}
+            {confirmLabel ?? (picked.length > 1 ? "Add exercises" : "Add exercise")}
+            {picked.length > 0 ? (
+              <span className="tabular -mr-1 flex h-5 min-w-5 items-center justify-center rounded bg-volt-ink/15 px-1 text-xs font-semibold">
+                {picked.length}
+              </span>
+            ) : null}
           </Button>
         </div>
       ) : null}

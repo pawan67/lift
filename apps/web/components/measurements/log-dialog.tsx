@@ -27,6 +27,7 @@ import { useState } from "react";
 
 import { Dialog, toast } from "@/components/ui/dialog";
 import { Button, Field, Input } from "@/components/ui/primitives";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { useFormat } from "@/lib/format";
@@ -121,7 +122,7 @@ function LogForm({ kinds, onDone }: { kinds?: readonly MeasurementKind[]; onDone
     >
       <div className="space-y-6 px-5 py-5">
         <Field label="Taken" error={future ? "That is in the future." : measuredAt === null && submitted ? "Pick a date and time." : undefined}>
-          <Input type="datetime-local" value={when} max={toLocalInput(now)} onChange={(e) => setWhen(e.target.value)} />
+          <DateTimeField value={when} max={toLocalInput(now)} onChange={setWhen} aria-label="When" />
         </Field>
 
         {groups.map(({ group, kinds: groupKinds }) => (

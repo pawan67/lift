@@ -15,6 +15,7 @@ import { useState } from "react";
 
 import { Dialog, confirm, toast } from "@/components/ui/dialog";
 import { Button, Field, Input } from "@/components/ui/primitives";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import type { BodyMeasurementRow } from "@/lib/data/types";
 import { useFormat } from "@/lib/format";
 import { useNow } from "@/lib/measurements/use-now";
@@ -92,7 +93,7 @@ function EditForm({ entry, onDone }: { entry: BodyMeasurementRow; onDone: () => 
           <Input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} className="tabular" data-autofocus />
         </Field>
         <Field label="Taken" error={whenError}>
-          <Input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+          <DateTimeField value={when} onChange={setWhen} aria-label="When" />
         </Field>
         <Field label="Notes">
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />

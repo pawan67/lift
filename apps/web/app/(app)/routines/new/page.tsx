@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 
-import { Button, Card, Field, Input, PageHeader, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Card, Field, Input, PageHeader, Textarea } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { useModel } from "@/lib/data/model";
 import { createRoutine } from "@/lib/routines/repository";
 
@@ -45,14 +46,12 @@ function NewRoutineForm() {
           </Field>
           {model.folders.length > 0 ? (
             <Field label="Folder">
-              <Select value={folderId} onChange={(event) => setFolderId(event.target.value)}>
-                <option value="">No folder</option>
-                {model.folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                value={folderId}
+                onValueChange={setFolderId}
+                aria-label="Folder"
+                options={[{ value: "", label: "No folder" }, ...model.folders.map((folder) => ({ value: folder.id, label: folder.name }))]}
+              />
             </Field>
           ) : null}
           <Field label="Notes" hint="Optional. Shown on your phone when you start the routine.">

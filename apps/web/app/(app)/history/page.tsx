@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useDeferredValue, useMemo, useState } from "react";
 
 import { SessionRow } from "@/components/overview/session-row";
-import { Button, Card, EmptyState, Input, PageHeader, Segmented, Select, Stat } from "@/components/ui/primitives";
+import { Button, Card, EmptyState, Input, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { useModel, type Session } from "@/lib/data/model";
 import { integer, useFormat } from "@/lib/format";
 import { STAT_RANGES, type StatRange } from "@/lib/stats/windows";
@@ -164,22 +165,18 @@ function HistoryScreen() {
               className="pl-9"
             />
           </div>
-          <Select value={routineId} onChange={(event) => setParam("routine", event.target.value)} aria-label="Routine">
-            <option value="">All routines</option>
-            {routineOptions.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </Select>
-          <Select value={exerciseId} onChange={(event) => setParam("exercise", event.target.value)} aria-label="Exercise">
-            <option value="">All exercises</option>
-            {exerciseOptions.map((exercise) => (
-              <option key={exercise.id} value={exercise.id}>
-                {exercise.name}
-              </option>
-            ))}
-          </Select>
+          <Select
+            value={routineId}
+            onValueChange={(next) => setParam("routine", next)}
+            aria-label="Routine"
+            options={[{ value: "", label: "All routines" }, ...routineOptions.map(([id, name]) => ({ value: id, label: name }))]}
+          />
+          <Select
+            value={exerciseId}
+            onValueChange={(next) => setParam("exercise", next)}
+            aria-label="Exercise"
+            options={[{ value: "", label: "All exercises" }, ...exerciseOptions.map((exercise) => ({ value: exercise.id, label: exercise.name }))]}
+          />
           <Segmented
             value={range}
             options={RANGE_OPTIONS}

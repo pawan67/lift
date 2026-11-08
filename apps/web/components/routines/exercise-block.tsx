@@ -28,7 +28,8 @@ import Link from "next/link";
 import type { DragEvent } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Card, Select } from "@/components/ui/primitives";
+import { Card } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import type { RoutineExerciseView } from "@/lib/data/model";
 import type { RoutineSetRow } from "@/lib/data/types";
@@ -201,21 +202,18 @@ export function ExerciseBlock({
 
         {/* Rest and notes */}
         <div className="mt-3 flex flex-col gap-1.5 px-3 sm:flex-row sm:px-4">
-          <Select
-            aria-label="Rest between sets"
-            className="h-8 rounded-md text-xs sm:w-36"
-            value={block.row.restSeconds === null ? "" : String(block.row.restSeconds)}
-            onChange={(event) =>
-              void updateRoutineExercise(block.row.id, { restSeconds: event.target.value === "" ? null : Number(event.target.value) })
-            }
-          >
-            <option value="">Rest: app default</option>
-            {REST_OPTIONS.map((seconds) => (
-              <option key={seconds} value={seconds}>
-                Rest: {restLabel(seconds)}
-              </option>
-            ))}
-          </Select>
+          <div className="shrink-0 sm:w-40">
+            <Select
+              size="sm"
+              aria-label="Rest between sets"
+              value={block.row.restSeconds === null ? "" : String(block.row.restSeconds)}
+              onValueChange={(next) => void updateRoutineExercise(block.row.id, { restSeconds: next === "" ? null : Number(next) })}
+              options={[
+                { value: "", label: "Rest: app default" },
+                ...REST_OPTIONS.map((seconds) => ({ value: String(seconds), label: `Rest: ${restLabel(seconds)}` })),
+              ]}
+            />
+          </div>
           <DraftInput
             aria-label="Exercise notes"
             className="h-8 rounded-md text-xs"

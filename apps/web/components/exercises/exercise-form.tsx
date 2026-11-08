@@ -23,7 +23,8 @@ import { Lock } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { toast } from "@/components/ui/dialog";
-import { Button, Chip, Field, Input, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Chip, Field, Input, Textarea } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";
 import { TRACKING_HINTS, TRACKING_LABELS } from "@/lib/exercises/labels";
@@ -138,29 +139,23 @@ export function ExerciseForm({
 
       <div className={cn("grid gap-4", !compact && "sm:grid-cols-2")}>
         <Field label="Equipment">
-          <Select value={equipment} onChange={(event) => setEquipment(event.target.value as Equipment)}>
-            {EQUIPMENT.map((item) => (
-              <option key={item} value={item}>
-                {EQUIPMENT_LABELS[item]}
-              </option>
-            ))}
-          </Select>
+          <Select<Equipment>
+            value={equipment}
+            onValueChange={setEquipment}
+            aria-label="Equipment"
+            options={EQUIPMENT.map((item) => ({ value: item, label: EQUIPMENT_LABELS[item] }))}
+          />
         </Field>
         <Field label="Primary muscle">
-          <Select
+          <Select<MuscleGroup>
             value={primaryMuscle}
-            onChange={(event) => {
-              const next = event.target.value as MuscleGroup;
+            onValueChange={(next) => {
               setPrimaryMuscle(next);
               setSecondaryMuscles((current) => current.filter((muscle) => muscle !== next));
             }}
-          >
-            {MUSCLE_GROUPS.map((muscle) => (
-              <option key={muscle} value={muscle}>
-                {MUSCLE_GROUP_LABELS[muscle]}
-              </option>
-            ))}
-          </Select>
+            aria-label="Primary muscle"
+            options={MUSCLE_GROUPS.map((muscle) => ({ value: muscle, label: MUSCLE_GROUP_LABELS[muscle] }))}
+          />
         </Field>
       </div>
 
@@ -226,13 +221,7 @@ export function ExerciseForm({
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} />
           </Field>
           <Field label="Default rest">
-            <Select value={rest} onChange={(event) => setRest(event.target.value)}>
-              {restOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            <Select value={rest} onValueChange={setRest} aria-label="Default rest" options={restOptions} />
           </Field>
         </div>
       )}

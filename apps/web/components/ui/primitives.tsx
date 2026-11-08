@@ -9,7 +9,7 @@
 "use client";
 
 import Link from "next/link";
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -240,17 +240,6 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   ref,
 ) {
   return <textarea ref={ref} className={cn(FIELD, "min-h-20 py-2.5 leading-relaxed", className)} {...props} />;
-});
-
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select(
-  { className, children, ...props },
-  ref,
-) {
-  return (
-    <select ref={ref} className={cn(FIELD, "h-10 cursor-pointer appearance-none pr-8", "bg-[image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2384848f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")] bg-[position:right_0.75rem_center] bg-no-repeat", className)} {...props}>
-      {children}
-    </select>
-  );
 });
 
 export function Field({

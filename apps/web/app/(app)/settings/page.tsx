@@ -22,7 +22,8 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { confirm, toast } from "@/components/ui/dialog";
-import { Badge, Button, Card, Input, PageHeader, Segmented, Select } from "@/components/ui/primitives";
+import { Badge, Button, Card, Input, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { signOut } from "@/components/shell/app-shell";
 import { useData } from "@/lib/data/store";
 import { fullResync, retryRejected, syncNow } from "@/lib/data/sync";
@@ -139,48 +140,48 @@ export default function SettingsPage() {
             label="1RM formula"
             description={`Used for every estimated one-rep max. In brackets: what each gives for ${FORMULA_REFERENCE.reps} reps at ${FORMULA_REFERENCE.weight}. They diverge past about 12 reps.`}
           >
-            <Select
-              className="h-9 w-full sm:w-52"
-              value={settings.oneRepMaxFormula}
-              onChange={(e) => update({ oneRepMaxFormula: e.target.value as OneRepMaxFormula })}
-            >
-              {ONE_REP_MAX_FORMULAS.map((formula) => (
-                <option key={formula} value={formula}>
-                  {ONE_REP_MAX_FORMULA_LABELS[formula]} ({estimateOneRepMax(FORMULA_REFERENCE.weight, FORMULA_REFERENCE.reps, formula).toFixed(1)})
-                </option>
-              ))}
-            </Select>
+            <div className="w-full sm:w-52">
+              <Select<OneRepMaxFormula>
+                className="h-9"
+                align="end"
+                aria-label="1RM formula"
+                value={settings.oneRepMaxFormula}
+                onValueChange={(next) => update({ oneRepMaxFormula: next })}
+                options={ONE_REP_MAX_FORMULAS.map((formula) => ({
+                  value: formula,
+                  label: ONE_REP_MAX_FORMULA_LABELS[formula],
+                  hint: estimateOneRepMax(FORMULA_REFERENCE.weight, FORMULA_REFERENCE.reps, formula).toFixed(1),
+                }))}
+              />
+            </div>
           </Row>
           <Row stack label="Training level" description="Sets the weekly volume ranges (MEV to MRV) each muscle is judged against.">
-            <Select
-              className="h-9 w-full sm:w-52"
-              value={settings.trainingLevel}
-              onChange={(e) => update({ trainingLevel: e.target.value as TrainingLevel })}
-            >
-              {TRAINING_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {TRAINING_LEVEL_LABELS[level]}
-                </option>
-              ))}
-            </Select>
+            <div className="w-full sm:w-52">
+              <Select<TrainingLevel>
+                className="h-9"
+                align="end"
+                aria-label="Training level"
+                value={settings.trainingLevel}
+                onValueChange={(next) => update({ trainingLevel: next })}
+                options={TRAINING_LEVELS.map((level) => ({ value: level, label: TRAINING_LEVEL_LABELS[level] }))}
+              />
+            </div>
           </Row>
         </Group>
 
         <Group id="body" title="Body" note="Used for BMI, waist-to-height and the body-fat estimate. Kept in this browser only.">
           <HeightRow />
           <Row stack label="Sex" description="The body-fat estimate uses a different formula for each.">
-            <Select
-              className="h-9 w-full sm:w-52"
-              value={settings.sex ?? ""}
-              onChange={(e) => update({ sex: (e.target.value || null) as Sex | null })}
-            >
-              <option value="">Not set</option>
-              {SEXES.map((sex) => (
-                <option key={sex} value={sex}>
-                  {SEX_LABELS[sex]}
-                </option>
-              ))}
-            </Select>
+            <div className="w-full sm:w-52">
+              <Select<Sex | "">
+                className="h-9"
+                align="end"
+                aria-label="Sex"
+                value={settings.sex ?? ""}
+                onValueChange={(next) => update({ sex: next || null })}
+                options={[{ value: "", label: "Not set" }, ...SEXES.map((sex) => ({ value: sex, label: SEX_LABELS[sex] }))]}
+              />
+            </div>
           </Row>
         </Group>
 

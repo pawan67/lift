@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useDeferredValue, useMemo, useState, type CSSProperties } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Button, Card, EmptyState, Input, PageHeader, Segmented, Select } from "@/components/ui/primitives";
+import { Button, Card, EmptyState, Input, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";
 import type { PersonalRecordRow } from "@/lib/data/types";
@@ -129,23 +130,16 @@ export default function RecordsPage() {
               className="pl-9"
             />
           </div>
-          <Select
+          <Select<PrKind | "">
             value={kind}
-            onChange={(event) => {
-              const next = event.target.value as PrKind | "";
+            onValueChange={(next) => {
               setKind(next);
               setSort(next ? "value" : "recent");
               setLimit(PAGE);
             }}
             aria-label="Record type"
-          >
-            <option value="">All record types</option>
-            {kindsPresent.map((k) => (
-              <option key={k} value={k}>
-                {PR_KIND_LABELS[k]}
-              </option>
-            ))}
-          </Select>
+            options={[{ value: "", label: "All record types" }, ...kindsPresent.map((k) => ({ value: k, label: PR_KIND_LABELS[k] }))]}
+          />
           <Segmented value={sort} options={sortOptions} onChange={setSort} className="self-center justify-self-start" />
         </div>
       </div>

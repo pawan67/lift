@@ -10,7 +10,8 @@ import { ExerciseSelector } from "@/components/exercises/exercise-selector";
 import { ExerciseBlock, type DragHandlers } from "@/components/routines/exercise-block";
 import { DraftTextarea, TitleInput } from "@/components/routines/fields";
 import { confirm, toast } from "@/components/ui/dialog";
-import { Button, ButtonLink, Card, EmptyState, Select } from "@/components/ui/primitives";
+import { Button, ButtonLink, Card, EmptyState } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/select";
 import { useModel } from "@/lib/data/model";
 import { useData } from "@/lib/data/store";
 import {
@@ -220,21 +221,19 @@ function RoutineEditor() {
           ) : null}
 
           <section className="space-y-3 py-5 first:pt-0">
-            <label className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-[13px] text-fg-2">Folder</span>
-              <Select
-                className="h-8 w-44 rounded-md text-[13px]"
-                value={routine.row.folderId && model.folders.some((folder) => folder.id === routine.row.folderId) ? routine.row.folderId : ""}
-                onChange={(event) => void updateRoutine(routine.id, { folderId: event.target.value || null })}
-              >
-                <option value="">No folder</option>
-                {model.folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
+              <div className="w-44">
+                <Select
+                  size="sm"
+                  align="end"
+                  aria-label="Folder"
+                  value={routine.row.folderId && model.folders.some((folder) => folder.id === routine.row.folderId) ? routine.row.folderId : ""}
+                  onValueChange={(next) => void updateRoutine(routine.id, { folderId: next || null })}
+                  options={[{ value: "", label: "No folder" }, ...model.folders.map((folder) => ({ value: folder.id, label: folder.name }))]}
+                />
+              </div>
+            </div>
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" className="flex-1" onClick={() => void onDuplicate()}>
                 <Copy size={14} /> Duplicate

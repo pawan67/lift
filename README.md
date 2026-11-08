@@ -145,42 +145,39 @@ On Dokploy:
 
 1. Create a **Postgres** service and copy the connection URL it hands back.
 2. Create a **Compose** application from this repository and set the compose
-   path to `docker-compose.dokploy.yml`. That file defines the API, the two web
-   apps and the landing page. The database is the service from step 1, not a
+   path to `docker-compose.dokploy.yml`. That file defines the API, the web app
+   and the landing page. The database is the service from step 1, not a
    container of its own.
 3. Supply `DATABASE_URL` from step 1, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`
    as the public `https://` address including scheme, `TRUSTED_ORIGINS`, which
-   has to list `lift://` or the app cannot complete an OAuth round trip,
-   `EXPO_PUBLIC_API_URL`, the API's public URL as the browser will call it, and
-   `NEXT_PUBLIC_SITE_URL`, the landing page's own public URL. All six are
+   has to list `lift://` or the app cannot complete an OAuth round trip, and
+   `NEXT_PUBLIC_SITE_URL`, the landing page's own public URL. All five are
    required; the stack refuses to start without them rather than inventing
    defaults. `TELEGRAM_BOT_TOKEN` is optional and turns on the Telegram bot
    (see [Training reports and the Telegram bot](#training-reports-and-the-telegram-bot)).
-4. Add four domains, one per service:
+4. Add three domains, one per service:
 
-   | Service   | Port   | What it is                                     |
-   | --------- | ------ | ---------------------------------------------- |
-   | `api`     | `3000` | sync server                                    |
-   | `web`     | `80`   | the phone app, exported for a browser          |
-   | `webapp`  | `3000` | the Next.js web app: statistics and the library |
-   | `landing` | `3000` | the marketing page                             |
+   | Service   | Port   | What it is                                           |
+   | --------- | ------ | ---------------------------------------------------- |
+   | `api`     | `3000` | sync server                                          |
+   | `web`     | `3000` | the web app: statistics, library, routines, body     |
+   | `landing` | `3000` | the marketing page                                   |
 
-   `api`, `webapp` and `landing` all name port 3000 and do not clash: they are
-   separate containers, and the number is the port inside each one. `webapp`
-   needs nothing in `TRUSTED_ORIGINS`; see [Web app](#web-app).
-5. Add the `web` domain's origin to `TRUSTED_ORIGINS`.
-   `lift://,https://app.example.com`. Without it the browser can load the app
-   and then fails every request it makes, which reads as a broken sign-in
-   rather than as a missing setting. The **landing page's origin does not go in
-   here**: it makes no request the API has to trust, and listing it widens what
-   the API accepts for nothing.
+   All three name port 3000 and do not clash: they are separate containers, and
+   the number is the port inside each one. Neither `web` nor `landing` goes in
+   `TRUSTED_ORIGINS`: the web app reaches the API from its own server (see
+   [Web app](#web-app)), and the landing page makes no request the API has to
+   trust, so listing either widens what the API accepts for nothing.
 
-`EXPO_PUBLIC_API_URL` is baked into the web bundle at build time, so moving the
-API means redeploying the web app, not restarting it. `NEXT_PUBLIC_SITE_URL` is
-the same kind of value for the landing page. It is what the social card's image
-URL is resolved against, so a wrong one leaves the page looking perfect while
-every share preview comes back blank. The phone builds are unaffected by any of
-this; they carry their own copy, set when the APK is built.
+`web` used to be the phone app exported for a browser, served by nginx on port
+80. A domain created for that service needs its container port changed to
+3000, and `EXPO_PUBLIC_API_URL` is no longer read by this stack.
+
+`NEXT_PUBLIC_SITE_URL` is baked into the landing page at build time. It is what
+the social card's image URL is resolved against, so a wrong one leaves the page
+looking perfect while every share preview comes back blank. The phone builds are
+unaffected by any of this; they carry their own API address, set when the APK is
+built.
 
 The schema is created on first boot. A migration that fails takes the container
 down with it instead of serving against a half-applied schema, so a broken
@@ -423,7 +420,7 @@ Sign in with the account the phone syncs to. How it is put together:
   custom exercises sync. Built-ins share ids across every device.
 
 `LIFT_API_URL` is read at runtime, so pointing the app at another API means a
-restart, not a rebuild. In `docker-compose.dokploy.yml` it is the `webapp`
+restart, not a rebuild. In `docker-compose.dokploy.yml` it is the `web`
 service, on port 3000, and defaults to `BETTER_AUTH_URL`.
 
 ### Desktop web

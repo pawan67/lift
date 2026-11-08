@@ -1,30 +1,29 @@
 # Production stack for Dokploy. Set the Compose Path to this file, not to
-# docker-compose.yml — that one is the local development stack, and it brings
+# docker-compose.yml: that one is the local development stack, and it brings
 # its own Postgres and publishes both services on host ports.
 #
 # The database is Dokploy's own Postgres service, so it is not defined here.
 # Paste the connection string that service gives you into DATABASE_URL and it
-# is used as-is. Nothing is published: Traefik reaches both services over
+# is used as-is. Nothing is published: Traefik reaches every service over
 # dokploy-network, which is also how the database hostname resolves.
 #
-# Four services means four domains in Dokploy:
+# Three services means three domains in Dokploy, all on port 3000 inside their
+# own containers:
 #
 #   api       port 3000
-#   web       port 80     (the phone app exported for a browser)
-#   landing   port 3000   (its own container, so it does not clash with api)
-#   webapp    port 3000   (the Next.js web app; see apps/web)
+#   web       port 3000   (the Next.js web app; see apps/web)
+#   landing   port 3000   (the marketing page)
 #
-# The first two have to know about each other:
+#   BETTER_AUTH_URL       the API's own public URL, scheme included. The web
+#                         app reaches the API through this address too.
+#   TRUSTED_ORIGINS       `lift://` for the phone app. Neither the web app nor
+#                         the landing page belongs here: the web app talks to
+#                         the API from its own server, and the landing page
+#                         never talks to it at all.
 #
-#   EXPO_PUBLIC_API_URL   the API's public URL, baked into the web bundle
-#   TRUSTED_ORIGINS       must include the web app's origin, or better-auth
-#                         rejects every request the browser makes
-#   BETTER_AUTH_URL       the API's own public URL, scheme included
-#
-# `landing` knows about neither. It is the marketing page: static apart from one
-# hourly call to the GitHub releases API, it holds no data and talks to nothing
-# in this stack. Its origin does **not** belong in TRUSTED_ORIGINS, because it
-# never makes a request the API would have to trust.
+# `web` used to be the phone app exported for a browser (apps/mobile/Dockerfile,
+# nginx on port 80). It is now apps/web, so a domain created for the old
+# service has to have its container port changed from 80 to 3000.
 
 services:
   api:
@@ -35,13 +34,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
-      # Must match the domain exactly, scheme included — cookies and OAuth
+      # Must match the domain exactly, scheme included: cookies and OAuth
       # callbacks are derived from it.
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
-      # The phone app's scheme, and — once the web app is deployed — its origin
-      # too: `lift://,https://app.example.com`. A browser request from an origin
-      # that is not listed is rejected before it reaches a handler, which reads
-      # as a broken sign-in rather than as a missing setting.
+      # The phone app's scheme, `lift://`. The web app does not need its origin
+      # here (it proxies through its own server). A browser request from an
+      # origin that is not listed is rejected before it reaches a handler.
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-lift://}
       # Optional. The Telegram bot's token from @BotFather; empty leaves the bot
       # off and the app hides its page.
@@ -52,22 +50,23 @@ services:
     networks:
       - dokploy-network
 
-  # The same app as the phone build, exported for a browser and served as static
-  # files. See apps/mobile/Dockerfile, and the "Desktop web" section of the
-  # README for the two things about this build that are not obvious.
+  # The web app: statistics, the exercise library, routines and body
+  # measurements in a browser, built with Next.js. See apps/web/Dockerfile.
+  #
+  # It reaches the API from its own server (sign-in and sync are proxied), so its
+  # origin does not need to be in TRUSTED_ORIGINS. LIFT_API_URL defaults to
+  # BETTER_AUTH_URL, which is the API's public address: the proxy presents that
+  # address as its Origin, and better-auth always trusts its own base URL. It is
+  # read at runtime, so pointing it elsewhere is a restart, not a rebuild.
   web:
     build:
       context: .
-      dockerfile: apps/mobile/Dockerfile
-      args:
-        # A build arg rather than an environment variable, because that is what
-        # it is: Metro substitutes `EXPO_PUBLIC_*` into the bundle at build
-        # time. Changing this means rebuilding the image — restarting the
-        # container with a new value does nothing at all.
-        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:?set EXPO_PUBLIC_API_URL to the API's public URL}
+      dockerfile: apps/web/Dockerfile
     restart: unless-stopped
+    environment:
+      LIFT_API_URL: ${LIFT_API_URL:-${BETTER_AUTH_URL:?set BETTER_AUTH_URL}}
     expose:
-      - '80'
+      - '3000'
     networks:
       - dokploy-network
 
@@ -75,8 +74,7 @@ services:
   # on nothing here — deploying it cannot take the app down, and the app being
   # down does not take it down.
   #
-  # A Node server rather than a directory of static files, which is the one way
-  # it differs from `web`. The download button shows the version and size of the
+  # A Node server rather than a directory of static files. The download button shows the version and size of the
   # release GitHub is currently serving, read from GitHub's API and revalidated
   # hourly; an export would freeze that at whatever was true when the image was
   # built. See apps/landing/lib/release.ts.
@@ -96,26 +94,6 @@ services:
         # comes back blank.
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?set NEXT_PUBLIC_SITE_URL to the landing page's public URL}
     restart: unless-stopped
-    expose:
-      - '3000'
-    networks:
-      - dokploy-network
-
-  # The web app: statistics, the exercise library, routines and body
-  # measurements in a browser, built with Next.js rather than exported from the
-  # phone app. See apps/web/Dockerfile.
-  #
-  # It reaches the API from its own server (sign-in and sync are proxied), so its
-  # origin does not need to be in TRUSTED_ORIGINS. LIFT_API_URL defaults to
-  # BETTER_AUTH_URL, which is the API's public address: the proxy presents that
-  # address as its Origin, and better-auth always trusts its own base URL.
-  webapp:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    restart: unless-stopped
-    environment:
-      LIFT_API_URL: ${LIFT_API_URL:-${BETTER_AUTH_URL:?set BETTER_AUTH_URL}}
     expose:
       - '3000'
     networks:

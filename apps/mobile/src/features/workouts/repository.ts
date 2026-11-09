@@ -1122,12 +1122,32 @@ export async function finishWorkout(
     name?: string;
     /** Replaces the session's note. `null` or blank clears it; omitted leaves it. */
     notes?: string | null;
+    /**
+     * When the session started, if the user moved it: a session logged after
+     * the fact (Sunday's match, entered on Monday) belongs on the day it happened.
+     */
+    startedAt?: Date;
+    /**
+     * How long the session took, if the save screen settled it: the stopwatch
+     * frozen at Finish, a logged activity's length, or a figure the user typed.
+     * Omitted, it is the wall clock from the start to now.
+     */
+    durationSeconds?: number;
   } = {},
 ): Promise<FinishResult> {
   const detail = await getWorkoutDetail(workoutId);
   if (!detail) throw new Error(`Workout ${workoutId} not found`);
 
-  const finishedAt = Date.now();
+  const startedAt = options.startedAt ?? detail.workout.startedAt;
+  // Either override places the end at start plus duration, so a backdated
+  // session ends on the day it was moved to, and its records are dated there too.
+  const finishedAt =
+    options.durationSeconds !== undefined || options.startedAt !== undefined
+      ? startedAt.getTime() +
+        (options.durationSeconds ??
+          Math.max(0, Math.round((Date.now() - detail.workout.startedAt.getTime()) / 1000))) *
+          1000
+      : Date.now();
 
   let totalVolume = 0;
   let totalSets = 0;
@@ -1178,10 +1198,7 @@ export async function finishWorkout(
     }
   }
 
-  const durationSeconds = Math.max(
-    0,
-    Math.round((finishedAt - detail.workout.startedAt.getTime()) / 1000),
-  );
+  const durationSeconds = Math.max(0, Math.round((finishedAt - startedAt.getTime()) / 1000));
 
   // Spread rather than assigned, so a caller that said nothing about the name or
   // the note leaves those columns untouched instead of writing an undefined
@@ -1192,23 +1209,36 @@ export async function finishWorkout(
   const updates = {
     ...(name ? { name } : {}),
     ...(notes === undefined ? {} : { notes }),
+    startedAt,
     finishedAt: new Date(finishedAt),
     durationSeconds,
     totalVolumeKg: totalVolume,
     totalSets,
     totalReps,
     prCount,
-    updatedAt: finishedAt,
+    // The write's own time, not the session's: sync resolves conflicts on
+    // `updatedAt`, and a backdated session must still count as the newest edit.
+    updatedAt: Date.now(),
     syncState: 'pending' as const,
   };
 
   await db.update(workouts).set(updates).where(eq(workouts.id, workoutId));
 
   if (detail.workout.routineId) {
-    await db
-      .update(routines)
-      .set({ lastPerformedAt: new Date(finishedAt), updatedAt: finishedAt, syncState: 'pending' })
-      .where(eq(routines.id, detail.workout.routineId));
+    // Only ever forwards. A session backdated to before the routine's latest run
+    // is an older run, and must not make the routine look longer untouched.
+    const [routine] = await db
+      .select({ lastPerformedAt: routines.lastPerformedAt })
+      .from(routines)
+      .where(eq(routines.id, detail.workout.routineId))
+      .limit(1);
+
+    if (!routine?.lastPerformedAt || routine.lastPerformedAt.getTime() < finishedAt) {
+      await db
+        .update(routines)
+        .set({ lastPerformedAt: new Date(finishedAt), updatedAt: Date.now(), syncState: 'pending' })
+        .where(eq(routines.id, detail.workout.routineId));
+    }
   }
 
   const [saved] = await db.select().from(workouts).where(eq(workouts.id, workoutId)).limit(1);

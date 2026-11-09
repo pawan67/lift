@@ -13,12 +13,13 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { router, Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   Button,
   Card,
+  Divider,
   EmptyState,
   HeaderAction,
   ListRow,
@@ -47,12 +48,16 @@ import {
   saveSessionAsRoutine,
   type RoutineDiff,
 } from '@/features/routines/repository';
+import { pickDateTime } from '@/features/workouts/pick-date-time';
 import { discardWorkout, finishWorkout } from '@/features/workouts/repository';
-import { useTicker } from '@/hooks/use-ticker';
+import { StartTimeSheet } from '@/features/workouts/start-time-sheet';
+import { WorkoutDurationSheet } from '@/features/workouts/workout-duration-sheet';
 import { showAlert, showConfirm } from '@/store/dialog';
 import { useSettings } from '@/store/settings';
 import { useTimer } from '@/store/timer';
 import { spacing } from '@/theme';
+
+const START_EDITABLE = Platform.OS !== 'web';
 
 /** One exercise of the session, reduced to what the totals need. */
 interface SessionEntry {
@@ -208,6 +213,51 @@ export default function SaveWorkoutScreen() {
   const [notes, setNotes] = useState('');
 
   /*
+   * The clock stops at Finish, which is the moment this screen opened. Time
+   * spent naming the session is not training, and a figure that keeps climbing
+   * while the user types cannot be corrected: it would move again the moment
+   * they looked away.
+   */
+  const [finishedAt] = useState(() => Date.now());
+  const [startOverride, setStartOverride] = useState<Date | null>(null);
+  const [durationOverride, setDurationOverride] = useState<number | null>(null);
+  const [editingDuration, setEditingDuration] = useState(false);
+  const [editingStart, setEditingStart] = useState(false);
+
+  /*
+   * Time the session's own sets account for: a 90-minute match, a 20
+   * minute run. Logged after the fact, the stopwatch saw a minute of tapping,
+   * and the session should still say it lasted at least as long as what was in
+   * it. Summed across exercises, so a run and a match are both counted.
+   */
+  const loggedSeconds = useMemo(
+    () =>
+      sets.reduce(
+        (total, set) => total + (set.isCompleted && set.durationSeconds ? set.durationSeconds : 0),
+        0,
+      ),
+    [sets],
+  );
+
+  const clockSeconds = workout
+    ? Math.max(0, Math.round((finishedAt - workout.startedAt.getTime()) / 1000))
+    : 0;
+  const sessionStart = startOverride ?? workout?.startedAt;
+  const sessionSeconds = durationOverride ?? Math.max(clockSeconds, loggedSeconds);
+
+  // Android opens the system dialogs; iOS lays the picker out in a sheet.
+  const editStart = () => {
+    if (!sessionStart) return;
+    if (Platform.OS === 'ios') {
+      setEditingStart(true);
+      return;
+    }
+    void pickDateTime(sessionStart, new Date()).then((picked) => {
+      if (picked) setStartOverride(picked);
+    });
+  };
+
+  /*
    * The fields are seeded once per session, not kept in step with the row.
    *
    * The live query re-emits on every write to `workouts`, and each emission is a
@@ -262,6 +312,8 @@ export default function SaveWorkoutScreen() {
           formula,
           name,
           notes: notes.trim() || null,
+          startedAt: sessionStart,
+          durationSeconds: sessionSeconds,
         });
 
         useTimer.getState().stopRest();
@@ -282,7 +334,7 @@ export default function SaveWorkoutScreen() {
         );
       }
     })();
-  }, [workout, totals.completed, bodyweightKg, formula, name, notes]);
+  }, [workout, totals.completed, bodyweightKg, formula, name, notes, sessionStart, sessionSeconds]);
 
   const handleDiscard = useCallback(() => {
     if (!workout || closingRef.current) return;
@@ -503,7 +555,7 @@ export default function SaveWorkoutScreen() {
 
   const uncheckedNoun = totals.unchecked === 1 ? 'set' : 'sets';
 
-  const startedAt = formatDateTime(workout.startedAt, DATE_MEDIUM);
+  const startedAt = formatDateTime(sessionStart ?? workout.startedAt, DATE_MEDIUM);
 
   return (
     <Screen width="form" scrolled={scrollEdge.progress}>
@@ -546,7 +598,7 @@ export default function SaveWorkoutScreen() {
         />
 
         <SessionStats
-          startedAt={workout.startedAt}
+          durationSeconds={sessionSeconds}
           volumeKg={totals.volumeKg}
           workingSets={totals.workingSets}
           weightUnit={weightUnit}
@@ -627,23 +679,30 @@ export default function SaveWorkoutScreen() {
         />
 
         {/*
-         * Informational, and deliberately not a control.
-         *
-         * The reference design opens a date picker here. This app has no
-         * date-picker dependency, and a row that wears a chevron and opens
-         * nothing is worse than a row with no chevron: it is a promise the
-         * screen cannot keep, found by the one user who needed it. Backdating a
-         * session is also not what this screen is for: it reports when the
-         * session started, which is a fact the app recorded rather than a field.
-         * If editing the start time is ever wanted, it wants a picker and a rule
-         * for what happens to the duration, not a tap target added here.
+         * When and how long, both correctable. The session is often saved
+         * after the fact (a match logged on the way home, Sunday's game
+         * entered on Monday) and these are the two facts that are then wrong.
+         * The end of the session is not a field: it is start plus duration.
          */}
         <Card padded={false}>
           <ListRow
             icon="calendar-outline"
             title={startedAt}
             subtitle="Started"
-            showChevron={false}
+            // No picker exists in a browser, so the web build only reports it.
+            showChevron={START_EDITABLE}
+            onPress={START_EDITABLE ? editStart : undefined}
+          />
+          <Divider inset={60} />
+          <ListRow
+            icon="time-outline"
+            title={formatDuration(sessionSeconds)}
+            subtitle={
+              durationOverride === null && loggedSeconds > clockSeconds
+                ? 'Duration, from the activity you logged'
+                : 'Duration'
+            }
+            onPress={() => setEditingDuration(true)}
           />
         </Card>
 
@@ -673,38 +732,47 @@ export default function SaveWorkoutScreen() {
         onCancel={() => setNaming(false)}
         onConfirm={handleSaveAsRoutine}
       />
+      <StartTimeSheet
+        visible={editingStart}
+        value={sessionStart ?? workout.startedAt}
+        latest={new Date()}
+        onCancel={() => setEditingStart(false)}
+        onSave={(startedAt) => {
+          setStartOverride(startedAt);
+          setEditingStart(false);
+        }}
+      />
+
+      <WorkoutDurationSheet
+        visible={editingDuration}
+        workoutName={name.trim() || workout.name}
+        value={sessionSeconds}
+        onCancel={() => setEditingDuration(false)}
+        onSave={(seconds) => {
+          setDurationOverride(seconds);
+          setEditingDuration(false);
+        }}
+      />
     </Screen>
   );
 }
 
 /**
- * The session's three figures, and the only thing on this screen that ticks.
+ * The session's three figures, as they will be saved.
  *
- * The ticker is owned here rather than at the screen root for the reason the
- * logging screen's `SessionStats` records: a `useTicker` at the top re-renders
- * the whole tree once a second, and this screen holds two controlled text
- * fields. Typing a workout note against a re-render every second is the same
- * fight a weight field used to put up mid-set. Confined here, the 1Hz update
- * costs one band.
- *
- * Duration leads because it is the figure still moving. The other two are
- * settled the moment the last set was checked off, and only the clock is a
- * reason to look at this band twice.
+ * Duration leads: it is the one the user is most likely to correct here.
  */
 function SessionStats({
-  startedAt,
+  durationSeconds,
   volumeKg,
   workingSets,
   weightUnit,
 }: {
-  startedAt: Date;
+  durationSeconds: number;
   volumeKg: number;
   workingSets: number;
   weightUnit: WeightUnit;
 }) {
-  const now = useTicker(1000);
-  const elapsed = Math.max(0, Math.floor((now - startedAt.getTime()) / 1000));
-
   // Split so the band can set the unit small and quiet beside the figure; the
   // formatters return the two joined, which is right for a sentence and wrong
   // for a column. See `splitMeasure`.
@@ -713,7 +781,7 @@ function SessionStats({
   return (
     <StatBand
       items={[
-        { label: 'Duration', value: formatDuration(elapsed), lead: true },
+        { label: 'Duration', value: formatDuration(durationSeconds), lead: true },
         { label: 'Volume', value: volume, unit: volumeUnit },
         { label: 'Sets', value: String(workingSets) },
       ]}

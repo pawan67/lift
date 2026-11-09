@@ -8,6 +8,26 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.30.0](https://github.com/pawan67/lift/compare/v0.29.3...v0.30.0) - 2026-11-09
+
+### Features
+
+- **mobile:** dial in weight and reps without the keyboard ([cbdc180](https://github.com/pawan67/lift/commit/cbdc180898b327de20f53e167574291bf4d256f3))
+- **landing:** put the web app on the landing page ([96c9864](https://github.com/pawan67/lift/commit/96c9864f73e8994b6bb23208d5e0e96f976c2234))
+- **web:** replace native selects and date inputs with custom pickers ([89b67a8](https://github.com/pawan67/lift/commit/89b67a8e0389cb91c8d21f7f739cbb8a5be21fb0))
+- **web:** give the web app real motion and a less generic look ([73c3271](https://github.com/pawan67/lift/commit/73c3271b0836a63c6ab4b5ba6e2689a4f62ef207))
+- **web:** add a Next.js web app for statistics, the library and routines ([d4426c9](https://github.com/pawan67/lift/commit/d4426c989d8b97c92e7593eebfe133dd9db7c35c))
+- **mobile:** edit custom exercises ([898e23a](https://github.com/pawan67/lift/commit/898e23af88db6d14ea0bad45c2b9f3a65f830fa1))
+
+### Fixes
+
+- **mobile:** keep the picker's Add button above the keyboard ([9a87fe1](https://github.com/pawan67/lift/commit/9a87fe15f2fbe8b0d31ffab7441b37d9d01d149d))
+- **api:** let the image's deploy step ignore the app-only FlashList patch ([e667eb6](https://github.com/pawan67/lift/commit/e667eb66dd67e975b2e2836e00c8d751e8b4b3bb))
+
+### Internal
+
+- chore(deploy): serve the Next.js web app as the Dokploy `web` service ([36fa6b5](https://github.com/pawan67/lift/commit/36fa6b5c78ad55343be34d02c3ed2570aa20ccd9))
+
 ## [0.29.3](https://github.com/pawan67/lift/compare/v0.29.2...v0.29.3) - 2026-10-20
 
 ### Fixes

@@ -10,6 +10,7 @@ import {
   toDisplayDistance,
   SET_TYPE_BADGE,
   SET_TYPE_LABELS,
+  toDisplayWeight,
   TRACKING_FIELDS,
   trimZeros,
   type DistanceUnit,
@@ -44,6 +45,10 @@ import { Button, NumericField, PressableScale, Text } from '@/components/ui';
 import type { WorkoutSet } from '@/db/schema';
 import { haptics } from '@/features/feedback/haptics';
 import { canLogSet } from '@/features/workouts/repository';
+import { DialCell } from '@/features/workouts/set-entry/dial-cell';
+import { ScrubField } from '@/features/workouts/set-entry/scrub-field';
+import { useEntryRow } from '@/features/workouts/set-entry/use-entry-row';
+import { maxFor, stepFor, type EntryField } from '@/features/workouts/set-entry/values';
 import { useSettings } from '@/store/settings';
 import {
   duration,
@@ -734,6 +739,31 @@ export const SetRow = memo(function SetRow({
   }, [set.isCompleted, loggable, done, pop, onToggleComplete]);
 
   /*
+   * Weight and reps entry: the cell is its own dial by default, or a tap opens
+   * the docked knob, ruler or wheels (Settings → Workout → Entering weight and
+   * reps). See `features/workouts/set-entry`.
+   *
+   * `typing` is the docked modes' way back to the keyboard: a long press on the
+   * cell, or the keypad button on the panel, swaps in a focused text field
+   * until it blurs.
+   */
+  const rowRef = useRef<View>(null);
+  const [typing, setTyping] = useState<EntryField | null>(null);
+  const entry = useEntryRow({
+    set,
+    previous,
+    isNext,
+    setName,
+    hasWeight: fields.weight,
+    hasReps: fields.reps,
+    weightUnit,
+    rowRef,
+    onChange,
+    log: handleToggle,
+    type: setTyping,
+  });
+
+  /*
    * Delete asks nothing, on every path that reaches it.
    *
    * The long press and the accessibility action used to raise a confirmation
@@ -842,6 +872,77 @@ export const SetRow = memo(function SetRow({
     set.weightKg == null ? '' : formatWeight(set.weightKg, weightUnit, { withUnit: false });
   const distanceValue = set.distanceKm == null ? '' : asDistanceField(set.distanceKm, distanceUnit);
 
+  /** The weight or reps cell, in whichever entry mode is set. A call, not a component. */
+  const renderEntry = (field: EntryField) => {
+    const isWeight = field === 'weight';
+    const text = isWeight ? weightValue : set.reps == null ? '' : String(set.reps);
+    const placeholder = isWeight
+      ? previous?.weightKg != null
+        ? formatWeight(previous.weightKg, weightUnit, { withUnit: false })
+        : '0'
+      : previous?.reps != null
+        ? String(previous.reps)
+        : '0';
+    const label = isWeight ? `${setName}, weight in ${weightUnit}` : `${setName}, reps`;
+    const onChangeText = isWeight ? handleWeightChange : handleRepsChange;
+    const keyboardType = isWeight ? undefined : ('number-pad' as const);
+
+    if (entry.mode === 'scrub') {
+      const toDisplay = (kg: number | null | undefined) =>
+        kg == null ? null : Math.round(toDisplayWeight(kg, weightUnit) * 100) / 100;
+      return (
+        <ScrubField
+          field={field}
+          numeric={isWeight ? toDisplay(set.weightKg) : set.reps}
+          seed={isWeight ? toDisplay(previous?.weightKg) : (previous?.reps ?? null)}
+          step={stepFor(field, weightUnit)}
+          max={maxFor(field, weightUnit)}
+          unitLabel={isWeight ? weightUnit : 'reps'}
+          onCommit={(value) =>
+            onChange(
+              isWeight
+                ? { weightKg: fromDisplayWeight(value, weightUnit) }
+                : { reps: Math.round(value) },
+            )
+          }
+          value={text}
+          onChangeText={onChangeText}
+          accessibilityLabel={label}
+          keyboardType={keyboardType}
+          placeholder={placeholder}
+          style={styles.input}
+        />
+      );
+    }
+
+    if (typing === field) {
+      return (
+        <NumericField
+          autoFocus
+          value={text}
+          onChangeText={onChangeText}
+          onBlur={() => setTyping(null)}
+          accessibilityLabel={label}
+          keyboardType={keyboardType}
+          placeholder={placeholder}
+          style={styles.input}
+        />
+      );
+    }
+
+    return (
+      <DialCell
+        text={text}
+        placeholder={placeholder}
+        selected={entry.selectedField === field}
+        onPress={() => entry.open(field)}
+        onLongPress={() => setTyping(field)}
+        accessibilityLabel={label}
+        style={styles.input}
+      />
+    );
+  };
+
   return (
     <Animated.View
       // Added and swiped-away sets fade rather than pop in and out of the list.
@@ -851,6 +952,14 @@ export const SetRow = memo(function SetRow({
       <ReanimatedSwipeable
         friction={2}
         rightThreshold={40}
+        /*
+         * In scrub mode a sideways drag on a number is the number's, so the
+         * row's own swipe waits for twenty points of travel and the cell's
+         * drag, which takes eight, is always the first to claim the finger.
+         * A swipe started anywhere else on the row deletes exactly as before.
+         */
+        dragOffsetFromLeftEdge={entry.mode === 'scrub' ? 20 : undefined}
+        dragOffsetFromRightEdge={entry.mode === 'scrub' ? 20 : undefined}
         renderRightActions={() => (
           <Pressable
             onPress={onDelete}
@@ -868,7 +977,7 @@ export const SetRow = memo(function SetRow({
           </Pressable>
         )}
       >
-        <View style={styles.row}>
+        <View ref={rowRef} collapsable={false} style={styles.row}>
           {/*
             The focus plate: the next set to do, outlined.
 
@@ -976,19 +1085,7 @@ export const SetRow = memo(function SetRow({
             )}
           </PressableScale>
 
-          {fields.weight && (
-            <NumericField
-              value={weightValue}
-              onChangeText={handleWeightChange}
-              accessibilityLabel={`${setName}, weight in ${weightUnit}`}
-              placeholder={
-                previous?.weightKg != null
-                  ? formatWeight(previous.weightKg, weightUnit, { withUnit: false })
-                  : '0'
-              }
-              style={styles.input}
-            />
-          )}
+          {fields.weight && renderEntry('weight')}
 
           {fields.duration && (
             <NumericField
@@ -1024,16 +1121,7 @@ export const SetRow = memo(function SetRow({
             />
           )}
 
-          {fields.reps && (
-            <NumericField
-              value={set.reps == null ? '' : String(set.reps)}
-              onChangeText={handleRepsChange}
-              accessibilityLabel={`${setName}, reps`}
-              keyboardType="number-pad"
-              placeholder={previous?.reps != null ? String(previous.reps) : '0'}
-              style={styles.input}
-            />
-          )}
+          {fields.reps && renderEntry('reps')}
 
           {/*
             The effort chip, and it is here only when the set carries one.

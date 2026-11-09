@@ -49,6 +49,16 @@ import { bodyMeasurements, settings as settingsTable, workouts } from '@/db/sche
  */
 export type RestSoundOutput = 'media' | 'notification' | 'alarm';
 
+/**
+ * How weight and reps are entered on a set row.
+ *
+ * `scrub` is the default: the number in the row is its own dial, dragged
+ * sideways to step it and tapped to type. The other three open a panel docked
+ * over the bottom of the workout screen: a rotary knob, two ruler tapes, or a
+ * pair of picker wheels. Duration and distance are typed in every mode.
+ */
+export type SetEntryMode = 'scrub' | 'knob' | 'ruler' | 'wheels';
+
 export interface Settings {
   weightUnit: WeightUnit;
   distanceUnit: DistanceUnit;
@@ -83,6 +93,8 @@ export interface Settings {
   hapticsEnabled: boolean;
   /** Keep the screen on during an active workout. */
   keepAwakeDuringWorkout: boolean;
+  /** How weight and reps are entered on a set row. */
+  setEntryMode: SetEntryMode;
 
   oneRepMaxFormula: OneRepMaxFormula;
   /** Default barbell weight for the plate calculator, in kg. */
@@ -230,6 +242,7 @@ export const DEFAULT_SETTINGS: Settings = {
   restTimerCountdownBeeps: true,
   hapticsEnabled: true,
   keepAwakeDuringWorkout: true,
+  setEntryMode: 'scrub',
 
   oneRepMaxFormula: 'brzycki',
   // Read from the same place `update` reads it, so "still the default" is a
@@ -476,6 +489,7 @@ async function persist(state: Settings): Promise<void> {
     restTimerCountdownBeeps: state.restTimerCountdownBeeps,
     hapticsEnabled: state.hapticsEnabled,
     keepAwakeDuringWorkout: state.keepAwakeDuringWorkout,
+    setEntryMode: state.setEntryMode,
     oneRepMaxFormula: state.oneRepMaxFormula,
     barWeightKg: state.barWeightKg,
     firstDayOfWeek: state.firstDayOfWeek,

@@ -97,6 +97,8 @@ import { useExercisePicker, usePickedExercises } from '@/store/exercise-picker';
 import { useNoticeRequest } from '@/store/notice-request';
 import { useSettings } from '@/store/settings';
 import { useTimer } from '@/store/timer';
+import { SetEntryHost } from '@/features/workouts/set-entry/host';
+import { useSetEntry } from '@/features/workouts/set-entry/store';
 import { spacing, timing, useColors } from '@/theme';
 
 /** This screen's name on the picker's hand-off channel. */
@@ -175,6 +177,22 @@ export default function ActiveWorkoutScreen() {
    */
   const advanceTo = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  /*
+   * The docked set-entry panel covers the bottom of the list, so while it is
+   * up the list grows by its height and the panel may nudge the row being
+   * edited up clear of it. That is the only other thing allowed to move this
+   * scroll, and it never runs while the keyboard is up: the panel and the
+   * keyboard are never on screen together.
+   */
+  const scrollY = useRef(0);
+  const entryInset = useSetEntry((state) => (state.target ? state.dockHeight : 0));
+  useEffect(() => {
+    useSetEntry.getState().setScroller((dy) =>
+      scrollRef.current?.scrollTo({ y: scrollY.current + dy, animated: true }),
+    );
+    return () => useSetEntry.getState().setScroller(null);
+  }, []);
   const [demo, setDemo] = useState<{
     name: string;
     thumbnailUrl: string | null;
@@ -1187,6 +1205,10 @@ export default function ActiveWorkoutScreen() {
       <ScrollView
         ref={scrollRef}
         {...scrollEdge.list}
+        onScroll={(event) => {
+          scrollY.current = event.nativeEvent.contentOffset.y;
+          scrollEdge.list.onScroll(event);
+        }}
         // The discard button is the last thing in the scroll, so the system
         // navigation inset is added to the content rather than the container.
         // The docked rest bar is added on top of it while one is running: it
@@ -1195,7 +1217,12 @@ export default function ActiveWorkoutScreen() {
         // being read: instead of a permanent strip of dead space.
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: spacing.huge + insets.bottom + (resting ? REST_BAR_HEIGHT : 0) },
+          {
+            paddingBottom:
+              spacing.huge +
+              insets.bottom +
+              Math.max(resting ? REST_BAR_HEIGHT : 0, entryInset),
+          },
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -1422,6 +1449,10 @@ export default function ActiveWorkoutScreen() {
           colors={recordColors}
         />
       )}
+
+      {/* The docked dial panel and the scrub bubble, over the list and the
+          rest bar. Renders nothing while neither is up. */}
+      <SetEntryHost />
 
       <RestTimerSheet
         visible={timerSheetOpen}

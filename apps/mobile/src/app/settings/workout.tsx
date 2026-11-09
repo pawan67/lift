@@ -5,7 +5,7 @@ import { Card, Divider, Reveal, TimePickerModal, type ListPickerOption } from '@
 import { Footnote, SettingsPage, settingsStyles } from '@/features/settings/page';
 import { SettingChoice, SettingToggle, SettingValue } from '@/features/settings/rows';
 import { showAlert } from '@/store/dialog';
-import { useSettings, type RestSoundOutput } from '@/store/settings';
+import { useSettings, type RestSoundOutput, type SetEntryMode } from '@/store/settings';
 import { spacing } from '@/theme';
 
 /**
@@ -49,6 +49,33 @@ const SOUND_OUTPUTS: readonly ListPickerOption<RestSoundOutput>[] = [
     // notification streams and leaves the alarm one running, which is the
     // difference between this and the row above it on a phone in a pocket.
     description: 'The same, at alarm volume. The loudest, and the one silent mode leaves alone.',
+  },
+];
+
+/**
+ * How the weight and reps cells take a number. Described by what the hand
+ * does, since that is the whole difference between them.
+ */
+const ENTRY_MODES: readonly ListPickerOption<SetEntryMode>[] = [
+  {
+    value: 'scrub',
+    label: 'Drag the number',
+    description: 'Drag a weight or rep count sideways to step it. Tap it to type.',
+  },
+  {
+    value: 'knob',
+    label: 'Knob',
+    description: 'A tap opens a rotary knob with clicks, one field at a time.',
+  },
+  {
+    value: 'ruler',
+    label: 'Ruler',
+    description: 'A tap opens two sliding tapes, weight and reps together. Flick to go far.',
+  },
+  {
+    value: 'wheels',
+    label: 'Wheels',
+    description: 'A tap opens two spinning picker wheels, weight and reps side by side.',
   },
 ];
 
@@ -260,6 +287,21 @@ export default function WorkoutSettingsScreen() {
             onPress={() => setEditingTime(true)}
           />
         </Card>
+
+        <Card padded={false} style={settingsStyles.sectionStacked}>
+          <SettingChoice
+            icon="speedometer-outline"
+            label="Entering weight and reps"
+            options={ENTRY_MODES}
+            value={settings.setEntryMode}
+            onChange={(value) => update('setEntryMode', value)}
+            valueBelow
+          />
+        </Card>
+        <Footnote>
+          Every mode starts from last session&apos;s numbers and steps by 2.5 kg or 5 lb. A long press on
+          a cell, or the keypad on the panel, still types any number you like.
+        </Footnote>
 
         <Card padded={false} style={settingsStyles.sectionStacked}>
           <SettingToggle

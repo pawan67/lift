@@ -44,6 +44,8 @@ import { haptics } from '@/features/feedback/haptics';
 import { ExerciseBlock } from '@/features/workouts/exercise-block';
 import { ghostFill, pairedPreviousSet } from '@/features/workouts/previous';
 import { RestDurationSheet } from '@/features/workouts/rest-duration-sheet';
+import { SetEntryHost } from '@/features/workouts/set-entry/host';
+import { useSetEntry } from '@/features/workouts/set-entry/store';
 import { showSupersetMenu, supersetMap, SupersetTie } from '@/features/workouts/superset';
 import {
   addExerciseToWorkout,
@@ -102,6 +104,8 @@ export default function EditWorkoutScreen() {
 
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // The docked set-entry panel covers the bottom of the list while it is up.
+  const entryInset = useSetEntry((state) => (state.target ? state.dockHeight : 0));
   const { id } = useLocalSearchParams<{ id: string }>();
 
   // Addressed per workout rather than per screen: two edit screens for two
@@ -596,7 +600,10 @@ export default function EditWorkoutScreen() {
 
       <ScrollView
         {...scrollEdge.list}
-        contentContainerStyle={[styles.scroll, { paddingBottom: spacing.huge + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: spacing.huge + insets.bottom + entryInset },
+        ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         // UIScrollView already scrolls the first responder into `bounds` minus
@@ -816,6 +823,9 @@ export default function EditWorkoutScreen() {
         onClose={() => setReordering(false)}
         onCommit={handleReorder}
       />
+
+      {/* The docked dial panel and the scrub bubble. See the active screen. */}
+      <SetEntryHost />
     </Screen>
   );
 }

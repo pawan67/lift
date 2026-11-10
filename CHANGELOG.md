@@ -8,6 +8,12 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.32.1](https://github.com/pawan67/lift/compare/v0.32.0...v0.32.1) - 2026-11-10
+
+### Fixes
+
+- **food:** long meal descriptions no longer break the AI estimate ([6e462f6](https://github.com/pawan67/lift/commit/6e462f6b8b3a7a7da45074af8d38fd21e5db6215))
+
 ## [0.32.0](https://github.com/pawan67/lift/compare/v0.31.1...v0.32.0) - 2026-11-10
 
 ### Features

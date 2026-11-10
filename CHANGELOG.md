@@ -8,6 +8,12 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.33.0](https://github.com/pawan67/lift/compare/v0.32.1...v0.33.0) - 2026-11-10
+
+### Features
+
+- **food:** serving sizes, time eaten and a macro ring on the add page ([894a115](https://github.com/pawan67/lift/commit/894a11514135ce6b562105951fed655bd282c388))
+
 ## [0.32.1](https://github.com/pawan67/lift/compare/v0.32.0...v0.32.1) - 2026-11-10
 
 ### Fixes

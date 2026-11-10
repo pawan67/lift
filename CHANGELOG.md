@@ -8,6 +8,13 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.34.0](https://github.com/pawan67/lift/compare/v0.33.0...v0.34.0) - 2026-11-10
+
+### Features
+
+- **coach:** reads the food diary, draws food cards, and a chat history you can delete from ([cdc2167](https://github.com/pawan67/lift/commit/cdc21678916d301c3cd266240891cb95248fdb38))
+- **food:** statistics for any day or range, and export as Markdown, CSV or JSON ([e928123](https://github.com/pawan67/lift/commit/e928123c7574ec9bc61bbce8515e1bc424461a0e))
+
 ## [0.33.0](https://github.com/pawan67/lift/compare/v0.32.1...v0.33.0) - 2026-11-10
 
 ### Features

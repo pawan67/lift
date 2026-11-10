@@ -8,6 +8,12 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.35.0](https://github.com/pawan67/lift/compare/v0.34.0...v0.35.0) - 2026-11-10
+
+### Features
+
+- **ai:** Cerebras for fast food estimates ([b567d86](https://github.com/pawan67/lift/commit/b567d86b177896dcfde8dda02ed7ab6e034382d0))
+
 ## [0.34.0](https://github.com/pawan67/lift/compare/v0.33.0...v0.34.0) - 2026-11-10
 
 ### Features

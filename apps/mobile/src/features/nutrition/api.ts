@@ -57,6 +57,7 @@ export const nutritionApi = {
   day: (date: string) => apiRequest<DiaryDay>('GET', `${BASE}/day${query({ date })}`),
   summary: (from: string, to: string) => apiRequest<DaySummary[]>('GET', `${BASE}/summary${query({ from, to })}`),
   stats: (range: NutritionStatsQuery) => apiRequest<NutritionStats>('GET', `${BASE}/stats${query(range)}`),
+  entries: (from: string, to: string) => apiRequest<FoodEntry[]>('GET', `${BASE}/entries${query({ from, to })}`),
 
   createEntries: (input: CreateEntriesInput) => apiRequest<FoodEntry[]>('POST', `${BASE}/entries`, input),
   updateEntry: (id: string, patch: EntryPatch) => apiRequest<FoodEntry>('PATCH', `${BASE}/entries/${id}`, patch),

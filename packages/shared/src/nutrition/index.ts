@@ -8,6 +8,7 @@ export * from './ai.ts';
 export * from './math.ts';
 export * from './nutrients.ts';
 export * from './servings.ts';
+export * from './export.ts';
 export * from './stats.ts';
 export * from './suggest.ts';
 export * from './types.ts';

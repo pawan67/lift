@@ -196,6 +196,20 @@ export class NutritionService {
     return { date, entries: rows.map(toEntry) };
   }
 
+  /**
+   * Every entry over a range, oldest day first and in diary order within a
+   * day. For exports and the coach, which want the food itself rather than the
+   * totals `summary` and `stats` reduce it to.
+   */
+  async entries(userId: string, from: string, to: string): Promise<FoodEntry[]> {
+    const rows = await db
+      .select()
+      .from(foodEntries)
+      .where(and(eq(foodEntries.userId, userId), gte(foodEntries.date, from), lte(foodEntries.date, to)))
+      .orderBy(asc(foodEntries.date), asc(foodEntries.position), asc(foodEntries.createdAt));
+    return rows.map(toEntry);
+  }
+
   /** Per-day core totals over a range, for the week strip and trends. Days with nothing are omitted. */
   async summary(userId: string, from: string, to: string): Promise<DaySummary[]> {
     const total = (key: string) =>

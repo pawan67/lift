@@ -431,3 +431,49 @@ export function bucketDays(daily: readonly StatsDay[], from: string, to: string,
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Patterns
+// ---------------------------------------------------------------------------
+
+export interface WeekdayAverage {
+  /** 0 is Sunday, as `Date.getDay` counts. */
+  weekday: number;
+  /** Per logged day of this weekday. 0 with none. */
+  calories: number;
+  protein: number;
+  days: number;
+}
+
+/**
+ * Calories by day of the week, over complete days only: the weekend that runs
+ * over, the Monday that starts light. Every weekday is present, oldest-first
+ * order does not matter, and an in-progress today is left out for the reason
+ * at the top of this file.
+ */
+export function weekdayAverages(daily: readonly StatsDay[]): WeekdayAverage[] {
+  const sums = Array.from({ length: 7 }, (_, weekday) => ({ weekday, calories: 0, protein: 0, days: 0 }));
+  for (const day of daily) {
+    if (day.inProgress) continue;
+    const slot = sums[new Date(dayNumber(day.date) * MS_PER_DAY).getUTCDay()]!;
+    slot.calories += day.calories;
+    slot.protein += day.protein;
+    slot.days += 1;
+  }
+  return sums.map((slot) =>
+    slot.days === 0 ? slot : { ...slot, calories: slot.calories / slot.days, protein: slot.protein / slot.days },
+  );
+}
+
+/** The complete days with the most and the fewest calories. Null with fewer than two. */
+export function dayExtremes(daily: readonly StatsDay[]): { highest: StatsDay; lowest: StatsDay } | null {
+  const complete = daily.filter((day) => !day.inProgress);
+  if (complete.length < 2) return null;
+  let highest = complete[0]!;
+  let lowest = complete[0]!;
+  for (const day of complete) {
+    if (day.calories > highest.calories) highest = day;
+    if (day.calories < lowest.calories) lowest = day;
+  }
+  return { highest, lowest };
+}

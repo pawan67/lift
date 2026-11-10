@@ -144,6 +144,13 @@ export class NutritionController {
     return this.nutrition.summary(request.userId, from, to);
   }
 
+  /** Every entry over a range, for exports and the coach. The same year-long bound as `summary`. */
+  @Get('entries')
+  entries(@Req() request: AuthedRequest, @Query() query: unknown): Promise<FoodEntry[]> {
+    const { from, to } = parse(summaryQuery, query);
+    return this.nutrition.entries(request.userId, from, to);
+  }
+
   /** The statistics screens: one call per range, everything they draw. */
   @Get('stats')
   stats(@Req() request: AuthedRequest, @Query() query: unknown): Promise<NutritionStats> {

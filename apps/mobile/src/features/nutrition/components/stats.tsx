@@ -15,7 +15,16 @@
  * diary's ring and week strip already taught.
  */
 
-import { MEAL_LABELS, formatCalories, type MacroSplit, type MealShare, type StatsBucket, type StatsBucketSize, type StatsDay } from '@lift/shared';
+import {
+  MEAL_LABELS,
+  formatCalories,
+  type MacroSplit,
+  type MealShare,
+  type StatsBucket,
+  type StatsBucketSize,
+  type StatsDay,
+  type WeekdayAverage,
+} from '@lift/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { useMemo, useRef, useState } from 'react';
@@ -52,28 +61,50 @@ function bucketLabel(bucket: StatsBucket, size: StatsBucketSize, count: number):
   return format(start, 'MMM');
 }
 
+export type TrendMetric = 'calories' | 'protein' | 'carbs' | 'fat';
+
+const METRIC_WORDS: Record<TrendMetric, { name: string; unit: string }> = {
+  calories: { name: 'calories', unit: 'kcal' },
+  protein: { name: 'protein', unit: 'g' },
+  carbs: { name: 'carbs', unit: 'g' },
+  fat: { name: 'fat', unit: 'g' },
+};
+
+function metricFigure(value: number, metric: TrendMetric): string {
+  return metric === 'calories' ? formatCalories(value) : String(Math.round(value));
+}
+
 /**
- * Calories per bar, the goal as a line across them, and a tap on any bar to
- * read its figure in the line above.
+ * One figure per bar (calories, or one macro), the goal as a line across
+ * them, and a tap on any bar to read its figure in the line above.
  *
  * Drawn with plain views, like the training report's bars, rather than through
  * the chart library: the goal line is the whole point of this chart and the
  * library's own reference lines are drawn against an axis maximum it rounds
  * internally, which would put the line in the wrong place.
+ *
+ * Only calories turn to the danger colour over the goal. Running over a
+ * protein goal is the point of having one, and is drawn as a hit, not a miss.
  */
 export function CalorieTrend({
   buckets,
   size,
   goal,
+  metric = 'calories',
+  color,
 }: {
   buckets: StatsBucket[];
   size: StatsBucketSize;
   goal: number | undefined;
+  metric?: TrendMetric;
+  /** The bar colour. Defaults to the accent. */
+  color?: string;
 }) {
   const colors = useColors();
   const [selected, setSelected] = useState<string | null>(null);
+  const { unit } = METRIC_WORDS[metric];
 
-  const peak = Math.max(0, ...buckets.map((bucket) => bucket.calories));
+  const peak = Math.max(0, ...buckets.map((bucket) => bucket[metric]));
   const max = Math.max(1, Math.max(peak, goal ?? 0) * HEADROOM);
   // Labels thin out so they never collide; the last bar always keeps its own.
   const every = Math.max(1, Math.ceil(buckets.length / 8));
@@ -83,10 +114,10 @@ export function CalorieTrend({
     ? chosen.daysLogged === 0
       ? `${bucketTitle(chosen, size)}: nothing logged`
       : size === 'day'
-        ? `${bucketTitle(chosen, size)}: ${formatCalories(chosen.calories)} kcal${chosen.inProgress ? ' so far' : ''}`
-        : `${bucketTitle(chosen, size)}: ${formatCalories(chosen.calories)} kcal a day, ${chosen.daysLogged} ${chosen.daysLogged === 1 ? 'day' : 'days'} logged`
+        ? `${bucketTitle(chosen, size)}: ${metricFigure(chosen[metric], metric)} ${unit}${chosen.inProgress ? ' so far' : ''}`
+        : `${bucketTitle(chosen, size)}: ${metricFigure(chosen[metric], metric)} ${unit} a day, ${chosen.daysLogged} ${chosen.daysLogged === 1 ? 'day' : 'days'} logged`
     : goal
-      ? `Goal ${formatCalories(goal)} kcal. Tap a bar for its figure.`
+      ? `Goal ${metricFigure(goal, metric)} ${unit}. Tap a bar for its figure.`
       : 'Tap a bar for its figure.';
 
   return (
@@ -102,14 +133,15 @@ export function CalorieTrend({
           />
         ) : null}
         {buckets.map((bucket, index) => {
-          const over = !!goal && bucket.calories > goal * OVER;
-          const base = over ? colors.danger : colors.accent;
+          const value = bucket[metric];
+          const over = metric === 'calories' && !!goal && value > goal * OVER;
+          const base = over ? colors.danger : (color ?? colors.accent);
           // A part day is drawn paler rather than with opacity, which would be a
           // conditional opacity on a view the Android release build may flatten.
           const fill = bucket.inProgress ? mix(colors.surfaceMuted, base, 0.5) : base;
           const isSelected = bucket.start === selected;
           const dimmed = selected !== null && !isSelected;
-          const height = bucket.calories > 0 ? Math.max(3, (bucket.calories / max) * PLOT_HEIGHT) : 0;
+          const height = value > 0 ? Math.max(3, (value / max) * PLOT_HEIGHT) : 0;
           return (
             <Pressable
               key={bucket.start}
@@ -117,7 +149,7 @@ export function CalorieTrend({
               onPress={() => setSelected(isSelected ? null : bucket.start)}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${bucketTitle(bucket, size)}, ${bucket.daysLogged === 0 ? 'nothing logged' : `${formatCalories(bucket.calories)} calories${size === 'day' ? '' : ' a day'}`}`}
+              accessibilityLabel={`${bucketTitle(bucket, size)}, ${bucket.daysLogged === 0 ? 'nothing logged' : `${metricFigure(value, metric)} ${metric === 'calories' ? 'calories' : `grams of ${metric}`}${size === 'day' ? '' : ' a day'}`}`}
             >
               <View style={styles.barTrack}>
                 <View
@@ -138,6 +170,66 @@ export function CalorieTrend({
           );
         })}
       </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Weekday pattern
+// ---------------------------------------------------------------------------
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Calories a day for each day of the week, in the user's week order, as
+ * horizontal bars against the goal. The weekend that runs over shows here
+ * when it is lost in a month of daily bars.
+ */
+export function WeekdayPattern({
+  weekdays,
+  goal,
+  firstDayOfWeek,
+}: {
+  weekdays: WeekdayAverage[];
+  goal: number | undefined;
+  firstDayOfWeek: 0 | 1;
+}) {
+  const colors = useColors();
+  const ordered = [...weekdays.slice(firstDayOfWeek), ...weekdays.slice(0, firstDayOfWeek)];
+  const top = Math.max(1, goal ?? 0, ...ordered.map((day) => day.calories));
+  return (
+    <View style={styles.weekdays}>
+      {ordered.map((day) => {
+        const over = !!goal && day.calories > goal * OVER;
+        return (
+          <View
+            key={day.weekday}
+            style={styles.weekdayRow}
+            accessible
+            accessibilityLabel={`${WEEKDAY_SHORT[day.weekday]}, ${day.days === 0 ? 'nothing logged' : `${formatCalories(day.calories)} calories on average over ${day.days} days`}`}
+          >
+            <Text variant="caption" color="textSecondary" style={styles.weekdayName}>
+              {WEEKDAY_SHORT[day.weekday]}
+            </Text>
+            <View style={[styles.weekdayTrack, { backgroundColor: colors.surfaceMuted }]}>
+              {day.days > 0 ? (
+                <View
+                  style={[
+                    styles.fill,
+                    { width: `${(day.calories / top) * 100}%`, backgroundColor: over ? colors.danger : colors.accent },
+                  ]}
+                />
+              ) : null}
+              {goal ? (
+                <View pointerEvents="none" style={[styles.weekdayGoal, { left: `${(goal / top) * 100}%`, backgroundColor: colors.text }]} />
+              ) : null}
+            </View>
+            <Text variant="numeric" style={styles.weekdayFigure} color={day.days === 0 ? 'textTertiary' : 'text'}>
+              {day.days === 0 ? '–' : formatCalories(day.calories)}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -501,6 +593,12 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
 
   meals: { gap: spacing.md },
+  weekdays: { gap: spacing.sm },
+  weekdayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  weekdayName: { width: 30 },
+  weekdayTrack: { flex: 1, height: 8, borderRadius: radius.pill, overflow: 'hidden' },
+  weekdayGoal: { position: 'absolute', top: 0, bottom: 0, width: 2, marginLeft: -1 },
+  weekdayFigure: { width: 52, textAlign: 'right' },
   mealRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   mealIcon: { width: 28, height: 28, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   mealBody: { flex: 1, gap: 6 },

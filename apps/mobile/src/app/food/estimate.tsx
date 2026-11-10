@@ -7,6 +7,9 @@
  * figure) and nothing is logged until "Log" is pressed. Confidence is shown as
  * a word rather than a number so 0.73 is not read as a measurement.
  *
+ * Search hands over what was typed (`description`, with `auto`), so a meal
+ * typed into the add screen's search is estimated without retyping it.
+ *
  * Steppers and typed fields only. Swipe and scroll controls inside this app's
  * modals do not register, and a quantity is one number anyway.
  */
@@ -101,7 +104,7 @@ export default function EstimateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const scrollEdge = useScrollEdge();
-  const params = useLocalSearchParams<{ date?: string; meal?: string }>();
+  const params = useLocalSearchParams<{ date?: string; meal?: string; description?: string; auto?: string }>();
   const date = isIsoDate(params.date) ? params.date : todayIso();
   const meal: Meal = isMeal(params.meal) ? params.meal : 'snacks';
 
@@ -122,7 +125,9 @@ export default function EstimateScreen() {
     };
   }, []);
 
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(() =>
+    typeof params.description === 'string' ? params.description.slice(0, 600) : '',
+  );
   const [image, setImage] = useState<AiImage | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +176,18 @@ export default function EstimateScreen() {
       setEstimating(false);
     }
   };
+
+  // Handed over from search: estimate straight away once the key is known to
+  // exist, rather than making the user press Estimate on words already typed.
+  // Started from a timer, which the cleanup cancels, so a Strict Mode remount
+  // sends one request, not two.
+  useEffect(() => {
+    if (configured !== true || params.auto !== '1' || !description.trim()) return;
+    const timer = setTimeout(() => void estimate(), 0);
+    return () => clearTimeout(timer);
+    // Runs once, when the key check lands; `estimate` reads the current description.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured]);
 
   const update = (key: number, change: (row: Row) => Row) =>
     setRows((current) => current.map((row) => (row.key === key ? change(row) : row)));

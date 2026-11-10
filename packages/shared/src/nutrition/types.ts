@@ -191,6 +191,12 @@ export const deleteEntriesSchema = z.object({ ids: z.array(z.string().max(64)).m
 export interface RecentItem extends EntryItem {
   lastLoggedAt: number;
   timesLogged: number;
+  /**
+   * How many of those times were at each meal, so the add screen and the diary
+   * can suggest it where it is usually eaten. Optional because an older server
+   * does not send it; treat missing as "no meal preference".
+   */
+  meals?: Partial<Record<Meal, number>>;
 }
 
 export interface DiaryDay {

@@ -47,6 +47,8 @@ export const nutritionKeys = {
   day: (date: string) => ["nutrition", "day", date] as const,
   summaries: ["nutrition", "summary"] as const,
   summary: (from: string, to: string) => ["nutrition", "summary", from, to] as const,
+  /** Under `summary` so every diary write, which invalidates that prefix, refreshes the statistics too. */
+  stats: (from: string, to: string, today: string) => ["nutrition", "summary", "stats", from, to, today] as const,
   recents: ["nutrition", "recents"] as const,
   foods: ["nutrition", "foods"] as const,
   favorites: ["nutrition", "foods", "favorites"] as const,
@@ -72,6 +74,15 @@ export function useSummary(from: string, to: string) {
   return useQuery({
     queryKey: nutritionKeys.summary(from, to),
     queryFn: () => nutritionApi.summary(from, to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The statistics page's one request. Keeps the last range on screen while the next loads. */
+export function useNutritionStats(from: string, to: string, today: string) {
+  return useQuery({
+    queryKey: nutritionKeys.stats(from, to, today),
+    queryFn: () => nutritionApi.stats({ from, to, today }),
     placeholderData: keepPreviousData,
   });
 }

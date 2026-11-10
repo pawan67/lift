@@ -71,6 +71,8 @@ export interface SeriesPoint {
   value: number;
   /** Optional emphasis, e.g. the current week. */
   highlight?: boolean;
+  /** Overrides the series colour for this bar alone, e.g. a day over its goal. */
+  color?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,7 @@ export function BarChart({
   valueLabel = "Value",
   yTicks = true,
   average,
+  goal,
 }: {
   data: SeriesPoint[];
   format: (value: number) => string;
@@ -94,6 +97,8 @@ export function BarChart({
   yTicks?: boolean;
   /** Draws a dashed line at this value. */
   average?: number;
+  /** Draws a labelled line at a target, and stretches the axis to keep it in view. */
+  goal?: number;
 }) {
   return (
     <div style={{ height }} className="w-full">
@@ -119,9 +124,18 @@ export function BarChart({
           {average !== undefined && average > 0 ? (
             <ReferenceLine y={average} stroke={CHART_COLORS.axis} strokeDasharray="4 4" />
           ) : null}
+          {goal !== undefined && goal > 0 ? (
+            <ReferenceLine
+              y={goal}
+              stroke={CHART_COLORS.axis}
+              strokeDasharray="4 4"
+              ifOverflow="extendDomain"
+              label={{ value: "Goal", position: "insideTopRight", fill: CHART_COLORS.axis, fontSize: 11 }}
+            />
+          ) : null}
           <Bar dataKey="value" radius={[4, 4, 1, 1]} maxBarSize={36} isAnimationActive={false}>
             {data.map((point, index) => (
-              <Cell key={index} fill={point.highlight === false ? CHART_COLORS.voltDim : color} />
+              <Cell key={index} fill={point.color ?? (point.highlight === false ? CHART_COLORS.voltDim : color)} />
             ))}
           </Bar>
         </RBarChart>

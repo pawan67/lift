@@ -1,12 +1,17 @@
 /**
  * Adding food: every way in, in one dialog, with the amount as its second step.
  *
- * Recent opens first, because most of a diary is food eaten before, and each
- * recent row has a one-click add at the amount used last time. Typing searches
- * the user's own foods, USDA's generic foods and OpenFoodFacts' products; a
- * string of digits is looked up as a barcode instead, which is how a desk
- * without a camera scans one. The buttons under the search open an AI
- * estimate, a quick add, or a new food.
+ * Recent opens first, because most of a diary is food eaten before, led by
+ * what is usually eaten at the chosen meal. Every row of food the user already
+ * has gets a one-click add: recents at the amount used last time, saved foods
+ * at one serving. Typing shows matching recents at once, then searches the
+ * user's own foods, USDA's generic foods and OpenFoodFacts' products, and
+ * offers to hand the words to an AI estimate, since "2 rotis and dal" is a
+ * meal rather than a product. A string of digits is looked up as a barcode
+ * instead, which is how a desk without a camera scans one. The buttons under
+ * the search open an AI estimate, a quick add, or a new food.
+ *
+ * Every add's toast carries Undo, so a mis-click costs one more click.
  *
  * In pick mode (the template editor) nothing is logged: the chosen amount is
  * handed back through `onPicked` and the dialog stays open for the next one.
@@ -19,7 +24,10 @@ import {
   MEAL_LABELS,
   formatQuantity,
   itemTotals,
+  matchRecents,
+  recentKey,
   totalsOf,
+  usualAt,
   type EntryItem,
   type Food,
   type FoodCandidate,
@@ -46,6 +54,8 @@ import { describeDay } from "@/lib/nutrition/dates";
 import {
   invalidateFoods,
   useCreateEntries,
+  nutritionKeys,
+  useDeleteEntries,
   useFavorites,
   useFoodSearch,
   useLogTemplate,
@@ -74,6 +84,23 @@ function foodDetail(food: Food | FoodCandidate): string {
 function amountDetail(item: Pick<EntryItem, "quantity" | "servingLabel">): string {
   return item.quantity === 1 ? item.servingLabel : `${formatQuantity(item.quantity)} × ${item.servingLabel}`;
 }
+
+/** A saved food as a diary item: one of its first serving, the amount it opens with. */
+function servingItem(food: Food): EntryItem {
+  const serving = food.servings[0]!;
+  return {
+    foodId: food.id,
+    name: food.name,
+    brand: food.brand,
+    servingLabel: serving.label,
+    servingGrams: serving.grams,
+    nutrients: serving.nutrients,
+    source: food.source,
+    quantity: 1,
+  };
+}
+
+type Trailing = { label: string; onClick: () => void; done?: boolean } | undefined;
 
 /** A recent is a snapshot, not a food: it opens as a one-serving food so the amount can change. */
 function recentAsFood(item: RecentItem): FoodCandidate {
@@ -107,12 +134,21 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
   const [portion, setPortion] = useState<{ subject: PortionSubject; food: Food | FoodCandidate | null } | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<{ mode: FoodFormMode; food?: Food; barcode?: string; name?: string } | null>(null);
-  const [estimating, setEstimating] = useState(false);
+  /** Open with the words to estimate, or "" for an empty estimate. */
+  const [estimating, setEstimating] = useState<string | null>(null);
 
   const profile = useNutritionProfile();
   const customNutrients = profile.data?.customNutrients ?? [];
   const create = useCreateEntries();
+  const remove = useDeleteEntries(mode.kind === "log" ? mode.date : "");
   const logTemplate = useLogTemplate();
+  const recents = useRecents();
+  // The diary behind this dialog already has the day cached; in pick mode there is no day.
+  const day = useQuery({
+    queryKey: nutritionKeys.day(mode.kind === "log" ? mode.date : ""),
+    queryFn: () => nutritionApi.day(mode.kind === "log" ? mode.date : ""),
+    enabled: mode.kind === "log",
+  });
 
   const trimmed = debounced.trim();
   const isBarcode = BARCODE.test(trimmed);
@@ -140,11 +176,36 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
     setPortion({ subject: subjectFromFood(food, quantity), food });
   }
 
+  // Keyed by meal too: switching meals and adding the same food again is a
+  // second, separate add.
+  const rowKey = (kind: string, id: string) => `${meal}:${kind}:${id}`;
+
+  /** Says what was added, with Undo, which also turns the row's tick back into a plus. */
+  function announce(label: string, ids: string[], key?: string) {
+    toast(`Added ${label} to ${MEAL_LABELS[meal].toLowerCase()}`, "success", {
+      label: "Undo",
+      onAction: () => {
+        remove.mutate(ids);
+        if (key) {
+          setAdded((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        }
+      },
+    });
+    if (key) setAdded((prev) => new Set(prev).add(key));
+  }
+
   async function logItems(items: EntryItem[], label: string, key?: string) {
     if (mode.kind !== "log") return;
-    await create.mutateAsync({ date: mode.date, meal, items });
-    toast(`Added ${label} to ${MEAL_LABELS[meal].toLowerCase()}`);
-    if (key) setAdded((prev) => new Set(prev).add(key));
+    const created = await create.mutateAsync({ date: mode.date, meal, items });
+    announce(
+      label,
+      created.map((entry) => entry.id),
+      key,
+    );
   }
 
   async function submitPortion(item: EntryItem) {
@@ -166,7 +227,18 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
     setPortion(null);
   }
 
-  async function quickLog(item: RecentItem) {
+  async function quickLog(item: EntryItem, key: string) {
+    try {
+      await logItems([item], item.name, key);
+    } catch (error) {
+      toast(describeError(error), "error");
+    }
+  }
+
+  /** The one-click add for a row, or none in pick mode where nothing is logged. */
+  function recentTrailing(item: RecentItem): Trailing {
+    if (mode.kind !== "log") return undefined;
+    const key = rowKey("recent", recentKey(item));
     const entry: EntryItem = {
       foodId: item.foodId,
       name: item.name,
@@ -177,19 +249,32 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
       source: item.source,
       quantity: item.quantity,
     };
-    try {
-      await logItems([entry], item.name, `recent:${item.name}:${item.servingLabel}`);
-    } catch (error) {
-      toast(describeError(error), "error");
-    }
+    return { label: `Add ${item.name} to ${MEAL_LABELS[meal].toLowerCase()}`, done: added.has(key), onClick: () => void quickLog(entry, key) };
   }
+  function foodTrailing(food: Food): Trailing {
+    if (mode.kind !== "log" || !food.servings[0]) return undefined;
+    const key = rowKey("food", food.id);
+    return {
+      label: `Add one ${food.servings[0].label} to ${MEAL_LABELS[meal].toLowerCase()}`,
+      done: added.has(key),
+      onClick: () => void quickLog(servingItem(food), key),
+    };
+  }
+
+  // Habits for the chosen meal lead Recent; what the meal already has is left out.
+  const inMeal = new Set((day.data?.entries ?? []).filter((entry) => entry.meal === meal).map(recentKey));
+  const usual = mode.kind === "log" ? usualAt(recents.data ?? [], meal, { exclude: inMeal, limit: 5 }) : [];
+  const recentMatches = query.trim().length >= 2 ? matchRecents(recents.data ?? [], query) : [];
 
   async function addTemplate(template: MealTemplate) {
     if (mode.kind !== "log") return;
     try {
-      await logTemplate.mutateAsync({ id: template.id, input: { date: mode.date, meal } });
-      toast(`Added ${template.name} to ${MEAL_LABELS[meal].toLowerCase()}`);
-      setAdded((prev) => new Set(prev).add(`template:${template.id}`));
+      const created = await logTemplate.mutateAsync({ id: template.id, input: { date: mode.date, meal } });
+      announce(
+        template.name,
+        created.map((entry) => entry.id),
+        rowKey("template", template.id),
+      );
     } catch (error) {
       toast(describeError(error), "error");
     }
@@ -289,7 +374,7 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search foods and brands, or type a barcode"
+            placeholder="Search foods, describe a meal, or type a barcode"
             aria-label="Search foods"
             data-autofocus
             className={fieldClass({ className: "h-11 pr-3 pl-9 text-[15px]" })}
@@ -319,7 +404,13 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
             loading={search.isFetching || query.trim() !== trimmed}
             error={search.isError ? describeError(search.error) : null}
             result={search.data}
+            query={query.trim()}
+            recents={recentMatches}
             onPick={pick}
+            onPickRecent={(item) => pick(recentAsFood(item), item.quantity)}
+            recentTrailing={recentTrailing}
+            foodTrailing={foodTrailing}
+            onEstimate={mode.kind === "log" ? () => setEstimating(query.trim()) : undefined}
             onCreate={() => setForm({ mode: "new", name: query.trim() })}
             menuFor={foodMenu}
           />
@@ -329,7 +420,7 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
           <div className={cn("grid gap-2", mode.kind === "log" ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3")}>
             {mode.kind === "log" ? (
               <>
-                <ActionTile icon={<Sparkles size={18} />} label="AI estimate" hint="Describe it or add a photo" accent onClick={() => setEstimating(true)} />
+                <ActionTile icon={<Sparkles size={18} />} label="AI estimate" hint="Describe it or add a photo" accent onClick={() => setEstimating("")} />
                 <ActionTile icon={<Zap size={18} />} label="Quick add" hint="Type the figures in" onClick={() => setForm({ mode: "quick" })} />
               </>
             ) : null}
@@ -338,15 +429,25 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
 
           <Segmented value={tab} onChange={setTab} options={tabs} aria-label="Lists" />
 
-          {tab === "recent" ? <RecentList mode={mode} meal={meal} added={added} onPick={(item) => pick(recentAsFood(item), item.quantity)} onQuickLog={quickLog} /> : null}
-          {tab === "favorites" ? <FoodList which="favorites" onPick={pick} menuFor={foodMenu} /> : null}
-          {tab === "mine" ? <FoodList which="mine" onPick={pick} menuFor={foodMenu} /> : null}
-          {tab === "templates" ? <TemplateList meal={meal} added={added} onAdd={addTemplate} /> : null}
+          {tab === "recent" ? (
+            <RecentList meal={meal} usual={usual} onPick={(item) => pick(recentAsFood(item), item.quantity)} trailing={recentTrailing} />
+          ) : null}
+          {tab === "favorites" ? <FoodList which="favorites" onPick={pick} menuFor={foodMenu} trailing={foodTrailing} /> : null}
+          {tab === "mine" ? <FoodList which="mine" onPick={pick} menuFor={foodMenu} trailing={foodTrailing} /> : null}
+          {tab === "templates" ? <TemplateList meal={meal} isAdded={(id) => added.has(rowKey("template", id))} onAdd={addTemplate} /> : null}
         </>
       )}
 
       {formDialog}
-      {mode.kind === "log" ? <EstimateDialog open={estimating} onClose={() => setEstimating(false)} date={mode.date} meal={meal} /> : null}
+      {mode.kind === "log" ? (
+        <EstimateDialog
+          open={estimating !== null}
+          onClose={() => setEstimating(null)}
+          date={mode.date}
+          meal={meal}
+          initialDescription={estimating ?? undefined}
+        />
+      ) : null}
     </div>
   );
 }
@@ -371,7 +472,22 @@ function ActionTile({ icon, label, hint, onClick, accent }: { icon: React.ReactN
   );
 }
 
-function ListFrame({ loading, error, empty, emptyState, children }: { loading: boolean; error: string | null; empty: boolean; emptyState: React.ReactNode; children: React.ReactNode }) {
+function ListFrame({
+  loading,
+  error,
+  empty,
+  emptyState,
+  children,
+  bare,
+}: {
+  loading: boolean;
+  error: string | null;
+  empty: boolean;
+  emptyState: React.ReactNode;
+  children: React.ReactNode;
+  /** The children draw their own cards, as grouped lists do. */
+  bare?: boolean;
+}) {
   if (loading) {
     return (
       <div className="space-y-2">
@@ -383,48 +499,80 @@ function ListFrame({ loading, error, empty, emptyState, children }: { loading: b
   }
   if (error) return <EmptyState title="Could not load" body={error} />;
   if (empty) return <>{emptyState}</>;
+  if (bare) return <>{children}</>;
   return <div className="overflow-hidden rounded-xl border border-line bg-surface">{children}</div>;
 }
 
 function RecentList({
-  mode,
   meal,
-  added,
+  usual,
   onPick,
-  onQuickLog,
+  trailing,
 }: {
-  mode: AddFoodMode;
   meal: Meal;
-  added: Set<string>;
+  /** Usually eaten at `meal`, shown first under their own heading. */
+  usual: RecentItem[];
   onPick: (item: RecentItem) => void;
-  onQuickLog: (item: RecentItem) => void;
+  trailing: (item: RecentItem) => Trailing;
 }) {
   const recents = useRecents();
+  const shown = new Set(usual.map(recentKey));
+  const others = (recents.data ?? []).filter((item) => !shown.has(recentKey(item)));
   return (
     <ListFrame
       loading={recents.isPending}
       error={recents.isError ? describeError(recents.error) : null}
       empty={recents.data?.length === 0}
       emptyState={<EmptyState title="Nothing logged yet" body="Foods you log show up here, ready to add again in one click." />}
+      bare
     >
-      {recents.data?.map((item) => {
-        const key = `recent:${item.name}:${item.servingLabel}`;
-        return (
-          <FoodRow
-            key={key}
-            name={item.name}
-            detail={`${amountDetail(item)}${item.timesLogged > 1 ? ` · ${item.timesLogged}×` : ""}`}
-            nutrients={itemTotals(item)}
-            onClick={() => onPick(item)}
-            trailing={mode.kind === "log" ? { label: `Add ${item.name} to ${MEAL_LABELS[meal].toLowerCase()}`, done: added.has(key), onClick: () => onQuickLog(item) } : undefined}
-          />
-        );
-      })}
+      <div className="space-y-5">
+        {usual.length > 0 ? (
+          <section>
+            <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Usually at {MEAL_LABELS[meal].toLowerCase()}</h4>
+            <RecentRows items={usual} onPick={onPick} trailing={trailing} />
+          </section>
+        ) : null}
+        {others.length > 0 ? (
+          <section>
+            {usual.length > 0 ? <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Recent</h4> : null}
+            <RecentRows items={others} onPick={onPick} trailing={trailing} />
+          </section>
+        ) : null}
+      </div>
     </ListFrame>
   );
 }
 
-function FoodList({ which, onPick, menuFor }: { which: "favorites" | "mine"; onPick: (food: Food) => void; menuFor: (food: Food) => React.ReactNode }) {
+function RecentRows({ items, onPick, trailing }: { items: RecentItem[]; onPick: (item: RecentItem) => void; trailing: (item: RecentItem) => Trailing }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-surface">
+      {items.map((item) => (
+        <FoodRow
+          key={recentKey(item)}
+          name={item.name}
+          detail={`${amountDetail(item)}${item.timesLogged > 1 ? ` · ${item.timesLogged}×` : ""}`}
+          nutrients={itemTotals(item)}
+          badge={item.source === "ai" ? <Sparkles size={12} className="shrink-0 text-fg-3" /> : undefined}
+          onClick={() => onPick(item)}
+          trailing={trailing(item)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FoodList({
+  which,
+  onPick,
+  menuFor,
+  trailing,
+}: {
+  which: "favorites" | "mine";
+  onPick: (food: Food) => void;
+  menuFor: (food: Food) => React.ReactNode;
+  trailing: (food: Food) => Trailing;
+}) {
   const favorites = useFavorites();
   const mine = useMyFoods();
   const query = which === "favorites" ? favorites : mine;
@@ -449,13 +597,14 @@ function FoodList({ which, onPick, menuFor }: { which: "favorites" | "mine"; onP
           badge={food.isFavorite ? <Star size={12} className="shrink-0 fill-record text-record" /> : undefined}
           onClick={() => onPick(food)}
           menu={menuFor(food)}
+          trailing={trailing(food)}
         />
       ))}
     </ListFrame>
   );
 }
 
-function TemplateList({ meal, added, onAdd }: { meal: Meal; added: Set<string>; onAdd: (template: MealTemplate) => void }) {
+function TemplateList({ meal, isAdded, onAdd }: { meal: Meal; isAdded: (id: string) => boolean; onAdd: (template: MealTemplate) => void }) {
   const templates = useTemplates();
   return (
     <div className="space-y-3">
@@ -472,7 +621,7 @@ function TemplateList({ meal, added, onAdd }: { meal: Meal; added: Set<string>; 
             detail={`${template.items.length} ${template.items.length === 1 ? "food" : "foods"}`}
             nutrients={totalsOf(template.items)}
             badge={<Album size={13} className="shrink-0 text-fg-3" />}
-            trailing={{ label: `Add ${template.name} to ${MEAL_LABELS[meal].toLowerCase()}`, done: added.has(`template:${template.id}`), onClick: () => onAdd(template) }}
+            trailing={{ label: `Add ${template.name} to ${MEAL_LABELS[meal].toLowerCase()}`, done: isAdded(template.id), onClick: () => onAdd(template) }}
           />
         ))}
       </ListFrame>
@@ -489,71 +638,121 @@ function SearchResults({
   loading,
   error,
   result,
+  query,
+  recents,
   onPick,
+  onPickRecent,
+  recentTrailing,
+  foodTrailing,
+  onEstimate,
   onCreate,
   menuFor,
 }: {
   loading: boolean;
   error: string | null;
   result: ReturnType<typeof useFoodSearch>["data"];
+  query: string;
+  /** Recents matching the query, filtered in the browser so they show before the server answers. */
+  recents: RecentItem[];
   onPick: (food: Food | FoodCandidate) => void;
+  onPickRecent: (item: RecentItem) => void;
+  recentTrailing: (item: RecentItem) => Trailing;
+  foodTrailing: (food: Food) => Trailing;
+  /** Absent in pick mode, where an estimate cannot be logged. */
+  onEstimate?: () => void;
   onCreate: () => void;
   menuFor: (food: Food) => React.ReactNode;
 }) {
-  if (!result && loading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-10 text-sm text-fg-3">
-        <Loader2 size={16} className="animate-spin" /> Searching your foods, USDA and OpenFoodFacts
-      </div>
-    );
-  }
-  if (!result && error) return <EmptyState title="Search failed" body={error} />;
-  if (!result) return null;
-
-  const nothing = result.mine.length === 0 && result.external.length === 0;
+  // A food already shown as a recent is listed once, as the recent: it adds at
+  // the amount actually eaten, which a saved food's first serving may not be.
+  const recentFoodIds = new Set(recents.map((item) => item.foodId).filter(Boolean));
+  const mine = (result?.mine ?? []).filter((food) => !recentFoodIds.has(food.id));
+  const nothing = !!result && recents.length === 0 && mine.length === 0 && result.external.length === 0;
 
   return (
-    <div className={cn("space-y-5 transition-opacity", loading && "opacity-60")}>
-      {result.mine.length > 0 ? (
+    <div className="space-y-5">
+      {onEstimate ? (
+        <button
+          type="button"
+          onClick={onEstimate}
+          className="press flex w-full items-center gap-3 rounded-xl border border-volt/30 bg-volt-tint px-3.5 py-3 text-left transition-colors hover:border-volt/60"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-volt text-volt-ink">
+            <Sparkles size={17} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-volt">Estimate “{query}”</span>
+            <span className="block text-xs text-fg-3">AI works out calories and macros from your words</span>
+          </span>
+        </button>
+      ) : null}
+
+      {recents.length > 0 ? (
         <section>
-          <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Your foods</h4>
-          <div className="overflow-hidden rounded-xl border border-line bg-surface">
-            {result.mine.map((food) => (
-              <FoodRow
-                key={food.id}
-                name={food.name}
-                detail={foodDetail(food)}
-                nutrients={food.servings[0]?.nutrients ?? {}}
-                badge={food.isFavorite ? <Star size={12} className="shrink-0 fill-record text-record" /> : undefined}
-                onClick={() => onPick(food)}
-                menu={menuFor(food)}
-              />
-            ))}
-          </div>
+          <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Recent</h4>
+          <RecentRows items={recents} onPick={onPickRecent} trailing={recentTrailing} />
         </section>
       ) : null}
-      {result.external.length > 0 ? (
-        <section>
-          <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Food databases</h4>
-          <div className="overflow-hidden rounded-xl border border-line bg-surface">
-            {result.external.map((food) => (
-              <FoodRow
-                key={`${food.source}:${food.sourceId}`}
-                name={food.name}
-                detail={`${SOURCE_LABELS[food.source] ?? food.source} · ${foodDetail(food)}`}
-                nutrients={food.servings[0]?.nutrients ?? {}}
-                onClick={() => onPick(food)}
-              />
-            ))}
-          </div>
-        </section>
+
+      {!result && loading ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-fg-3">
+          <Loader2 size={16} className="animate-spin" /> Searching your foods, USDA and OpenFoodFacts
+        </div>
       ) : null}
-      {result.unavailable.length > 0 ? (
-        <p className="text-center text-xs text-fg-3">
-          {result.unavailable.map((source) => SOURCE_LABELS[source] ?? source).join(" and ")} did not answer, so these results may be incomplete.
-        </p>
+      {!result && !loading && error ? <EmptyState title="Search failed" body={error} /> : null}
+
+      {result ? (
+        <div className={cn("space-y-5 transition-opacity", loading && "opacity-60")}>
+          {mine.length > 0 ? (
+            <section>
+              <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Your foods</h4>
+              <div className="overflow-hidden rounded-xl border border-line bg-surface">
+                {mine.map((food) => (
+                  <FoodRow
+                    key={food.id}
+                    name={food.name}
+                    detail={foodDetail(food)}
+                    nutrients={food.servings[0]?.nutrients ?? {}}
+                    badge={food.isFavorite ? <Star size={12} className="shrink-0 fill-record text-record" /> : undefined}
+                    onClick={() => onPick(food)}
+                    menu={menuFor(food)}
+                    trailing={foodTrailing(food)}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {result.external.length > 0 ? (
+            <section>
+              <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Food databases</h4>
+              <div className="overflow-hidden rounded-xl border border-line bg-surface">
+                {result.external.map((food) => (
+                  <FoodRow
+                    key={`${food.source}:${food.sourceId}`}
+                    name={food.name}
+                    detail={`${SOURCE_LABELS[food.source] ?? food.source} · ${foodDetail(food)}`}
+                    nutrients={food.servings[0]?.nutrients ?? {}}
+                    onClick={() => onPick(food)}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {result.unavailable.length > 0 ? (
+            <p className="text-center text-xs text-fg-3">
+              {result.unavailable.map((source) => SOURCE_LABELS[source] ?? source).join(" and ")} did not answer, so these results may be incomplete.
+            </p>
+          ) : null}
+          {nothing ? (
+            <EmptyState
+              icon={<Search size={20} />}
+              title="No matches"
+              body={onEstimate ? "Try fewer words, let AI estimate it from the words above, or make it yourself." : "Try fewer words, or make it yourself."}
+            />
+          ) : null}
+        </div>
       ) : null}
-      {nothing ? <EmptyState icon={<Search size={20} />} title="No matches" body="Try fewer words, or make it yourself. An AI estimate works for home cooking too." /> : null}
+
       <div className="text-center">
         <button type="button" onClick={onCreate} className="text-[13px] font-medium text-volt hover:underline">
           Create a food instead

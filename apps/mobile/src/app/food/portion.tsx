@@ -271,9 +271,12 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
         next = { ...next, foodId: saved.id };
         void invalidateFoods();
       }
-      await create.mutateAsync({ date: draft.target.date, meal, items: [next] });
+      const created = await create.mutateAsync({ date: draft.target.date, meal, items: [next] });
       haptics.logged();
-      useFoodDraft.getState().noteAdded(`${subject.name} to ${MEAL_LABELS[meal]}`);
+      useFoodDraft.getState().noteAdded(`${subject.name} to ${MEAL_LABELS[meal]}`, {
+        date: draft.target.date,
+        ids: created.map((entry) => entry.id),
+      });
       router.back();
     } catch (failure) {
       haptics.rejected();

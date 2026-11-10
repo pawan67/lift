@@ -17,6 +17,7 @@ import {
   goalsInputSchema,
   isoDate,
   logTemplateSchema,
+  nutritionStatsQuerySchema,
   templateInputSchema,
   templatePatchSchema,
   type CustomNutrient,
@@ -29,6 +30,7 @@ import {
   type MealTemplate,
   type NutritionGoals,
   type NutritionProfile,
+  type NutritionStats,
   type RecentItem,
 } from '@lift/shared';
 import {
@@ -140,6 +142,12 @@ export class NutritionController {
   summary(@Req() request: AuthedRequest, @Query() query: unknown): Promise<DaySummary[]> {
     const { from, to } = parse(summaryQuery, query);
     return this.nutrition.summary(request.userId, from, to);
+  }
+
+  /** The statistics screens: one call per range, everything they draw. */
+  @Get('stats')
+  stats(@Req() request: AuthedRequest, @Query() query: unknown): Promise<NutritionStats> {
+    return this.nutrition.stats(request.userId, parse(nutritionStatsQuerySchema, query));
   }
 
   @Post('entries')

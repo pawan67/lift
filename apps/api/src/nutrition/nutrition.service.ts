@@ -8,6 +8,8 @@
  */
 
 import {
+  buildNutritionStats,
+  previousRange,
   type CopyEntriesInput,
   type CreateEntriesInput,
   type CustomNutrient,
@@ -30,6 +32,8 @@ import {
   type NutrientValues,
   type NutritionGoals,
   type NutritionProfile,
+  type NutritionStats,
+  type NutritionStatsQuery,
   type RecentItem,
   type Serving,
   type TemplateInput,
@@ -218,6 +222,53 @@ export class NutritionService {
     }));
   }
 
+  /**
+   * Everything the statistics screens draw for one range. The figures are
+   * worked out by `buildNutritionStats` in `@lift/shared`, which is pure and
+   * tested there; this only gathers its inputs.
+   *
+   * The entries are loaded whole rather than summed in SQL because the page
+   * wants every nutrient, the meal split and the food rankings, and a year of
+   * a diary is a few thousand rows. The range before is only ever compared on
+   * the core four, so it comes from `summary`. The streak needs logged dates
+   * from before `from`, so those are read on their own, newest first.
+   */
+  async stats(userId: string, query: NutritionStatsQuery): Promise<NutritionStats> {
+    const { from, to, today } = query;
+    const before = previousRange(from, to);
+    const [entries, goals, logged, previous] = await Promise.all([
+      db
+        .select({
+          date: foodEntries.date,
+          meal: foodEntries.meal,
+          name: foodEntries.name,
+          brand: foodEntries.brand,
+          quantity: foodEntries.quantity,
+          nutrients: foodEntries.nutrients,
+        })
+        .from(foodEntries)
+        .where(and(eq(foodEntries.userId, userId), gte(foodEntries.date, from), lte(foodEntries.date, to))),
+      this.goals(userId),
+      db
+        .selectDistinct({ date: foodEntries.date })
+        .from(foodEntries)
+        .where(and(eq(foodEntries.userId, userId), lte(foodEntries.date, today && today > to ? today : to)))
+        .orderBy(desc(foodEntries.date))
+        // A streak longer than this reads the same as this.
+        .limit(1000),
+      this.summary(userId, before.from, before.to),
+    ]);
+    return buildNutritionStats({
+      from,
+      to,
+      today: today ?? null,
+      entries: entries.map((row) => ({ ...row, meal: row.meal as Meal, nutrients: row.nutrients as NutrientValues })),
+      targets: goals.targets,
+      loggedDates: logged.map((row) => row.date),
+      previous,
+    });
+  }
+
   /** Where the next entry in a meal goes: after everything already there. */
   private async nextPosition(
     tx: Pick<typeof db, 'select'>,
@@ -366,13 +417,22 @@ export class NutritionService {
       quantity: number;
       created_at: string;
       times: number;
+      breakfast: number;
+      lunch: number;
+      dinner: number;
+      snacks: number;
     }>(sql`
       SELECT * FROM (
         SELECT DISTINCT ON (lower(name), serving_label)
           food_id, name, brand, serving_label, serving_grams, nutrients, source, quantity, created_at,
-          count(*) OVER (PARTITION BY lower(name), serving_label)::int AS times
+          (count(*) OVER w)::int AS times,
+          (count(*) FILTER (WHERE meal = 'breakfast') OVER w)::int AS breakfast,
+          (count(*) FILTER (WHERE meal = 'lunch') OVER w)::int AS lunch,
+          (count(*) FILTER (WHERE meal = 'dinner') OVER w)::int AS dinner,
+          (count(*) FILTER (WHERE meal = 'snacks') OVER w)::int AS snacks
         FROM food_entries
         WHERE user_id = ${userId}
+        WINDOW w AS (PARTITION BY lower(name), serving_label)
         ORDER BY lower(name), serving_label, created_at DESC
       ) latest
       ORDER BY created_at DESC
@@ -389,6 +449,7 @@ export class NutritionService {
       quantity: row.quantity,
       lastLoggedAt: Number(row.created_at),
       timesLogged: row.times,
+      meals: { breakfast: row.breakfast, lunch: row.lunch, dinner: row.dinner, snacks: row.snacks },
     }));
   }
 

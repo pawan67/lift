@@ -48,21 +48,34 @@ import { MacroLine } from "./summary";
 
 const CONFIDENCE_TONES: Record<"low" | "medium" | "high", BadgeTone> = { low: "warn", medium: "neutral", high: "signal" };
 
-export function EstimateDialog({ open, onClose, date, meal }: { open: boolean; onClose: () => void; date: string; meal: Meal }) {
+/** `initialDescription`, from the add dialog's search, is estimated as soon as the dialog opens. */
+export function EstimateDialog({
+  open,
+  onClose,
+  date,
+  meal,
+  initialDescription,
+}: {
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  meal: Meal;
+  initialDescription?: string;
+}) {
   return (
     <Dialog open={open} onClose={onClose} title="Estimate with AI" description={`Into ${MEAL_LABELS[meal].toLowerCase()}`} size="lg">
       {/* Remounted per open, so each opening starts clean and a pending request dies with it. */}
-      {open ? <EstimateBody date={date} meal={meal} onDone={onClose} /> : null}
+      {open ? <EstimateBody date={date} meal={meal} onDone={onClose} initialDescription={initialDescription} /> : null}
     </Dialog>
   );
 }
 
-function EstimateBody({ date, meal, onDone }: { date: string; meal: Meal; onDone: () => void }) {
+function EstimateBody({ date, meal, onDone, initialDescription }: { date: string; meal: Meal; onDone: () => void; initialDescription?: string }) {
   const apiKey = useAiSetup((state) => state.apiKey);
   const [settingUp, setSettingUp] = useState(!apiKey);
 
   if (settingUp || !apiKey) return <SetupForm onSaved={() => setSettingUp(false)} onCancel={apiKey ? () => setSettingUp(false) : undefined} />;
-  return <Estimator date={date} meal={meal} onDone={onDone} onSettings={() => setSettingUp(true)} />;
+  return <Estimator date={date} meal={meal} onDone={onDone} onSettings={() => setSettingUp(true)} initialDescription={initialDescription} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,13 +201,25 @@ function settled(item: ReviewItem): EstimatedItem {
   return { ...item, quantity, nutrients: item.editing ? parseNutrientDraft(item.draft) : item.nutrients };
 }
 
-function Estimator({ date, meal, onDone, onSettings }: { date: string; meal: Meal; onDone: () => void; onSettings: () => void }) {
+function Estimator({
+  date,
+  meal,
+  onDone,
+  onSettings,
+  initialDescription,
+}: {
+  date: string;
+  meal: Meal;
+  onDone: () => void;
+  onSettings: () => void;
+  initialDescription?: string;
+}) {
   const provider = useAiSetup((state) => state.provider);
   const profile = useNutritionProfile();
   const customNutrients = profile.data?.customNutrients ?? [];
   const create = useCreateEntries();
 
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription?.slice(0, 600) ?? "");
   const [image, setImage] = useState<{ ai: AiImage; preview: string } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -257,6 +282,17 @@ function Estimator({ date, meal, onDone, onSettings }: { date: string; meal: Mea
       if (controller.current === next) setBusy(false);
     }
   }
+
+  // Words handed over from search are estimated on open rather than waiting
+  // for a click on text already typed. Started from a timer, which the
+  // cleanup cancels, so Strict Mode's remount sends one request, not two.
+  useEffect(() => {
+    if (!initialDescription?.trim()) return;
+    const timer = window.setTimeout(() => void run(), 0);
+    return () => window.clearTimeout(timer);
+    // Once, on open; `run` reads the description state seeded from the prop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const update = (key: string, change: Partial<ReviewItem>) =>
     setItems((list) => list?.map((item) => (item.key === key ? { ...item, ...change } : item)) ?? null);

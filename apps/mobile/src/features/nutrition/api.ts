@@ -28,6 +28,8 @@ import type {
   MealTemplate,
   NutritionGoals,
   NutritionProfile,
+  NutritionStats,
+  NutritionStatsQuery,
   RecentItem,
   TemplateInput,
   TemplatePatch,
@@ -54,6 +56,7 @@ export const nutritionApi = {
 
   day: (date: string) => apiRequest<DiaryDay>('GET', `${BASE}/day${query({ date })}`),
   summary: (from: string, to: string) => apiRequest<DaySummary[]>('GET', `${BASE}/summary${query({ from, to })}`),
+  stats: (range: NutritionStatsQuery) => apiRequest<NutritionStats>('GET', `${BASE}/stats${query(range)}`),
 
   createEntries: (input: CreateEntriesInput) => apiRequest<FoodEntry[]>('POST', `${BASE}/entries`, input),
   updateEntry: (id: string, patch: EntryPatch) => apiRequest<FoodEntry>('PATCH', `${BASE}/entries/${id}`, patch),

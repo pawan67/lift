@@ -11,6 +11,16 @@ const OPTIONS: { value: StatRange; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-export function RangePicker({ value, onChange }: { value: StatRange; onChange: (value: StatRange) => void }) {
-  return <Segmented size="sm" value={value} options={OPTIONS} onChange={onChange} />;
+export function RangePicker({
+  value,
+  onChange,
+  options,
+}: {
+  value: StatRange;
+  onChange: (value: StatRange) => void;
+  /** Narrow the offer. Food statistics read at most a year, so they leave out "All". */
+  options?: readonly StatRange[];
+}) {
+  const available = options ? OPTIONS.filter((option) => options.includes(option.value)) : OPTIONS;
+  return <Segmented size="sm" value={value} options={available} onChange={onChange} />;
 }

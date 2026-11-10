@@ -18,11 +18,18 @@ import { cn } from "@/lib/cn";
 
 type Tone = "info" | "error" | "success";
 
+/** One button on the toast, such as Undo. */
+interface ToastAction {
+  label: string;
+  onAction: () => void;
+}
+
 interface ToastEntry {
   id: number;
   message: string;
   tone: Tone;
   open: boolean;
+  action?: ToastAction;
 }
 
 const useToastStore = create<{ toasts: ToastEntry[] }>(() => ({ toasts: [] }));
@@ -34,9 +41,9 @@ const MAX_TOASTS = 3;
 /** Long enough for the exit animation in `theme.css` to finish. */
 const EXIT_MS = 200;
 
-export function toast(message: string, tone: Tone = "success"): void {
+export function toast(message: string, tone: Tone = "success", action?: ToastAction): void {
   const id = nextToast++;
-  useToastStore.setState((state) => ({ toasts: [...state.toasts.filter((entry) => entry.open).slice(-(MAX_TOASTS - 1)), { id, message, tone, open: true }] }));
+  useToastStore.setState((state) => ({ toasts: [...state.toasts.filter((entry) => entry.open).slice(-(MAX_TOASTS - 1)), { id, message, tone, open: true, action }] }));
 }
 
 function close(id: number) {
@@ -70,6 +77,17 @@ export function Toaster() {
         >
           {entry.tone === "success" ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-volt" aria-hidden /> : null}
           <Primitive.Description>{entry.message}</Primitive.Description>
+          {entry.action ? (
+            // `altText` is what a screen reader is told to do instead, since
+            // the toast may be gone before the button can be reached.
+            <Primitive.Action
+              altText={`${entry.action.label}: press F8 to reach it`}
+              onClick={entry.action.onAction}
+              className="ml-1 shrink-0 rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-volt hover:bg-surface-2"
+            >
+              {entry.action.label}
+            </Primitive.Action>
+          ) : null}
         </Primitive.Root>
       ))}
       <Primitive.Viewport className="pointer-events-none fixed inset-x-0 bottom-20 z-[90] m-0 flex list-none flex-col items-center gap-2 px-4 outline-none lg:bottom-6" />

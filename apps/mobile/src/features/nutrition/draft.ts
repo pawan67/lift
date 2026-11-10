@@ -40,10 +40,12 @@ interface DraftState {
   /**
    * The last thing logged from the add flow, so the add screen can say so when
    * the portion screen returns to it. `at` makes a second add of the same food
-   * a new event.
+   * a new event. `undo` names what was created, so the note can offer to take
+   * it back without a trip to the diary.
    */
-  lastAdded: { name: string; at: number } | null;
-  noteAdded: (name: string) => void;
+  lastAdded: { name: string; at: number; undo?: { date: string; ids: string[] } } | null;
+  noteAdded: (name: string, undo?: { date: string; ids: string[] }) => void;
+  clearAdded: () => void;
 }
 
 export const useFoodDraft = create<DraftState>((set) => ({
@@ -52,5 +54,6 @@ export const useFoodDraft = create<DraftState>((set) => ({
   templateResult: null,
   setTemplateResult: (templateResult) => set({ templateResult }),
   lastAdded: null,
-  noteAdded: (name) => set({ lastAdded: { name, at: Date.now() } }),
+  noteAdded: (name, undo) => set({ lastAdded: { name, at: Date.now(), undo } }),
+  clearAdded: () => set({ lastAdded: null }),
 }));

@@ -3,9 +3,11 @@
  *
  * Everything on it is a step away from the day's two commonest acts, which are
  * adding something to a meal and repeating what was eaten before. So every
- * meal has its own add button, a long press on any entry offers copy and
- * delete, a meal's menu copies or templates the whole meal, and an empty day
- * offers to copy yesterday.
+ * meal has its own add button and one-tap chips for what is usually eaten
+ * there (or the same meal as the day before), a search field under the
+ * summary opens the add screen ready to type, a long press on any entry
+ * offers copy and delete, a meal's menu copies or templates the whole meal,
+ * and an empty day offers to copy yesterday.
  *
  * Paging between days keeps the previous one on screen until the next arrives
  * (see `useDiaryDay`), so moving through the week never flashes an empty diary.
@@ -21,6 +23,7 @@ import {
   formatQuantity,
   groupByMeal,
   itemTotals,
+  mealForTime,
   nutrientDefinitions,
   totalsOf,
   type FoodEntry,
@@ -44,6 +47,7 @@ import {
 } from '@/components/ui';
 import { haptics } from '@/features/feedback/haptics';
 import { FoodRow } from '@/features/nutrition/components/food-row';
+import { MealSuggestions } from '@/features/nutrition/components/meal-suggestions';
 import { DaySummaryPanel } from '@/features/nutrition/components/summary';
 import { describeDay, describeDayInline, shiftIso, todayIso, weekEnding } from '@/features/nutrition/dates';
 import { useFoodDraft } from '@/features/nutrition/draft';
@@ -109,6 +113,13 @@ function Diary({ scrollEdge }: { scrollEdge: ReturnType<typeof useScrollEdge> })
   const [date, setDate] = useState(today);
 
   const day = useDiaryDay(date);
+  // The day before, for "same as yesterday" on an empty meal. Only trusted
+  // when it is really that day, not the placeholder kept while paging.
+  const dayBefore = useDiaryDay(shiftIso(date, -1));
+  const previousByMeal = useMemo(
+    () => groupByMeal(dayBefore.data?.date === shiftIso(date, -1) ? dayBefore.data.entries : []),
+    [dayBefore.data, date],
+  );
   const profile = useNutritionProfile();
   // The strip shows the selected day with a few days either side, but never
   // runs past today unless the selected day already has.
@@ -129,6 +140,12 @@ function Diary({ scrollEdge }: { scrollEdge: ReturnType<typeof useScrollEdge> })
   const addTo = (meal: Meal) => {
     haptics.added();
     router.push({ pathname: '/food/add', params: { date, meal } });
+  };
+
+  /** The search field: straight to typing, into the meal the time of day suggests. */
+  const searchToAdd = () => {
+    haptics.selection();
+    router.push({ pathname: '/food/add', params: { date, meal: mealForTime(new Date()), focus: '1' } });
   };
 
   const openEntry = (entry: FoodEntry) => {
@@ -339,6 +356,22 @@ function Diary({ scrollEdge }: { scrollEdge: ReturnType<typeof useScrollEdge> })
           ) : null}
         </View>
 
+        <Pressable
+          onPress={searchToAdd}
+          style={({ pressed }) => [
+            styles.searchEntry,
+            { backgroundColor: pressed ? colors.surfacePressed : colors.surfaceMuted },
+          ]}
+          accessibilityRole="search"
+          accessibilityLabel="Search foods or describe a meal"
+        >
+          <Ionicons name="search" size={17} color={colors.textTertiary} />
+          <Text variant="body" color="textTertiary" style={styles.searchEntryText} numberOfLines={1}>
+            Search foods or describe a meal
+          </Text>
+          <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+        </Pressable>
+
         {day.isError && !day.data ? (
           <Card style={styles.section}>
             <Text variant="bodyMedium">Could not load this day</Text>
@@ -387,6 +420,18 @@ function Diary({ scrollEdge }: { scrollEdge: ReturnType<typeof useScrollEdge> })
                   <Ionicons name="add" size={20} color={colors.textOnAccent} />
                 </Pressable>
               </View>
+
+              {day.isSuccess && !day.isPlaceholderData ? (
+                <MealSuggestions
+                  // A fresh note per day: Undo belongs to the day it was added on.
+                  key={date}
+                  date={date}
+                  meal={meal}
+                  isToday={date === today}
+                  current={list}
+                  previous={previousByMeal[meal]}
+                />
+              ) : null}
 
               {list.length > 0 ? (
                 <Card padded={false} style={styles.mealCard}>
@@ -466,6 +511,20 @@ function Diary({ scrollEdge }: { scrollEdge: ReturnType<typeof useScrollEdge> })
             </Pressable>
           </View>
         ) : null}
+
+        {/* Outside the block above so it is there on an empty day too: the
+            morning, before breakfast is logged, is when the week is reviewed. */}
+        <Pressable
+          onPress={() => router.push('/food/stats')}
+          style={[styles.section, styles.nutrientsToggle]}
+          accessibilityRole="button"
+          accessibilityLabel="Food statistics"
+        >
+          <Text variant="label" color="textSecondary">
+            Statistics
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        </Pressable>
       </ScrollView>
     </Screen>
   );
@@ -546,6 +605,16 @@ const styles = StyleSheet.create({
   weekTrack: { width: 4, height: 18, borderRadius: 2, overflow: 'hidden', justifyContent: 'flex-end' },
   weekFill: { width: '100%', borderRadius: 2 },
   section: { marginHorizontal: spacing.lg, gap: spacing.sm },
+  searchEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
+    height: 44,
+    borderRadius: radius.lg,
+  },
+  searchEntryText: { flex: 1 },
   goalHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'center', padding: spacing.xs },
   errorText: { marginTop: spacing.xs, marginBottom: spacing.md },
   meal: { marginHorizontal: spacing.lg, gap: spacing.sm },

@@ -29,7 +29,7 @@ import {
   type Meal,
   type NutrientValues,
 } from "@lift/shared";
-import { Album, BookmarkPlus, ChevronLeft, ChevronRight, Coffee, Copy, Moon, Plus, SlidersHorizontal, Sparkles, Sun, Trash2, UtensilsCrossed } from "lucide-react";
+import { Album, BarChart3, BookmarkPlus, ChevronLeft, ChevronRight, Coffee, Copy, Moon, Plus, SlidersHorizontal, Sparkles, Sun, Trash2, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -183,6 +183,11 @@ export default function FoodPage() {
         subtitle="Your food diary, shared with the phone app."
         actions={
           <>
+            <Button asChild>
+              <Link href="/food/stats">
+                <BarChart3 size={16} /> Statistics
+              </Link>
+            </Button>
             <Button asChild>
               <Link href="/food/templates">
                 <Album size={16} /> Templates

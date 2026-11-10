@@ -16,21 +16,16 @@ import { useMemo, useState } from "react";
 
 import { TimeChart, type TimePoint } from "@/components/charts/charts";
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { confirm, toast } from "@/components/ui/dialog";
-import {
-  Badge,
-  Button,
-  ButtonLink,
-  buttonClass,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
-  ListRow,
-  PageHeader,
-  Segmented,
-  Stat,
-} from "@/components/ui/primitives";
+import { confirm } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListRow } from "@/components/ui/list-row";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
+import { Stat } from "@/components/ui/stat";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { TRACKING_LABELS } from "@/lib/exercises/labels";
@@ -190,16 +185,18 @@ export default function ExerciseDetailPage() {
         actions={
           <>
             {exercise.videoUrl ? (
-              <a href={exercise.videoUrl} target="_blank" rel="noreferrer" className={buttonClass("secondary")}>
-                <PlayCircle size={15} /> Watch demo
-              </a>
+              <Button asChild>
+                <a href={exercise.videoUrl} target="_blank" rel="noreferrer">
+                  <PlayCircle size={15} /> Watch demo
+                </a>
+              </Button>
             ) : null}
             {custom ? (
               <>
                 <ButtonLink href={`/exercises/${encodeURIComponent(id)}/edit`}>
                   <Pencil size={15} /> Edit
                 </ButtonLink>
-                <Button variant="ghost" onClick={() => void onArchive()} title={exercise.isArchived ? "Unarchive" : "Archive"}>
+                <Button variant="ghost" onClick={() => void onArchive()}>
                   {exercise.isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
                   {exercise.isArchived ? "Unarchive" : "Archive"}
                 </Button>

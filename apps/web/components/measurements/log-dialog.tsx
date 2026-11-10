@@ -25,9 +25,11 @@ import {
 } from "@lift/shared";
 import { useState } from "react";
 
-import { Dialog, toast } from "@/components/ui/dialog";
-import { Button, Field, Input } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
 import { DateTimeField } from "@/components/ui/date-time-field";
+import { Dialog } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { useFormat } from "@/lib/format";

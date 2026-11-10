@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 
 import { LiftMark } from "@/components/shell/lift-mark";
-import { Button, Field, Input } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
 
 function SignInForm() {
   const router = useRouter();

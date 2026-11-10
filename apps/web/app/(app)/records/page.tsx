@@ -6,7 +6,12 @@ import Link from "next/link";
 import { useDeferredValue, useMemo, useState, type CSSProperties } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Button, Card, EmptyState, Input, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";

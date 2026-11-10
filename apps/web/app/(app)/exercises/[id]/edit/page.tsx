@@ -3,7 +3,9 @@
 import { useParams, useRouter } from "next/navigation";
 
 import { ExerciseForm } from "@/components/exercises/exercise-form";
-import { ButtonLink, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { ButtonLink } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { useModel } from "@/lib/data/model";
 
 export default function EditExercisePage() {

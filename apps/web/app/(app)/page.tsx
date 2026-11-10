@@ -9,16 +9,12 @@ import { BarChart, HBarList, TimeChart } from "@/components/charts/charts";
 import { rankColor } from "@/components/overview/body-parts";
 import { ContributionGraph } from "@/components/overview/contribution-graph";
 import { SessionRow } from "@/components/overview/session-row";
-import {
-  ButtonLink,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
-  PageHeader,
-  Segmented,
-  Stat,
-} from "@/components/ui/primitives";
+import { ButtonLink } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
+import { Stat } from "@/components/ui/stat";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { changeLabel, compactNumber, formatDateShort, integer, relativeDay, useFormat } from "@/lib/format";

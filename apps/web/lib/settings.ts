@@ -17,7 +17,15 @@ import type {
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/** `system` follows the operating system's light or dark setting. */
+export type ThemePreference = "system" | "light" | "dark";
+
+/** Where `persist` keeps these; the pre-paint theme script reads it too. */
+export const SETTINGS_STORAGE_KEY = "lift-web-settings";
+
 export interface Settings {
+  /** Appearance. Dark by default: the AMOLED palette is the app's own look. */
+  theme: ThemePreference;
   weightUnit: WeightUnit;
   distanceUnit: DistanceUnit;
   measurementUnit: MeasurementUnit;
@@ -30,6 +38,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  theme: "dark",
   weightUnit: "kg",
   distanceUnit: "km",
   measurementUnit: "cm",
@@ -50,6 +59,6 @@ export const useSettings = create<SettingsStore>()(
       ...DEFAULT_SETTINGS,
       update: (patch) => set(patch),
     }),
-    { name: "lift-web-settings", version: 1 },
+    { name: SETTINGS_STORAGE_KEY, version: 1 },
   ),
 );

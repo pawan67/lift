@@ -28,7 +28,8 @@ import Link from "next/link";
 import type { DragEvent } from "react";
 
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Card } from "@/components/ui/primitives";
+import { Card } from "@/components/ui/card";
+import { ActionMenu, type MenuItem } from "@/components/ui/dropdown-menu";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/cn";
 import type { RoutineExerciseView } from "@/lib/data/model";
@@ -47,7 +48,6 @@ import {
 import type { LastPerformance } from "@/lib/routines/summary";
 
 import { DraftInput, NumberCell } from "./fields";
-import { ActionMenu, type MenuItem } from "./menu";
 
 const REST_OPTIONS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 

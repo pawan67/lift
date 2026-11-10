@@ -9,9 +9,12 @@ import { HBarList } from "@/components/charts/charts";
 import { ExerciseSelector } from "@/components/exercises/exercise-selector";
 import { ExerciseBlock, type DragHandlers } from "@/components/routines/exercise-block";
 import { DraftTextarea, TitleInput } from "@/components/routines/fields";
-import { confirm, toast } from "@/components/ui/dialog";
-import { Button, ButtonLink, Card, EmptyState } from "@/components/ui/primitives";
+import { confirm } from "@/components/ui/alert-dialog";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Select } from "@/components/ui/select";
+import { toast } from "@/components/ui/toast";
 import { useModel } from "@/lib/data/model";
 import { useData } from "@/lib/data/store";
 import {

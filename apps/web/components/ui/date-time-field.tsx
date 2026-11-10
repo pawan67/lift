@@ -1,6 +1,8 @@
 /**
  * A date and time field with its own calendar, in place of the browser's
- * `datetime-local` picker (which draws the operating system's calendar).
+ * `datetime-local` picker (which draws the operating system's calendar). The
+ * panel is a Radix Popover: it closes on Escape or an outside press and hands
+ * focus back to the field.
  *
  * Works on the same `YYYY-MM-DDTHH:mm` local string a `datetime-local` input
  * does, so callers keep their parsing. The week starts on the day chosen in
@@ -11,13 +13,14 @@
 "use client";
 
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 
 import { cn } from "@/lib/cn";
 import { useSettings } from "@/lib/settings";
 
-import { Popover } from "./popover";
-import { Button } from "./primitives";
+import { Button } from "./button";
+import { fieldClass } from "./input";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "./popover";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -62,7 +65,6 @@ export function DateTimeField({
   className?: string;
   "aria-label"?: string;
 }) {
-  const trigger = useRef<HTMLButtonElement>(null);
   const grid = useRef<HTMLDivElement>(null);
   const firstDay = useSettings((s) => s.firstDayOfWeek);
   const [open, setOpen] = useState(false);
@@ -77,24 +79,14 @@ export function DateTimeField({
     onChange(format(bounded));
   };
 
-  const openPicker = () => {
-    setMonth(new Date(current.getFullYear(), current.getMonth(), 1));
-    setHours(pad(current.getHours()));
-    setMinutes(pad(current.getMinutes()));
-    setOpen(true);
+  const onOpenChange = (next: boolean) => {
+    if (next) {
+      setMonth(new Date(current.getFullYear(), current.getMonth(), 1));
+      setHours(pad(current.getHours()));
+      setMinutes(pad(current.getMinutes()));
+    }
+    setOpen(next);
   };
-
-  const close = (refocus = true) => {
-    setOpen(false);
-    if (refocus) trigger.current?.focus();
-  };
-
-  // Focus the chosen day once the panel is up.
-  useEffect(() => {
-    if (!open) return;
-    const frame = requestAnimationFrame(() => grid.current?.querySelector<HTMLElement>("[data-selected]")?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
 
   const pickDay = (day: Date) => {
     const next = new Date(day.getFullYear(), day.getMonth(), day.getDate(), current.getHours(), current.getMinutes());
@@ -124,15 +116,6 @@ export function DateTimeField({
     }
   };
 
-  const onPanelKey = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      // Stops here, so a dialog around the field stays open.
-      event.preventDefault();
-      event.stopPropagation();
-      close();
-    }
-  };
-
   const applyTime = (h: string, m: string) => {
     const hour = clampNumber(h, 23);
     const minute = clampNumber(m, 59);
@@ -152,35 +135,39 @@ export function DateTimeField({
   const time = current.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
   return (
-    <>
-      <button
-        ref={trigger}
-        type="button"
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger
         aria-haspopup="dialog"
-        aria-expanded={open}
         aria-label={`${ariaLabel}: ${label}, ${time}`}
-        onClick={() => (open ? close() : openPicker())}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault();
-            openPicker();
+            onOpenChange(true);
           }
         }}
-        className={cn(
-          "flex h-10 w-full items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-3 text-left text-sm text-fg",
-          "transition-[border-color,box-shadow,background-color] duration-150 ease-out hover:border-line-strong",
-          "focus-visible:border-volt/60 focus-visible:shadow-[0_0_0_3px_rgb(210_243_75/0.12)] focus-visible:outline-none",
-          open && "border-line-strong bg-surface-3",
-          className,
-        )}
+        className={fieldClass({
+          focus: "focus-visible",
+          className: cn("flex h-10 items-center gap-2.5 px-3 text-left data-[state=open]:border-line-strong data-[state=open]:bg-surface-3", className),
+        })}
       >
         <CalendarDays size={15} className="shrink-0 text-fg-3" aria-hidden />
         <span className="truncate">{label}</span>
         <span className="tabular ml-auto shrink-0 text-fg-2">{time}</span>
-      </button>
+      </PopoverTrigger>
 
-      <Popover open={open} onClose={() => close(false)} anchor={trigger} width={300} role="dialog" aria-label={ariaLabel}>
-        <div onKeyDown={onPanelKey} className="w-full overflow-y-auto p-3">
+      <PopoverContent
+        width={300}
+        role="dialog"
+        aria-label={ariaLabel}
+        onOpenAutoFocus={(event) => {
+          // The chosen day, so arrow keys work straight away.
+          const day = grid.current?.querySelector<HTMLElement>("[data-selected]");
+          if (!day) return;
+          event.preventDefault();
+          day.focus();
+        }}
+      >
+        <div className="w-full overflow-y-auto p-3">
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
@@ -294,12 +281,14 @@ export function DateTimeField({
             >
               Now
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => close()}>
-              Done
-            </Button>
+            <PopoverClose asChild>
+              <Button size="sm" variant="secondary">
+                Done
+              </Button>
+            </PopoverClose>
           </div>
         </div>
-      </Popover>
-    </>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -4,6 +4,7 @@
  * `day-shading.ts`, minus the database: the model already holds every session.
  */
 
+import { alpha, color } from "@/components/ui/tokens";
 import type { Session } from "@/lib/data/model";
 
 export interface CalendarDay {
@@ -84,10 +85,10 @@ export function intensityStep(volumeKg: number, typicalVolumeKg: number): number
 }
 
 /** Volt at rising strength. The first step still has to read as trained. */
-export const DAY_SHADES = ["rgba(210, 243, 75, 0.28)", "rgba(210, 243, 75, 0.5)", "rgba(210, 243, 75, 0.74)", "#d2f34b"];
+export const DAY_SHADES = [alpha(color.volt, 28), alpha(color.volt, 50), alpha(color.volt, 74), color.volt];
 
 /** Text on each shade: the top two are light enough to need dark figures. */
-export const DAY_SHADE_TEXT = ["#f5f5f7", "#f5f5f7", "#12180a", "#12180a"];
+export const DAY_SHADE_TEXT = [color.fg, color.fg, color.voltInk, color.voltInk];
 
 export function monthCells(monthStart: Date, firstDayOfWeek: 0 | 1): (Date | null)[] {
   const year = monthStart.getFullYear();

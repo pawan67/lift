@@ -24,12 +24,13 @@ import {
 } from "recharts";
 
 import { CHART_COLORS } from "@/components/charts/charts";
+import { color } from "@/components/ui/tokens";
 
 const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-sans)", style: { fontVariantNumeric: "tabular-nums" } };
 
 function Box({ title, rows }: { title: string; rows: { label: string; value: string; color: string }[] }) {
   return (
-    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
+    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-toast">
       <div className="mb-1 text-[11px] text-fg-3">{title}</div>
       {rows.map((row) => (
         <div key={row.label} className="flex items-center gap-2 text-sm">
@@ -65,7 +66,7 @@ export function BodyPartRadar({
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} outerRadius="72%">
           <PolarGrid stroke={CHART_COLORS.grid} />
-          <PolarAngleAxis dataKey="axis" tick={{ fill: "#a1a1ac", fontSize: 12 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fill: color.fg2, fontSize: 12 }} />
           {hasPrevious ? (
             <Radar
               name={previousLabel!}
@@ -101,7 +102,7 @@ export function BodyPartRadar({
             <Legend
               iconType="circle"
               iconSize={8}
-              wrapperStyle={{ fontSize: 12, color: "#a1a1ac" }}
+              wrapperStyle={{ fontSize: 12, color: color.fg2 }}
             />
           ) : null}
         </RadarChart>
@@ -127,7 +128,7 @@ export function WeeklySetsChart({ data, landmarks }: { data: WeekPoint[]; landma
           <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={12} />
           <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={32} domain={[0, Math.ceil(top)]} allowDecimals={false} />
           <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+            cursor={{ fill: CHART_COLORS.cursor }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const point = payload[0]!.payload as WeekPoint;
@@ -136,9 +137,9 @@ export function WeeklySetsChart({ data, landmarks }: { data: WeekPoint[]; landma
           />
           {landmarks && landmarks.mrv > 0 ? (
             <>
-              <ReferenceLine y={landmarks.mev} stroke="#84848f" strokeDasharray="4 4" label={{ value: "MEV", position: "right", fill: "#84848f", fontSize: 10 }} />
-              <ReferenceLine y={landmarks.mav} stroke="#d2f34b" strokeOpacity={0.6} strokeDasharray="4 4" label={{ value: "MAV", position: "right", fill: "#b6d634", fontSize: 10 }} />
-              <ReferenceLine y={landmarks.mrv} stroke="#e8913c" strokeDasharray="4 4" label={{ value: "MRV", position: "right", fill: "#e8913c", fontSize: 10 }} />
+              <ReferenceLine y={landmarks.mev} stroke={CHART_COLORS.axis} strokeDasharray="4 4" label={{ value: "MEV", position: "right", fill: CHART_COLORS.axis, fontSize: 10 }} />
+              <ReferenceLine y={landmarks.mav} stroke={CHART_COLORS.volt} strokeOpacity={0.6} strokeDasharray="4 4" label={{ value: "MAV", position: "right", fill: color.voltDeep, fontSize: 10 }} />
+              <ReferenceLine y={landmarks.mrv} stroke={CHART_COLORS.warn} strokeDasharray="4 4" label={{ value: "MRV", position: "right", fill: CHART_COLORS.warn, fontSize: 10 }} />
             </>
           ) : null}
           <Bar dataKey="value" radius={[4, 4, 1, 1]} maxBarSize={32} isAnimationActive={false}>

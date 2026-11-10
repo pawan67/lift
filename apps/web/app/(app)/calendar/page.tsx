@@ -5,7 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { SessionRow } from "@/components/overview/session-row";
-import { Button, Card, CardBody, EmptyState, PageHeader, Stat } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Stat } from "@/components/ui/stat";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { integer, useFormat } from "@/lib/format";

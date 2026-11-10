@@ -10,7 +10,12 @@ import { ProgressChart, seriesColor } from "@/components/stats/progress-chart";
 import { RangePicker } from "@/components/stats/range-picker";
 import { Section, TH } from "@/components/stats/section";
 import { StatsNav } from "@/components/stats/stats-nav";
-import { Button, Card, CardBody, CardHeader, Chip, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { formatDateShort, integer, useFormat } from "@/lib/format";
@@ -117,7 +122,11 @@ export default function LiftsPage() {
                     <th className={cn(TH, "px-2 text-right whitespace-nowrap sm:px-3")}><span className="sm:hidden">1RM</span><span className="hidden sm:inline">Est. 1RM</span></th>
                     <th className={cn(TH, "hidden px-3 text-right sm:table-cell")}>Heaviest</th>
                     <th className={cn(TH, "hidden px-3 text-right sm:table-cell")}>Volume</th>
-                    <th className={cn(TH, "pl-2 text-right whitespace-nowrap sm:pl-3")} title="Best est. 1RM against the previous period">Change</th>
+                    <th className={cn(TH, "pl-2 text-right whitespace-nowrap sm:pl-3")}>
+                      <Tooltip content="Best est. 1RM against the previous period" side="top" align="end">
+                        <span className="cursor-help underline decoration-dotted decoration-fg-3/50 underline-offset-4">Change</span>
+                      </Tooltip>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

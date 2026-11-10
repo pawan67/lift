@@ -78,7 +78,7 @@ export function ProgressChart({
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
               return (
-                <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
+                <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-toast">
                   <div className="mb-1 text-[11px] text-fg-3">
                     {new Date(Number(label)).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                   </div>

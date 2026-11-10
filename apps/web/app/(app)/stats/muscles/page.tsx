@@ -17,13 +17,18 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { BodyPartRadar, WeeklySetsChart, type WeekPoint } from "@/components/stats/muscle-charts";
 import { quietChange, toneClass } from "@/components/stats/delta";
+import { BodyPartRadar, WeeklySetsChart, type WeekPoint } from "@/components/stats/muscle-charts";
 import { RangePicker } from "@/components/stats/range-picker";
 import { Section, TH } from "@/components/stats/section";
 import { StatsNav } from "@/components/stats/stats-nav";
 import { ZONE_COLORS, ZONE_DESCRIPTIONS } from "@/components/stats/zones";
-import { Card, CardBody, CardHeader, Chip, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { ChoiceGroup, ChoiceItem, Segmented } from "@/components/ui/segmented";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { useModel } from "@/lib/data/model";
 import { compactNumber, integer, useFormat } from "@/lib/format";
@@ -150,25 +155,23 @@ export default function MusclesPage() {
             <CardBody>
               <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2">
                 {VOLUME_ZONES.map((zone) => (
-                  <div key={zone} className="flex items-center gap-1.5 text-xs text-fg-3" title={ZONE_DESCRIPTIONS[zone]}>
-                    <span className="h-2 w-2 rounded-full" style={{ background: ZONE_COLORS[zone] }} />
-                    {VOLUME_ZONE_LABELS[zone]}
-                    <span className="tabular text-fg-2">{zoneCounts.get(zone) ?? 0}</span>
-                  </div>
+                  <Tooltip key={zone} content={ZONE_DESCRIPTIONS[zone]}>
+                    <div className="flex cursor-default items-center gap-1.5 text-xs text-fg-3">
+                      <span className="h-2 w-2 rounded-full" style={{ background: ZONE_COLORS[zone] }} />
+                      {VOLUME_ZONE_LABELS[zone]}
+                      <span className="tabular text-fg-2">{zoneCounts.get(zone) ?? 0}</span>
+                    </div>
+                  </Tooltip>
                 ))}
               </div>
-              <ul className="grid gap-x-12 gap-y-1 lg:grid-cols-2">
-                {rows.map((row) => (
-                  <LandmarkRow
-                    key={row.muscle}
-                    muscle={row.muscle}
-                    value={row.value}
-                    landmarks={row.landmarks}
-                    selected={row.muscle === trendMuscle}
-                    onSelect={() => setPicked(row.muscle)}
-                  />
-                ))}
-              </ul>
+              {/* One muscle is charted week by week below: picking a row is a single choice. */}
+              <ChoiceGroup asChild value={trendMuscle} onValueChange={(muscle) => setPicked(muscle as MuscleGroup)} aria-label="Muscle to chart">
+                <ul className="grid gap-x-12 gap-y-1 lg:grid-cols-2">
+                  {rows.map((row) => (
+                    <LandmarkRow key={row.muscle} muscle={row.muscle} value={row.value} landmarks={row.landmarks} selected={row.muscle === trendMuscle} />
+                  ))}
+                </ul>
+              </ChoiceGroup>
               <p className="mt-4 text-xs leading-relaxed text-fg-3">
                 MEV is the minimum that grows a muscle, MAV the top of the most productive band, MRV the most that most
                 people recover from. Change the training level in <Link href="/settings" className="text-fg-2 underline decoration-line-strong underline-offset-2 transition-colors duration-150 hover:text-fg">Settings</Link>.
@@ -330,13 +333,11 @@ function LandmarkRow({
   value,
   landmarks,
   selected,
-  onSelect,
 }: {
   muscle: MuscleGroup;
   value: number;
   landmarks: VolumeLandmarks;
   selected: boolean;
-  onSelect: () => void;
 }) {
   const zone = volumeZone(value, landmarks);
   const scale = Math.max(landmarks.mrv * 1.25, value * 1.05, 1);
@@ -345,11 +346,9 @@ function LandmarkRow({
 
   return (
     <li>
-      <button
-        type="button"
-        onClick={onSelect}
+      <ChoiceItem
+        value={muscle}
         className="group -mx-2 block w-[calc(100%+1rem)] rounded-md px-2 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70"
-        aria-pressed={selected}
       >
         <div className="mb-1.5 flex items-baseline justify-between gap-3">
           <span
@@ -387,7 +386,7 @@ function LandmarkRow({
             />
           ))}
         </div>
-      </button>
+      </ChoiceItem>
     </li>
   );
 }

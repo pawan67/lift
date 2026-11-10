@@ -1,6 +1,6 @@
 "use client";
 
-import { Segmented } from "@/components/ui/primitives";
+import { Segmented } from "@/components/ui/segmented";
 import type { StatRange } from "@/lib/stats/windows";
 
 const OPTIONS: { value: StatRange; label: string }[] = [

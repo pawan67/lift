@@ -25,7 +25,8 @@ import {
 import { ChevronDown, Search, X } from "lucide-react";
 import { forwardRef, useState, type KeyboardEvent } from "react";
 
-import { Chip } from "@/components/ui/primitives";
+import { Chip } from "@/components/ui/chip";
+import { fieldClass } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 
 const MUSCLES_BY_PART = BODY_PARTS.map((part) => ({
@@ -59,12 +60,7 @@ export const SearchBox = forwardRef<
         aria-label={placeholder}
         autoComplete="off"
         spellCheck={false}
-        className={cn(
-          "h-10 w-full rounded-lg border border-line bg-surface-2 pr-9 pl-9 text-sm text-fg placeholder:text-fg-3",
-          "transition-[border-color,box-shadow] duration-150 ease-out hover:border-line-strong",
-          "focus:border-volt/60 focus:shadow-[0_0_0_3px_rgb(210_243_75/0.12)] focus:outline-none focus-visible:outline-none",
-          "[&::-webkit-search-cancel-button]:hidden",
-        )}
+        className={fieldClass({ className: "h-10 pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden" })}
       />
       {value ? (
         <button

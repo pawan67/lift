@@ -12,7 +12,7 @@ import { smoothMeasurements, toDisplayMeasurementValue, trimZeros, type Measurem
 import { useMemo } from "react";
 
 import { TimeChart } from "@/components/charts/charts";
-import { EmptyState } from "@/components/ui/primitives";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { BodyMeasurementRow } from "@/lib/data/types";
 import { useFormat } from "@/lib/format";
 import { useNow } from "@/lib/measurements/use-now";

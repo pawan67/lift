@@ -14,9 +14,13 @@ import { useParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { HBarList } from "@/components/charts/charts";
-import { rankColor } from "@/components/overview/body-parts";
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { ButtonLink, Card, EmptyState, PageHeader, Stat } from "@/components/ui/primitives";
+import { rankColor } from "@/components/overview/body-parts";
+import { ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Stat } from "@/components/ui/stat";
 import { cn } from "@/lib/cn";
 import type { PersonalRecordRow } from "@/lib/data/types";
 import { useModel, type SessionExercise, type SessionSet } from "@/lib/data/model";

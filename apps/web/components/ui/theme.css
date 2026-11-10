@@ -1,0 +1,351 @@
+/*
+ * The design system's tokens: colour, elevation, radius and motion.
+ *
+ * Every component in `components/ui` and every screen draws from these names,
+ * never from a literal. Two palettes share one set of names, so nothing
+ * branches on the theme:
+ *
+ * - Dark is the app's AMOLED palette, values copied from
+ *   `apps/mobile/src/theme/tokens.ts` by way of the landing page, which is why
+ *   they stay hex. True black, one saturated colour.
+ * - Light is the phone's `lightPalette`: the accent drops to a deep olive so it
+ *   still clears AA as text and as a fill under white.
+ *
+ * `data-theme` on <html> picks one. It is set before first paint by the
+ * script in `theme.tsx`, from the Appearance setting.
+ */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink: #000000;
+  --surface: #0c0c0f;
+  --surface-2: #16161a;
+  --surface-3: #1e1e24;
+  --surface-4: #26262e;
+  --line: #22222a;
+  --line-strong: #3a3a46;
+
+  --fg: #f5f5f7;
+  --fg-2: #a1a1ac;
+  --fg-3: #84848f;
+
+  --volt: #d2f34b;
+  --volt-deep: #b6d634;
+  --volt-ink: #12180a;
+  --volt-tint: rgb(210 243 75 / 0.14);
+
+  --record: #f5c445;
+  --signal: #63cc5a;
+  --warn: #e8913c;
+  --alarm: #ec5a62;
+  --alarm-surface: #1f0e10;
+  --info: #6aa8f7;
+  --violet: #a78bfa;
+  --teal: #5eead4;
+
+  /* Focus halo around fields. */
+  --ring: rgb(210 243 75 / 0.12);
+  /* Backdrop behind dialogs and the drawer. */
+  --scrim: rgb(0 0 0 / 0.7);
+  /* A faint wash for chart cursors and similar hover bands. */
+  --hover-wash: rgb(255 255 255 / 0.04);
+
+  --elev-card: inset 0 1px 0 rgb(255 255 255 / 0.025);
+  --elev-raised: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --elev-pop: 0 16px 48px -8px rgb(0 0 0 / 0.85);
+  --elev-dialog: 0 24px 80px -12px rgb(0 0 0 / 0.8);
+  --elev-toast: 0 12px 40px -8px rgb(0 0 0 / 0.8);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: #f4f4f6;
+  --surface: #ffffff;
+  --surface-2: #efeff2;
+  --surface-3: #e4e4ea;
+  --surface-4: #d8d8e0;
+  --line: #e2e2e8;
+  --line-strong: #c9c9d2;
+
+  --fg: #111114;
+  --fg-2: #5a5a64;
+  --fg-3: #767681;
+
+  --volt: #54700a;
+  --volt-deep: #3f5406;
+  --volt-ink: #ffffff;
+  --volt-tint: rgb(163 209 30 / 0.22);
+
+  --record: #6e5c00;
+  --signal: #2a6b1e;
+  --warn: #a34a07;
+  --alarm: #b3242c;
+  --alarm-surface: #fbeaeb;
+  --info: #1d5fc4;
+  --violet: #6a46d0;
+  --teal: #0f766e;
+
+  --ring: rgb(84 112 10 / 0.18);
+  --scrim: rgb(0 0 0 / 0.4);
+  --hover-wash: rgb(0 0 0 / 0.04);
+
+  --elev-card: 0 1px 2px rgb(16 16 24 / 0.04);
+  --elev-raised: 0 1px 2px rgb(16 16 24 / 0.06);
+  --elev-pop: 0 12px 36px -8px rgb(16 16 24 / 0.18), 0 2px 6px rgb(16 16 24 / 0.06);
+  --elev-dialog: 0 24px 80px -12px rgb(16 16 24 / 0.28);
+  --elev-toast: 0 12px 32px -8px rgb(16 16 24 / 0.22);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-volt: var(--volt);
+  --color-volt-deep: var(--volt-deep);
+  --color-volt-ink: var(--volt-ink);
+  --color-volt-tint: var(--volt-tint);
+  --color-record: var(--record);
+  --color-signal: var(--signal);
+  --color-warn: var(--warn);
+  --color-alarm: var(--alarm);
+  --color-alarm-surface: var(--alarm-surface);
+  --color-info: var(--info);
+  --color-violet: var(--violet);
+  --color-teal: var(--teal);
+  --color-scrim: var(--scrim);
+
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
+  --shadow-pop: var(--elev-pop);
+  --shadow-dialog: var(--elev-dialog);
+  --shadow-toast: var(--elev-toast);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 0.75rem;
+}
+
+/*
+ * Motion. Tailwind's own `ease-out` and `ease-in-out` are too soft to read as
+ * intentional, so these replace them app-wide; `ease-drawer` is the iOS sheet
+ * curve, for anything that slides in from an edge.
+ */
+@theme {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/*
+ * Press feedback for anything clickable that is button-sized: a small scale on
+ * `:active` tells the hand the click landed before anything else changes.
+ * Colour still eases on hover; the scale is the only motion.
+ */
+@utility press {
+  transition-property: transform, background-color, border-color, color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/*
+ * Overlays: dialogs, the phone drawer, menus, popovers, tooltips and toasts.
+ *
+ * Radix keeps a closing element mounted until its CSS animation ends, so entry
+ * and exit are keyframes keyed on `data-state`. The curves and durations are
+ * the ones the hand-built overlays used. Each class goes on the Radix part it
+ * names; the components in this folder already apply them.
+ */
+
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ui-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.ui-scrim[data-state="open"] {
+  animation: ui-fade-in 200ms var(--ease-out);
+}
+.ui-scrim[data-state="closed"] {
+  animation: ui-fade-out 150ms var(--ease-out) forwards;
+}
+
+/* Centred dialogs scale up from the middle; there is no trigger to grow from. */
+@keyframes ui-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes ui-dialog-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+.ui-dialog[data-state="open"] {
+  animation: ui-dialog-in 200ms var(--ease-out);
+}
+.ui-dialog[data-state="closed"] {
+  animation: ui-dialog-out 150ms var(--ease-out) forwards;
+}
+
+/* On a phone the same dialog is a bottom sheet, so it rises from the edge. */
+@keyframes ui-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes ui-sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@media (width < 40rem) {
+  .ui-dialog[data-state="open"] {
+    animation: ui-sheet-up 380ms var(--ease-drawer);
+  }
+  .ui-dialog[data-state="closed"] {
+    animation: ui-sheet-down 220ms var(--ease-drawer) forwards;
+  }
+}
+
+/* The phone's navigation drawer, from the right edge. */
+@keyframes ui-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes ui-drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+.ui-drawer[data-state="open"] {
+  animation: ui-drawer-in 340ms var(--ease-drawer);
+}
+.ui-drawer[data-state="closed"] {
+  animation: ui-drawer-out 220ms var(--ease-drawer) forwards;
+}
+
+/*
+ * Menus, popovers and select lists grow out of their trigger. Radix sets a
+ * `--radix-*-transform-origin` on each; the component maps it to `--origin`.
+ */
+@keyframes ui-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes ui-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+.ui-pop {
+  transform-origin: var(--origin, top left);
+}
+.ui-pop[data-state="open"] {
+  animation: ui-pop-in 140ms var(--ease-out);
+}
+.ui-pop[data-state="closed"] {
+  animation: ui-pop-out 100ms var(--ease-out) forwards;
+}
+
+/* Tooltips: quicker, and only once the delay has passed. */
+.ui-tooltip {
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+}
+.ui-tooltip[data-state="delayed-open"],
+.ui-tooltip[data-state="instant-open"] {
+  animation: ui-pop-in 120ms var(--ease-out);
+}
+.ui-tooltip[data-state="closed"] {
+  animation: ui-fade-out 80ms var(--ease-out) forwards;
+}
+
+/* Toasts rise from below and can be swiped back down. */
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes ui-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.ui-toast[data-state="open"] {
+  animation: ui-toast-in 260ms var(--ease-out);
+}
+.ui-toast[data-state="closed"] {
+  animation: ui-toast-out 160ms var(--ease-out) forwards;
+}
+.ui-toast[data-swipe="move"] {
+  transform: translateY(var(--radix-toast-swipe-move-y));
+}
+.ui-toast[data-swipe="cancel"] {
+  transform: none;
+  transition: transform 200ms var(--ease-out);
+}
+.ui-toast[data-swipe="end"] {
+  animation: ui-toast-out 160ms var(--ease-out) forwards;
+}
+
+/* Bars that change length when a range or metric changes. */
+.bar-fill {
+  transform-origin: left center;
+  transition: transform 320ms var(--ease-out);
+}
+
+/*
+ * Reduced motion keeps the fades, which help, and drops the movement, which is
+ * what makes people queasy.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog[data-state="open"],
+  .ui-pop[data-state="open"],
+  .ui-toast[data-state="open"],
+  .ui-tooltip[data-state="delayed-open"],
+  .ui-tooltip[data-state="instant-open"] {
+    animation: ui-fade-in 150ms linear;
+  }
+  .ui-dialog[data-state="closed"],
+  .ui-pop[data-state="closed"],
+  .ui-toast[data-state="closed"] {
+    animation: ui-fade-out 120ms linear forwards;
+  }
+  .ui-drawer[data-state="open"] {
+    animation: ui-fade-in 150ms linear;
+  }
+  .ui-drawer[data-state="closed"] {
+    animation: ui-fade-out 120ms linear forwards;
+  }
+  .bar-fill {
+    transition: none;
+  }
+  .press:active {
+    transform: none;
+  }
+}

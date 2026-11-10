@@ -21,16 +21,22 @@ import {
 import { LogOut, RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { confirm, toast } from "@/components/ui/dialog";
-import { Badge, Button, Card, Input, PageHeader, Segmented } from "@/components/ui/primitives";
-import { Select } from "@/components/ui/select";
 import { signOut } from "@/components/shell/app-shell";
+import { confirm } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
+import { Select } from "@/components/ui/select";
+import { toast } from "@/components/ui/toast";
 import { useData } from "@/lib/data/store";
 import { fullResync, retryRejected, syncNow } from "@/lib/data/sync";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { parseDecimal } from "@/lib/measurements/actions";
-import { useSettings } from "@/lib/settings";
+import { useSettings, type ThemePreference } from "@/lib/settings";
 
 /**
  * The set the formula picker compares on: eight reps at 100 of anything. At
@@ -91,6 +97,21 @@ export default function SettingsPage() {
       <PageHeader title="Settings" subtitle="Saved in this browser." />
 
       <div className="space-y-8">
+        <Group title="Appearance">
+          <Row label="Theme" description="System follows your device's light or dark setting.">
+            <Segmented<ThemePreference>
+              aria-label="Theme"
+              value={settings.theme}
+              onChange={(theme) => update({ theme })}
+              options={[
+                { value: "system", label: "System" },
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+            />
+          </Row>
+        </Group>
+
         <Group title="Units" note="Your log is stored in kilograms and centimetres, so switching units never changes it.">
           <Row label="Weight" description="Sets, volume, records and bodyweight.">
             <Segmented<WeightUnit>

@@ -19,8 +19,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";
 import { exerciseSubtitle } from "@/lib/exercises/labels";
@@ -338,7 +339,7 @@ function SelectorBody({
                     type="button"
                     onClick={() => setPicked((current) => current.filter((entry) => entry !== id))}
                     className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-surface-3 pr-1.5 pl-1 text-xs text-fg hover:bg-surface-4"
-                    title="Remove"
+                    aria-label={`Remove ${exercise?.name ?? "exercise"}`}
                   >
                     <span className="tabular flex h-5 w-5 items-center justify-center rounded bg-volt text-[11px] font-semibold text-volt-ink">{index + 1}</span>
                     <span className="max-w-40 truncate">{exercise?.name ?? "Exercise"}</span>

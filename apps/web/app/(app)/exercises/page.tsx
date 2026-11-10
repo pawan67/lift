@@ -5,9 +5,14 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { ExerciseFilters, SearchBox } from "@/components/exercises/filters";
 import { ExerciseThumb } from "@/components/exercises/exercise-thumb";
-import { Badge, ButtonLink, Card, EmptyState, PageHeader, Segmented } from "@/components/ui/primitives";
+import { ExerciseFilters, SearchBox } from "@/components/exercises/filters";
+import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
 import { useModel } from "@/lib/data/model";
 import { exerciseSubtitle } from "@/lib/exercises/labels";
 import {

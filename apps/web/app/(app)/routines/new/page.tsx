@@ -3,7 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 
-import { Button, Card, Field, Input, PageHeader, Textarea } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, Input, Textarea } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { useModel } from "@/lib/data/model";
 import { createRoutine } from "@/lib/routines/repository";

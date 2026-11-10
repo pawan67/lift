@@ -4,8 +4,9 @@
 
 import { useState, type FormEvent } from "react";
 
-import { Dialog } from "@/components/ui/dialog";
-import { Button, Field, Input } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogFooter } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/input";
 
 export function NameDialog({
   open,
@@ -83,14 +84,14 @@ function NameForm({
           <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={placeholder} maxLength={80} />
         </Field>
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+      <DialogFooter>
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
           {confirmLabel}
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

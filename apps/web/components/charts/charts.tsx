@@ -25,28 +25,32 @@ import {
   YAxis,
 } from "recharts";
 
+import { alpha, color } from "@/components/ui/tokens";
+
+/** Chart roles on the design tokens, so every chart follows the light or dark theme. */
 export const CHART_COLORS = {
-  volt: "#d2f34b",
-  voltDim: "rgba(210, 243, 75, 0.35)",
-  grid: "#1e1e24",
-  axis: "#84848f",
-  record: "#f5c445",
-  signal: "#63cc5a",
-  warn: "#e8913c",
-  alarm: "#ec5a62",
-  info: "#6aa8f7",
-  violet: "#a78bfa",
-  muted: "#3a3a46",
+  volt: color.volt,
+  voltDim: alpha(color.volt, 35),
+  grid: color.surface3,
+  axis: color.fg3,
+  record: color.record,
+  signal: color.signal,
+  warn: color.warn,
+  alarm: color.alarm,
+  info: color.info,
+  violet: color.violet,
+  muted: color.lineStrong,
+  cursor: color.hoverWash,
 };
 
 /** A categorical ramp for series that need telling apart. */
-export const SERIES_COLORS = ["#d2f34b", "#6aa8f7", "#f5c445", "#a78bfa", "#63cc5a", "#e8913c", "#ec5a62", "#5eead4"];
+export const SERIES_COLORS = [color.volt, color.info, color.record, color.violet, color.signal, color.warn, color.alarm, color.teal];
 
 const AXIS_TICK = { fill: CHART_COLORS.axis, fontSize: 11, fontFamily: "var(--font-sans)", style: { fontVariantNumeric: "tabular-nums" } };
 
 function TooltipBox({ title, rows }: { title: ReactNode; rows: { label: ReactNode; value: ReactNode; color?: string }[] }) {
   return (
-    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-[0_12px_32px_-8px_rgb(0_0_0/0.8)]">
+    <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 shadow-toast">
       <div className="mb-1 text-[11px] text-fg-3">{title}</div>
       {rows.map((row, index) => (
         <div key={index} className="flex items-center gap-2 text-sm">
@@ -105,7 +109,7 @@ export function BarChart({
             tickFormatter={(value: number) => format(value)}
           />
           <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+            cursor={{ fill: CHART_COLORS.cursor }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const point = payload[0]!.payload as SeriesPoint;

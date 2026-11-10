@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 
 import { ExerciseForm } from "@/components/exercises/exercise-form";
-import { PageHeader } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function NewExercisePage() {
   const router = useRouter();

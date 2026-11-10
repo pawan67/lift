@@ -6,12 +6,14 @@
 
 import type { VolumeZone } from "@lift/shared";
 
+import { color } from "@/components/ui/tokens";
+
 export const ZONE_COLORS: Record<VolumeZone, string> = {
-  untrained: "#3a3a46",
-  maintenance: "#84848f",
-  growth: "#b6d634",
-  optimal: "#d2f34b",
-  overreaching: "#e8913c",
+  untrained: color.lineStrong,
+  maintenance: color.fg3,
+  growth: color.voltDeep,
+  optimal: color.volt,
+  overreaching: color.warn,
 };
 
 export const ZONE_DESCRIPTIONS: Record<VolumeZone, string> = {

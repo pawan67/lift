@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
-import { Input, Textarea } from "@/components/ui/primitives";
+import { Input, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 
 const DEBOUNCE_MS = 600;

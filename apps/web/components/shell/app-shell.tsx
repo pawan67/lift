@@ -18,17 +18,18 @@ import {
   Ruler,
   Settings,
   Trophy,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { ConfirmHost, ToastHost } from "@/components/ui/dialog";
-import { Button, Skeleton } from "@/components/ui/primitives";
+import { Button, IconButton } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/empty-state";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet } from "@/components/ui/sheet";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
-import { usePresence } from "@/lib/use-presence";
 import { wipeDatabase } from "@/lib/data/idb";
 import { useData } from "@/lib/data/store";
 import { hardNavigate, syncNow } from "@/lib/data/sync";
@@ -105,54 +106,58 @@ function SyncStatus({ compact = false }: { compact?: boolean }) {
           : "Not synced yet";
 
   return (
-    <button
-      type="button"
-      onClick={() => void syncNow()}
-      title={syncError ?? "Sync now"}
-      className={cn(
-        "press flex items-center gap-2 rounded-md text-xs hover:bg-surface-2",
-        compact ? "p-2" : "w-full px-3 py-2",
-        syncError ? "text-alarm" : "text-fg-3 hover:text-fg",
-      )}
-    >
-      <RefreshCw size={14} className={cn(syncing && "animate-spin")} />
-      {compact ? null : <span className="truncate">{label}</span>}
-    </button>
+    <Tooltip content={syncError ?? (compact ? `${label}. Sync now` : "Sync now")} side={compact ? "bottom" : "top"}>
+      <button
+        type="button"
+        onClick={() => void syncNow()}
+        aria-label={compact ? `${label}. Sync now` : undefined}
+        className={cn(
+          "press flex items-center gap-2 rounded-md text-xs hover:bg-surface-2",
+          compact ? "p-2" : "w-full px-3 py-2",
+          syncError ? "text-alarm" : "text-fg-3 hover:text-fg",
+        )}
+      >
+        <RefreshCw size={14} className={cn(syncing && "animate-spin")} />
+        {compact ? null : <span className="truncate">{label}</span>}
+      </button>
+    </Tooltip>
   );
 }
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto px-3">
-      {NAV.map((group) => (
-        <div key={group.heading}>
-          <div className="mb-1 px-3 text-xs font-medium text-fg-3/80">{group.heading}</div>
-          <ul className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = isActive(pathname, item);
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "relative flex items-center gap-3 rounded-md px-3 py-[7px] text-sm transition-colors duration-150",
-                      active ? "bg-surface-3 font-medium text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
-                    )}
-                  >
-                    {active ? <span className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-volt" aria-hidden /> : null}
-                    <Icon size={16} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-volt" : "text-fg-3"} />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </nav>
+    <ScrollArea className="flex-1" viewportClassName="px-3">
+      <nav className="space-y-5">
+        {NAV.map((group) => (
+          <div key={group.heading}>
+            <div className="mb-1 px-3 text-xs font-medium text-fg-3/80">{group.heading}</div>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = isActive(pathname, item);
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "relative flex items-center gap-3 rounded-md px-3 py-[7px] text-sm transition-colors duration-150",
+                        active ? "bg-surface-3 font-medium text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
+                      )}
+                    >
+                      {active ? <span className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-volt" aria-hidden /> : null}
+                      <Icon size={16} strokeWidth={active ? 2.25 : 1.75} className={active ? "text-volt" : "text-fg-3"} />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </ScrollArea>
   );
 }
 
@@ -180,15 +185,9 @@ function AccountFooter({ onNavigate }: { onNavigate?: () => void }) {
           <div className="truncate text-sm text-fg">{user?.name || "Signed in"}</div>
           <div className="truncate text-xs text-fg-3">{user?.email}</div>
         </div>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          title="Sign out"
-          aria-label="Sign out"
-          className="press rounded-md p-2 text-fg-3 hover:bg-surface-2 hover:text-fg"
-        >
+        <IconButton label="Sign out" size="sm" className="rounded-md" onClick={() => void signOut()}>
           <LogOut size={15} />
-        </button>
+        </IconButton>
       </div>
     </div>
   );
@@ -241,7 +240,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const status = useData((s) => s.status);
   const [drawer, setDrawer] = useState(false);
-  const drawerPresence = usePresence(drawer, 220);
 
   return (
     <DataProvider>
@@ -264,31 +262,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-1">
             <SyncStatus compact />
-            <button type="button" onClick={() => setDrawer(true)} className="press rounded-lg p-2 text-fg-2 hover:bg-surface-2" aria-label="Menu">
+            <IconButton label="Menu" tooltip={false} className="text-fg-2" onClick={() => setDrawer(true)}>
               <Menu size={20} />
-            </button>
+            </IconButton>
           </div>
         </header>
 
         {/* Phone drawer */}
-        {drawerPresence.mounted ? (
-          <div
-            className={cn("fixed inset-0 z-50 lg:hidden", drawerPresence.closing && "pointer-events-none")}
-            data-closing={drawerPresence.closing || undefined}
-          >
-            <div className="overlay-backdrop absolute inset-0 bg-black/70" onClick={() => setDrawer(false)} aria-hidden />
-            <div className="drawer-panel absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-line bg-surface">
-              <div className="flex items-center justify-between px-5 py-4">
-                <span className="font-semibold">Menu</span>
-                <button type="button" onClick={() => setDrawer(false)} className="press rounded-lg p-1.5 text-fg-3 hover:bg-surface-2" aria-label="Close menu">
-                  <X size={18} />
-                </button>
-              </div>
-              <NavLinks pathname={pathname} onNavigate={() => setDrawer(false)} />
-              <AccountFooter onNavigate={() => setDrawer(false)} />
-            </div>
-          </div>
-        ) : null}
+        <Sheet open={drawer} onOpenChange={setDrawer} title="Menu" className="lg:hidden">
+          <NavLinks pathname={pathname} onNavigate={() => setDrawer(false)} />
+          <AccountFooter onNavigate={() => setDrawer(false)} />
+        </Sheet>
 
         <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-16">
           {status === "ready" ? (
@@ -326,8 +310,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
       </div>
-      <ConfirmHost />
-      <ToastHost />
     </DataProvider>
   );
 }

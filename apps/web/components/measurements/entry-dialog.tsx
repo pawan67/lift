@@ -13,9 +13,12 @@ import {
 } from "@lift/shared";
 import { useState } from "react";
 
-import { Dialog, confirm, toast } from "@/components/ui/dialog";
-import { Button, Field, Input } from "@/components/ui/primitives";
+import { confirm } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { DateTimeField } from "@/components/ui/date-time-field";
+import { Dialog, DialogFooter } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toast";
 import type { BodyMeasurementRow } from "@/lib/data/types";
 import { useFormat } from "@/lib/format";
 import { useNow } from "@/lib/measurements/use-now";
@@ -99,7 +102,7 @@ function EditForm({ entry, onDone }: { entry: BodyMeasurementRow; onDone: () => 
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
-      <div className="flex items-center gap-2 border-t border-line px-5 py-3">
+      <DialogFooter>
         <Button variant="danger" onClick={() => void onDelete()} className="mr-auto">
           Delete
         </Button>
@@ -109,7 +112,7 @@ function EditForm({ entry, onDone }: { entry: BodyMeasurementRow; onDone: () => 
         <Button type="submit" variant="primary" disabled={saving || Boolean(valueError || whenError)}>
           Save
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

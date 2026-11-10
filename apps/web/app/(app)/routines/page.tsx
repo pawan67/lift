@@ -7,10 +7,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { FolderDialog } from "@/components/routines/folder-dialog";
-import { ActionMenu } from "@/components/routines/menu";
 import { NameDialog } from "@/components/routines/name-dialog";
-import { confirm, toast } from "@/components/ui/dialog";
-import { Button, ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { confirm } from "@/components/ui/alert-dialog";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ActionMenu } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { toast } from "@/components/ui/toast";
 import { useModel, type RoutineView } from "@/lib/data/model";
 import type { RoutineFolderRow } from "@/lib/data/types";
 import {

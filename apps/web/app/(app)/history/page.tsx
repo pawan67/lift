@@ -5,8 +5,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useDeferredValue, useMemo, useState } from "react";
 
 import { SessionRow } from "@/components/overview/session-row";
-import { Button, Card, EmptyState, Input, PageHeader, Segmented, Stat } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
+import { Stat } from "@/components/ui/stat";
 import { useModel, type Session } from "@/lib/data/model";
 import { integer, useFormat } from "@/lib/format";
 import { STAT_RANGES, type StatRange } from "@/lib/stats/windows";

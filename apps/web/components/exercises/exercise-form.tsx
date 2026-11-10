@@ -22,9 +22,12 @@ import {
 import { Lock } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
-import { toast } from "@/components/ui/dialog";
-import { Button, Chip, Field, Input, Textarea } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { Field, Input, Textarea } from "@/components/ui/input";
+import { ChoiceCards } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { useModel, type ExerciseInfo } from "@/lib/data/model";
 import { TRACKING_HINTS, TRACKING_LABELS } from "@/lib/exercises/labels";
@@ -190,29 +193,18 @@ export function ExerciseForm({
             </span>
           ) : null}
         </span>
-        <div className={cn("grid gap-2", compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
-          {TRACKING_TYPES.map((type) => {
-            const selected = trackingType === type;
-            const disabled = trackingLocked && !selected;
-            return (
-              <button
-                key={type}
-                type="button"
-                disabled={disabled}
-                aria-pressed={selected}
-                onClick={() => setTrackingType(type)}
-                className={cn(
-                  "press rounded-lg border px-3 py-2.5 text-left",
-                  selected ? "border-volt/50 bg-volt-tint" : "border-line bg-surface-2 hover:border-line-strong",
-                  disabled && "cursor-not-allowed opacity-35",
-                )}
-              >
-                <div className={cn("text-sm font-medium transition-colors duration-150", selected ? "text-volt" : "text-fg")}>{TRACKING_LABELS[type]}</div>
-                <div className="mt-0.5 text-xs text-fg-3">{TRACKING_HINTS[type]}</div>
-              </button>
-            );
-          })}
-        </div>
+        <ChoiceCards
+          aria-label="Tracking"
+          value={trackingType}
+          onChange={setTrackingType}
+          className={compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"}
+          options={TRACKING_TYPES.map((type) => ({
+            value: type,
+            label: TRACKING_LABELS[type],
+            description: TRACKING_HINTS[type],
+            disabled: trackingLocked && trackingType !== type,
+          }))}
+        />
       </div>
 
       {compact ? null : (

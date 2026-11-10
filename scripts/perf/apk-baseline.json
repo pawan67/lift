@@ -11,6 +11,11 @@
     "tens of percent, not as noise. v0.29.0 added pdf-lib and fontkit for the",
     "training report, about 1.4 MB of bundle, measured at 32.75 MB in CI.",
     "",
+    "v0.31.0 added the food tracker: expo-camera with its on-device barcode reader",
+    "(native lib, model asset and a fourth dex file), expo-image-picker and",
+    "expo-image-manipulator, and the food screens. Recorded from the CI log of the",
+    "v0.31.0 build, which this gate stopped before upload, so it was not installed.",
+    "",
     "tolerancePercent is headroom for a feature release, not a target. Raise it",
     "only with the reason in the commit message. To move a baseline, run",
     "'node scripts/perf/apk-size.mjs <apk> --update' against a build you have",
@@ -20,18 +25,18 @@
   "tolerancePercent": 5,
   "builds": {
     "arm64-v8a": {
-      "recordedFrom": "lift-0.28.0-50-80e23e4.apk",
-      "recordedAt": "2026-10-15",
-      "totalBytes": 32913490,
-      "dexFiles": 3,
+      "recordedFrom": "lift-0.31.0-57-34aa8e3.apk",
+      "recordedAt": "2026-11-10",
+      "totalBytes": 39168082,
+      "dexFiles": 4,
       "buckets": {
-        "dex": 8191216,
-        "lib": 8474333,
-        "bundle": 8490468,
-        "assets": 17190,
-        "res": 3788708,
-        "arsc": 2312352,
-        "other": 1411240
+        "dex": 9363784,
+        "lib": 10601103,
+        "bundle": 10527703,
+        "assets": 901775,
+        "res": 3795845,
+        "arsc": 2338324,
+        "other": 1415578
       }
     }
   }

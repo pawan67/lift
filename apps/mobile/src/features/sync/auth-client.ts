@@ -132,7 +132,7 @@ export async function apiFetch<T>(path: string, body: unknown): Promise<T> {
  * the same reasons.
  */
 export async function apiRequest<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {

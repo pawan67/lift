@@ -359,6 +359,33 @@ export default function TabLayout() {
         }}
       />
       {/*
+        Food, after Workout and before Profile.
+
+        The fourth tab, and the only one that reads from the server rather than
+        the phone: the diary needs an account, so the screen itself handles the
+        signed-out case instead of the bar hiding the tab and moving everyone's
+        thumb memory around. Its header holds Goals, the one setting a diary is
+        useless without.
+      */}
+      <Tabs.Screen
+        name="food"
+        options={{
+          title: 'Food',
+          ...columnHeader,
+          headerRight: () => (
+            <HeaderAction
+              label="Daily goals and nutrients"
+              icon="options-outline"
+              iconSize={24}
+              onPress={() => router.push('/food/goals')}
+            />
+          ),
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="nutrition" size={size} color={color} focused={focused} />
+          ),
+        }}
+      />
+      {/*
         No History or Exercises tab. Three is the whole bar.
 
         Both were places to look something up rather than to do something, and a

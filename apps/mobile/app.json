@@ -70,6 +70,21 @@
         }
       ],
       "expo-image",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Lift uses the camera to scan food barcodes and photograph meals for calorie estimates.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lift reads the meal photo you choose to estimate its calories.",
+          "cameraPermission": "Lift uses the camera to photograph meals for calorie estimates."
+        }
+      ],
       "./plugins/with-theme-launcher-icons.ts",
       "./plugins/with-exact-alarms.ts"
     ],

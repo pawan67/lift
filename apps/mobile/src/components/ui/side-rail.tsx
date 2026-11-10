@@ -98,6 +98,7 @@ const GROUPS: RailGroup[] = [
         match: ['/workout', '/routine'],
         icon: 'add-circle-outline',
       },
+      { href: '/food', label: 'Food', match: ['/food'], icon: 'nutrition-outline' },
     ],
   },
   {

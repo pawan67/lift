@@ -6,6 +6,7 @@
 "use client";
 
 import {
+  Apple,
   BarChart3,
   CalendarDays,
   Dumbbell,
@@ -65,16 +66,20 @@ const NAV: { heading: string; items: NavItem[] }[] = [
   },
   {
     heading: "Body",
-    items: [{ href: "/measurements", label: "Measurements", icon: Ruler }],
+    items: [
+      { href: "/food", label: "Food", icon: Apple },
+      { href: "/measurements", label: "Measurements", icon: Ruler },
+    ],
   },
 ];
 
-/** The phone's bottom bar: the five places worth one tap. */
+/** The phone's bottom bar: the six places worth one tap. */
 const TABS: NavItem[] = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/stats", label: "Stats", icon: BarChart3, match: ["/history", "/calendar", "/records"] },
   { href: "/exercises", label: "Exercises", icon: Dumbbell },
   { href: "/routines", label: "Routines", icon: ListChecks },
+  { href: "/food", label: "Food", icon: Apple },
   { href: "/measurements", label: "Body", icon: Ruler },
 ];
 
@@ -287,7 +292,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* Phone bottom tabs */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-ink/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-          <ul className="grid grid-cols-5">
+          <ul className="grid grid-cols-6">
             {TABS.map((item) => {
               const active = isActive(pathname, item);
               const Icon = item.icon;

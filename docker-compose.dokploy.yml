@@ -44,6 +44,7 @@ services:
       # Optional. The Telegram bot's token from @BotFather; empty leaves the bot
       # off and the app hides its page.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      USDA_API_KEY: ${USDA_API_KEY:-}
       PORT: 3000
     expose:
       - '3000'

@@ -41,6 +41,19 @@ export interface AiMessage {
    * refused. Never shown and never sent to any provider that did not emit it.
    */
   reasoning?: string;
+  /**
+   * User turns only: pictures sent alongside the text, such as a photo of a
+   * meal. Needs a vision-capable model; one without vision answers with an
+   * error, which surfaces as an ordinary `AiError`.
+   */
+  images?: AiImage[];
+}
+
+/** A picture, inline. Kept small by the caller: providers cap it at a few megabytes. */
+export interface AiImage {
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+  /** Base64, no `data:` prefix. */
+  data: string;
 }
 
 /**

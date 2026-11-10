@@ -43,6 +43,13 @@
       "when": 1792080812685,
       "tag": "0005_telegram_links",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794296119608,
+      "tag": "0006_nutrition",
+      "breakpoints": true
     }
   ]
 }

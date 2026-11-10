@@ -105,6 +105,21 @@ function anthropicRequest(config: AiConfig, request: AiRequest): WireRequest {
     const cacheable =
       (request.cacheFirstMessage === true && index === 0) || request.cacheMessageAt === index;
 
+    if (message.images?.length) {
+      // Images before the text: Anthropic's own guidance, and it reads the
+      // question with the picture already in view.
+      return {
+        role: message.role,
+        content: [
+          ...message.images.map((image) => ({
+            type: 'image',
+            source: { type: 'base64', media_type: image.mediaType, data: image.data },
+          })),
+          ...(message.content.length > 0 ? [{ type: 'text', text: message.content }] : []),
+        ],
+      };
+    }
+
     if (!message.toolCalls?.length && !message.toolResults?.length) {
       return {
         role: message.role,
@@ -234,6 +249,21 @@ function openAiRequest(config: AiConfig, request: AiRequest): WireRequest {
  * only results therefore produces no `user` message at all.
  */
 function openAiMessages(message: AiMessage): Record<string, unknown>[] {
+  if (message.role === 'user' && message.images?.length) {
+    return [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: message.content },
+          ...message.images.map((image) => ({
+            type: 'image_url',
+            image_url: { url: `data:${image.mediaType};base64,${image.data}` },
+          })),
+        ],
+      },
+    ];
+  }
+
   if (message.role === 'user') {
     const results = (message.toolResults ?? []).map((result) => ({
       role: 'tool',

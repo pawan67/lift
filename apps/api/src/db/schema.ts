@@ -444,6 +444,124 @@ export const telegramLinks = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Nutrition
+// ---------------------------------------------------------------------------
+//
+// Server-only, like Telegram: the food tracker talks to these through
+// `/api/nutrition/*` rather than through sync, so none of them carries
+// `syncColumns`, and deletes are real deletes. Nutrient figures are a jsonb map
+// keyed by nutrient (`@lift/shared` `NutrientValues`), which is what lets a
+// user's custom nutrients ride along without a column each. Times are epoch ms,
+// as everywhere else in this schema.
+
+/** A user's saved foods: their own, and ones imported from OpenFoodFacts or USDA. */
+export const foods = pgTable(
+  'foods',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    brand: text('brand'),
+    barcode: text('barcode'),
+    source: text('source').notNull(),
+    sourceId: text('source_id'),
+    /** `Serving[]`, each with its own figures. The first is the default. */
+    servings: jsonb('servings').notNull(),
+    isFavorite: boolean('is_favorite').notNull().default(false),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+    updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+  },
+  (table) => [
+    index('foods_user_idx').on(table.userId, table.updatedAt),
+    // Importing the same product twice returns the saved row. Custom foods
+    // have no source id, and Postgres treats NULLs as distinct, so they never
+    // collide.
+    uniqueIndex('foods_source_idx').on(table.userId, table.source, table.sourceId),
+    index('foods_barcode_idx').on(table.userId, table.barcode),
+  ],
+);
+
+/**
+ * One line of the diary. Carries its own copy of the food's name and figures,
+ * so editing or deleting the food never rewrites what was eaten.
+ */
+export const foodEntries = pgTable(
+  'food_entries',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** Local calendar date, `YYYY-MM-DD`, in the zone the user logged it in. */
+    date: text('date').notNull(),
+    meal: text('meal').notNull(),
+    position: integer('position').notNull().default(0),
+    quantity: doublePrecision('quantity').notNull(),
+    foodId: text('food_id').references(() => foods.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    brand: text('brand'),
+    servingLabel: text('serving_label').notNull(),
+    servingGrams: doublePrecision('serving_grams'),
+    /** Per one serving. The logged amount is these times `quantity`. */
+    nutrients: jsonb('nutrients').notNull(),
+    source: text('source').notNull(),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+    updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+  },
+  (table) => [
+    index('food_entries_day_idx').on(table.userId, table.date),
+    index('food_entries_recent_idx').on(table.userId, table.createdAt),
+    index('food_entries_food_idx').on(table.foodId),
+  ],
+);
+
+/** A named group of foods logged together in one tap: "My usual breakfast". */
+export const mealTemplates = pgTable(
+  'meal_templates',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    meal: text('meal'),
+    /** `EntryItem[]`, snapshots like an entry's. */
+    items: jsonb('items').notNull(),
+    useCount: integer('use_count').notNull().default(0),
+    lastUsedAt: bigint('last_used_at', { mode: 'number' }),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+    updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+  },
+  (table) => [index('meal_templates_user_idx').on(table.userId)],
+);
+
+/** Daily targets. One row per user, absent until they set any. */
+export const nutritionGoals = pgTable('nutrition_goals', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  targets: jsonb('targets').notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
+/** Nutrients the user tracks beyond the built-in list. Values are keyed by `id`. */
+export const customNutrients = pgTable(
+  'custom_nutrients',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    unit: text('unit').notNull(),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  },
+  (table) => [index('custom_nutrients_user_idx').on(table.userId)],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 

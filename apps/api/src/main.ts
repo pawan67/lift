@@ -4,10 +4,23 @@ import { toNodeHandler } from 'better-auth/node';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import express from 'express';
+import net from 'node:net';
 
 import { AppModule } from './app.module.js';
 import { auth } from './auth/auth.js';
 import { runMigrations } from './db/migrate.js';
+
+/**
+ * How long one address gets to connect before Node tries the next.
+ *
+ * Node's default is 250 ms, which assumes every host is nearby. USDA's
+ * FoodData Central regularly takes longer than that just to open a TCP
+ * connection, so with the default every address is abandoned in turn and the
+ * request fails with "fetch failed" while curl, which waits, succeeds. Each
+ * caller still has its own overall timeout; this only stops Node giving up on
+ * a slow handshake early.
+ */
+net.setDefaultAutoSelectFamilyAttemptTimeout(2_000);
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');

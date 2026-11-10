@@ -9,6 +9,7 @@ export * from './landmarks.ts';
 export * from './progression.ts';
 export * from './autoregulate.ts';
 export * from './measurements.ts';
+export * from './nutrition/index.ts';
 export * from './ordering.ts';
 export * from './plates.ts';
 export * from './rotation.ts';

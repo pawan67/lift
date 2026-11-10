@@ -8,6 +8,12 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.31.1](https://github.com/pawan67/lift/compare/v0.31.0...v0.31.1) - 2026-11-10
+
+### Internal
+
+- chore(perf): record the APK size the food tracker brought ([5439dbf](https://github.com/pawan67/lift/commit/5439dbf813717b041af6764c5097ff54c02a08a8))
+
 ## [0.31.0](https://github.com/pawan67/lift/compare/v0.30.0...v0.31.0) - 2026-11-10
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "@lift/web",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "private": true,
   "scripts": {
     "predev": "pnpm --filter @lift/shared build",

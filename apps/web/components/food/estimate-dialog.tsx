@@ -15,6 +15,8 @@
 import {
   AI_PROVIDERS,
   AI_PROVIDER_LABELS,
+  AI_PROVIDER_READS_IMAGES,
+  CEREBRAS_VISION_MODEL,
   DEFAULT_AI_MODELS,
   DEFAULT_BASE_URLS,
   MEAL_LABELS,
@@ -392,7 +394,11 @@ function Estimator({
             <img src={image.preview} alt="Meal photo" className="h-20 w-20 rounded-lg border border-line object-cover" />
             <div className="min-w-0 flex-1 text-sm">
               <p className="text-fg-2">Photo attached</p>
-              {provider === "deepseek" ? <p className="mt-0.5 text-xs text-warn">DeepSeek cannot read images. Pick another provider in AI settings, or remove the photo.</p> : null}
+              {!AI_PROVIDER_READS_IMAGES[provider] ? (
+                <p className="mt-0.5 text-xs text-warn">{AI_PROVIDER_LABELS[provider]} cannot read images. Pick another provider in AI settings, or remove the photo.</p>
+              ) : provider === "cerebras" ? (
+                <p className="mt-0.5 text-xs text-fg-3">Read by {CEREBRAS_VISION_MODEL} on Cerebras.</p>
+              ) : null}
             </div>
             <Button variant="ghost" size="sm" onClick={() => setImage(null)}>
               <X size={14} /> Remove

@@ -59,6 +59,9 @@ export type RestSoundOutput = 'media' | 'notification' | 'alarm';
  */
 export type SetEntryMode = 'scrub' | 'knob' | 'ruler' | 'wheels';
 
+/** Who answers food estimates. See `foodEstimateProvider`. */
+export type FoodEstimateProvider = 'coach' | 'cerebras';
+
 export interface Settings {
   weightUnit: WeightUnit;
   distanceUnit: DistanceUnit;
@@ -167,6 +170,14 @@ export interface Settings {
   /** Origin only. Empty means the provider's own address. Ignored for Anthropic. */
   aiBaseUrl: string;
   /**
+   * Who estimates food. `coach` is the provider above; `cerebras` sends
+   * estimates to Cerebras with its own key, which answers in a second or two.
+   * A photo goes to Cerebras's vision model (`CEREBRAS_VISION_MODEL`).
+   */
+  foodEstimateProvider: FoodEstimateProvider;
+  /** Empty means `DEFAULT_AI_MODELS.cerebras`. */
+  foodEstimateModel: string;
+  /**
    * Write the session summary without being asked.
    *
    * Off by default because it spends money on a request nobody requested, and
@@ -273,6 +284,8 @@ export const DEFAULT_SETTINGS: Settings = {
   aiProvider: 'anthropic',
   aiModel: '',
   aiBaseUrl: '',
+  foodEstimateProvider: 'coach',
+  foodEstimateModel: '',
   aiAutoSummary: false,
   trainingLevel: DEFAULT_TRAINING_LEVEL,
 
@@ -505,6 +518,8 @@ async function persist(state: Settings): Promise<void> {
     aiProvider: state.aiProvider,
     aiModel: state.aiModel,
     aiBaseUrl: state.aiBaseUrl,
+    foodEstimateProvider: state.foodEstimateProvider,
+    foodEstimateModel: state.foodEstimateModel,
     aiAutoSummary: state.aiAutoSummary,
     trainingLevel: state.trainingLevel,
     onboardingCompletedAt: state.onboardingCompletedAt,

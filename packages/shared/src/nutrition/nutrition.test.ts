@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { buildRequest } from '../ai/providers.ts';
 
-import { buildFoodEstimateRequest, estimateProgress, parseFoodEstimate } from './ai.ts';
+import { buildFoodEstimateRequest, estimateConfigFor, estimateProgress, parseFoodEstimate } from './ai.ts';
 import { groupByMeal, macroEnergySplit, macroGramsFromPercent, sumNutrients, totalsOf } from './math.ts';
 import { copyEntriesSchema, createEntriesSchema, type FoodEntry } from './types.ts';
 
@@ -154,5 +154,21 @@ describe('AI estimate', () => {
   it('leaves room for a long list', () => {
     const request = buildFoodEstimateRequest({ description: 'a lot', customNutrients: [] });
     assert.ok(request.maxOutputTokens >= 8000);
+  });
+});
+
+describe('Cerebras estimates', () => {
+  const config = { provider: 'cerebras' as const, model: 'gpt-oss-120b', apiKey: 'k' };
+
+  it('sends a photo to the vision model and text to the configured one', () => {
+    assert.equal(estimateConfigFor(config, true).model, 'qwen-3.8-27b');
+    assert.equal(estimateConfigFor(config, false).model, 'gpt-oss-120b');
+    assert.equal(estimateConfigFor({ ...config, provider: 'anthropic' }, true).model, 'gpt-oss-120b');
+  });
+
+  it('goes to the Cerebras API in the OpenAI format', () => {
+    const wire = buildRequest(config, buildFoodEstimateRequest({ description: 'dal', customNutrients: [] }));
+    assert.equal(wire.url, 'https://api.cerebras.ai/v1/chat/completions');
+    assert.equal(JSON.parse(wire.body).model, 'gpt-oss-120b');
   });
 });

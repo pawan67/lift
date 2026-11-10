@@ -1,6 +1,7 @@
 import {
   AI_PROVIDER_LABELS,
   AI_PROVIDERS,
+  CEREBRAS_VISION_MODEL,
   DEFAULT_AI_MODELS,
   DEFAULT_BASE_URLS,
   TRAINING_LEVEL_LABELS,
@@ -10,17 +11,22 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 
 import { Card, Divider, PromptModal, Reveal } from '@/components/ui';
-import { requireAiConfig, testConnection } from '@/features/ai/client';
+import { loadEstimateConfig, requireAiConfig, testConnection } from '@/features/ai/client';
 import { AiError } from '@/features/ai/errors';
 import { deleteApiKey, maskApiKey, readApiKey, writeApiKey } from '@/features/ai/key-storage';
 import { Footnote, SettingsPage, settingsStyles } from '@/features/settings/page';
 import { SettingAction, SettingChoice, SettingToggle, SettingValue } from '@/features/settings/rows';
 import { showAlert, showConfirm } from '@/store/dialog';
-import { useSettings } from '@/store/settings';
+import { useSettings, type FoodEstimateProvider } from '@/store/settings';
 import { spacing } from '@/theme';
 
-/** Which of the three text fields is open, if any. */
-type Editing = 'key' | 'model' | 'baseUrl' | null;
+/** Which text field is open, if any. The `estimate` ones belong to the Cerebras estimate card. */
+type Editing = 'key' | 'model' | 'baseUrl' | 'estimateKey' | 'estimateModel' | null;
+
+const ESTIMATE_OPTIONS: { value: FoodEstimateProvider; label: string }[] = [
+  { value: 'coach', label: 'Same as coach' },
+  { value: 'cerebras', label: 'Cerebras (fast)' },
+];
 
 /**
  * Keyboard behaviour for a field holding an identifier rather than a sentence.
@@ -103,6 +109,48 @@ export default function AiSettingsScreen() {
     setStoredKey(null);
   }, [provider]);
 
+  // The Cerebras key, for the estimate card. Its own keychain slot, shared with
+  // Cerebras as the coach's provider, so one key serves both.
+  const [cerebrasKey, setCerebrasKey] = useState<string | null>(null);
+  const [testingEstimate, setTestingEstimate] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void readApiKey('cerebras').then((key) => {
+      if (live) setCerebrasKey(key);
+    });
+    return () => {
+      live = false;
+    };
+  }, [storedKey]);
+
+  const saveCerebrasKey = useCallback(async (value: string) => {
+    if (!(await writeApiKey('cerebras', value))) {
+      await showAlert('Could not store the key', 'This device would not let the app save to secure storage.');
+      return;
+    }
+    const key = await readApiKey('cerebras');
+    setCerebrasKey(key);
+    if (provider === 'cerebras') setStoredKey(key);
+  }, [provider]);
+
+  const runEstimateTest = useCallback(async () => {
+    setTestingEstimate(true);
+    try {
+      const config = await loadEstimateConfig({ withImage: false });
+      if (!config || config.provider !== 'cerebras') throw new AiError('no-key');
+      await testConnection(config);
+      await showAlert('Connected', 'Cerebras answered. Food estimates from a description now go there.');
+    } catch (cause) {
+      const error = cause instanceof AiError ? cause : null;
+      await showAlert(
+        'That did not work',
+        error ? [error.message, error.detail].filter(Boolean).join('\n\n') : String(cause),
+      );
+    } finally {
+      setTestingEstimate(false);
+    }
+  }, []);
+
   const runTest = useCallback(async () => {
     setTesting(true);
     try {
@@ -119,7 +167,7 @@ export default function AiSettingsScreen() {
     }
   }, []);
 
-  const prompt = promptFor(editing, settings.aiModel, settings.aiBaseUrl, provider);
+  const prompt = promptFor(editing, settings.aiModel, settings.aiBaseUrl, provider, settings.foodEstimateModel);
 
   return (
     <SettingsPage title="AI coach">
@@ -223,6 +271,54 @@ export default function AiSettingsScreen() {
         </Footnote>
 
         <Card padded={false} style={settingsStyles.sectionStacked}>
+          <SettingChoice
+            icon="flash-outline"
+            label="Food estimates"
+            description="Which model works out a meal you describe."
+            options={ESTIMATE_OPTIONS}
+            value={settings.foodEstimateProvider}
+            onChange={(value: FoodEstimateProvider) => update('foodEstimateProvider', value)}
+          />
+          {settings.foodEstimateProvider === 'cerebras' && (
+            <>
+              <Divider inset={spacing.lg} />
+              <SettingValue
+                icon="key-outline"
+                label="Cerebras API key"
+                value={cerebrasKey ? maskApiKey(cerebrasKey) : 'Not set'}
+                hint="Opens a field to paste your Cerebras API key."
+                onPress={() => setEditing('estimateKey')}
+              />
+              <Divider inset={spacing.lg} />
+              <SettingValue
+                icon="chatbox-outline"
+                label="Estimate model"
+                value={settings.foodEstimateModel.trim() || DEFAULT_AI_MODELS.cerebras}
+                hint="Opens a field to name the Cerebras model to use."
+                onPress={() => setEditing('estimateModel')}
+              />
+              {cerebrasKey && (
+                <>
+                  <Divider inset={spacing.lg} />
+                  <SettingAction
+                    icon="pulse-outline"
+                    label={testingEstimate ? 'Testing…' : 'Test Cerebras'}
+                    description="Sends a two-word request to Cerebras."
+                    disabled={testingEstimate || !settings.aiEnabled}
+                    onPress={() => void runEstimateTest()}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </Card>
+        <Footnote>
+          {settings.foodEstimateProvider === 'cerebras'
+            ? `Meals go to api.cerebras.ai with your Cerebras key and come back in a second or two: a description to the model above, a photo to ${CEREBRAS_VISION_MODEL}, which can see. ${cerebrasKey ? '' : 'Until a key is added, estimates use the coach.'}`
+            : 'Estimates use the coach\'s provider. Cerebras answers a typed meal in a second or two, if you would rather not wait.'}
+        </Footnote>
+
+        <Card padded={false} style={settingsStyles.sectionStacked}>
           <SettingToggle
             icon="document-text-outline"
             label="Summarise finished workouts"
@@ -269,6 +365,8 @@ export default function AiSettingsScreen() {
           const field = editing;
           setEditing(null);
           if (field === 'key') void saveKey(value);
+          else if (field === 'estimateKey') void saveCerebrasKey(value);
+          else if (field === 'estimateModel') update('foodEstimateModel', value);
           else if (field === 'model') update('aiModel', value);
           else if (field === 'baseUrl') update('aiBaseUrl', value);
         }}
@@ -285,8 +383,24 @@ export default function AiSettingsScreen() {
  * screenshot, and there is nothing to edit in a key anyway: it is replaced or
  * removed, and removing it has its own row.
  */
-function promptFor(editing: Editing, model: string, baseUrl: string, provider: AiProvider) {
+function promptFor(editing: Editing, model: string, baseUrl: string, provider: AiProvider, estimateModel: string) {
   switch (editing) {
+    case 'estimateKey':
+      return {
+        title: 'Cerebras API key',
+        message: "From cloud.cerebras.ai. Stored in this device's keychain.",
+        placeholder: 'csk-…',
+        initialValue: '',
+        maxLength: 400,
+      };
+    case 'estimateModel':
+      return {
+        title: 'Estimate model',
+        message: `Leave empty for ${DEFAULT_AI_MODELS.cerebras}.`,
+        placeholder: DEFAULT_AI_MODELS.cerebras,
+        initialValue: estimateModel,
+        maxLength: 120,
+      };
     case 'key':
       return {
         title: 'API key',

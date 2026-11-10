@@ -138,14 +138,34 @@ export interface AiConfig {
   baseUrl?: string;
 }
 
-export const AI_PROVIDERS = ['anthropic', 'deepseek', 'openai-compatible'] as const;
+export const AI_PROVIDERS = ['anthropic', 'deepseek', 'cerebras', 'openai-compatible'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
 export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: 'Claude',
   deepseek: 'DeepSeek',
+  cerebras: 'Cerebras',
   'openai-compatible': 'OpenAI-compatible',
 };
+
+/**
+ * Whether a provider can read photos. DeepSeek's API takes text only, so a
+ * photo estimate there is refused with a sentence that says why.
+ */
+export const AI_PROVIDER_READS_IMAGES: Record<AiProvider, boolean> = {
+  anthropic: true,
+  deepseek: false,
+  // Through `CEREBRAS_VISION_MODEL`, which a photo estimate switches to.
+  cerebras: true,
+  'openai-compatible': true,
+};
+
+/**
+ * The Cerebras model a photo goes to. gpt-oss reads text only; Qwen 3.8 27B is
+ * the Cerebras model that takes images (base64 PNG or JPEG), so an estimate
+ * with a photo is sent there and one without stays on the faster default.
+ */
+export const CEREBRAS_VISION_MODEL = 'qwen-3.8-27b';
 
 /**
  * What each provider is asked for when the user has expressed no preference.
@@ -161,6 +181,9 @@ export const DEFAULT_AI_MODELS: Record<AiProvider, string> = {
   // `deepseek-chat` was retired on 2026-07-24. `deepseek-flash` is the
   // cheaper of the two current models and the one that takes tool calls.
   deepseek: 'deepseek-flash',
+  // OpenAI's open-weight model, served at a few thousand tokens a second: the
+  // reason to pick Cerebras is speed, and this is its fastest strong model.
+  cerebras: 'gpt-oss-120b',
   'openai-compatible': 'gpt-4o-mini',
 };
 
@@ -168,6 +191,7 @@ export const DEFAULT_AI_MODELS: Record<AiProvider, string> = {
 export const DEFAULT_BASE_URLS: Record<AiProvider, string> = {
   anthropic: 'https://api.anthropic.com',
   deepseek: 'https://api.deepseek.com',
+  cerebras: 'https://api.cerebras.ai',
   'openai-compatible': 'https://api.openai.com',
 };
 

@@ -20,6 +20,7 @@
 import {
   DEFAULT_AI_MODELS,
   buildFoodEstimateRequest,
+  estimateConfigFor,
   estimateProgress,
   buildRequest,
   createSseDecoder,
@@ -105,7 +106,9 @@ export async function estimateFood(input: {
   const config = configOf(useAiSetup.getState());
   if (!config) throw new EstimateError("Set up AI first: pick a provider and paste your key.");
 
-  const wire = buildRequest(config, buildFoodEstimateRequest(input));
+  // On Cerebras a photo goes to its vision model; gpt-oss reads text only.
+  const sent = estimateConfigFor(config, !!input.image);
+  const wire = buildRequest(sent, buildFoodEstimateRequest(input));
 
   let response: Response;
   try {

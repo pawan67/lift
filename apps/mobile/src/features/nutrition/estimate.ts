@@ -19,7 +19,7 @@ import {
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
-import { requireAiConfig, streamCompletion } from '@/features/ai/client';
+import { loadEstimateConfig, streamCompletion } from '@/features/ai/client';
 import { AiError } from '@/features/ai/errors';
 
 export interface EstimateFoodInput {
@@ -41,7 +41,8 @@ export interface EstimateFoodInput {
  * describing it differently" rather than showing a stack trace.
  */
 export async function estimateFood(input: EstimateFoodInput): Promise<FoodEstimate> {
-  const config = await requireAiConfig();
+  const config = await loadEstimateConfig({ withImage: !!input.image });
+  if (!config) throw new AiError('no-key');
   const request = buildFoodEstimateRequest({
     description: input.description,
     image: input.image,

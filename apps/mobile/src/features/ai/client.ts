@@ -26,6 +26,7 @@ import {
   createSseDecoder,
   createToolCallCollector,
   DEFAULT_AI_MODELS,
+  estimateConfigFor,
   type AiConfig,
   type AiRequest,
   type AiToolCall,
@@ -72,6 +73,34 @@ export async function loadAiConfig(): Promise<AiConfig | null> {
     apiKey,
     baseUrl: settings.aiBaseUrl.trim() || undefined,
   };
+}
+
+/**
+ * The provider that estimates food, which may not be the coach's.
+ *
+ * With Cerebras chosen for estimates and its key set, an estimate goes there:
+ * it answers in a second or two where a coach model takes ten. A photo goes to
+ * Cerebras's vision model (`estimateConfigFor`), since gpt-oss reads text only.
+ * Behind the same AI switch as everything else, because it is the same act of
+ * sending something to a third party.
+ */
+export async function loadEstimateConfig(options: { withImage: boolean }): Promise<AiConfig | null> {
+  const settings = useSettings.getState();
+  if (!settings.aiEnabled) return null;
+
+  if (settings.foodEstimateProvider === 'cerebras') {
+    const apiKey = await readApiKey('cerebras');
+    if (apiKey) {
+      const config: AiConfig = {
+        provider: 'cerebras',
+        model: settings.foodEstimateModel.trim() || DEFAULT_AI_MODELS.cerebras,
+        apiKey,
+      };
+      return estimateConfigFor(config, options.withImage);
+    }
+  }
+  const config = await loadAiConfig();
+  return config && estimateConfigFor(config, options.withImage);
 }
 
 /** The same, but for a caller that is about to ask a question and must not proceed without one. */

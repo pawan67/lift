@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import type { AiImage, AiRequest } from '../ai/messages.ts';
+import { CEREBRAS_VISION_MODEL, type AiConfig, type AiImage, type AiRequest } from '../ai/messages.ts';
 
 import { BUILT_IN_NUTRIENTS, CORE_NUTRIENT_KEYS, type CustomNutrient, type NutrientValues } from './nutrients.ts';
 import { withGrams, type ServingSize } from './servings.ts';
@@ -46,6 +46,15 @@ function nutrientList(custom: readonly CustomNutrient[]): string {
   const builtIn = BUILT_IN_NUTRIENTS.map((n) => `- "${n.key}": ${n.label} (${n.unit})`);
   const extra = custom.map((c) => `- "${c.id}": ${c.name} (${c.unit})`);
   return [...builtIn, ...extra].join('\n');
+}
+
+/**
+ * The config an estimate is actually sent with. On Cerebras a photo goes to
+ * its vision model, since the default (gpt-oss) reads text only; everything
+ * else is sent as configured.
+ */
+export function estimateConfigFor(config: AiConfig, withImage: boolean): AiConfig {
+  return config.provider === 'cerebras' && withImage ? { ...config, model: CEREBRAS_VISION_MODEL } : config;
 }
 
 export function buildFoodEstimateRequest(input: FoodEstimateInput): AiRequest {

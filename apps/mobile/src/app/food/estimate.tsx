@@ -16,6 +16,10 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import {
+  AI_PROVIDER_LABELS,
+  AI_PROVIDER_READS_IMAGES,
+  CEREBRAS_VISION_MODEL,
+  DEFAULT_AI_MODELS,
   MEAL_LABELS,
   MEALS,
   confidenceLabel,
@@ -53,7 +57,7 @@ import {
   Toggle,
   useScrollEdge,
 } from '@/components/ui';
-import { loadAiConfig } from '@/features/ai/client';
+import { loadEstimateConfig } from '@/features/ai/client';
 import { AiError } from '@/features/ai/errors';
 import { haptics } from '@/features/feedback/haptics';
 import { nutritionApi } from '@/features/nutrition/api';
@@ -170,7 +174,9 @@ export default function EstimateScreen() {
   const date = isIsoDate(params.date) ? params.date : todayIso();
   const meal: Meal = isMeal(params.meal) ? params.meal : 'snacks';
 
-  const provider = useSettings((state) => state.aiProvider);
+  // The coach's provider, which reads photos unless estimates are on Cerebras.
+  const photoProvider = useSettings((state) => state.aiProvider);
+  const fastProvider = useSettings((state) => state.foodEstimateProvider);
   const profile = useNutritionProfile();
   const customNutrients = useMemo(() => profile.data?.customNutrients ?? [], [profile.data]);
   const createEntries = useCreateEntries();
@@ -179,7 +185,7 @@ export default function EstimateScreen() {
   const [configured, setConfigured] = useState<boolean | undefined>(undefined);
   useEffect(() => {
     let live = true;
-    void loadAiConfig().then((config) => {
+    void loadEstimateConfig({ withImage: false }).then((config) => {
       if (live) setConfigured(!!config);
     });
     return () => {
@@ -382,13 +388,16 @@ export default function EstimateScreen() {
               </View>
             )}
 
-            {image && provider === 'deepseek' ? (
+            {image && fastProvider !== 'cerebras' && !AI_PROVIDER_READS_IMAGES[photoProvider] ? (
               <Text variant="caption" color="warning">
-                DeepSeek cannot read photos. Describe the meal, or switch to a vision model in AI settings.
+                {AI_PROVIDER_LABELS[photoProvider]} cannot read photos. Describe the meal, or switch to a vision model in
+                AI settings.
               </Text>
             ) : (
               <Text variant="caption" color="textTertiary">
-                Photos need a model that can see images, such as Claude or GPT-4o.
+                {fastProvider === 'cerebras'
+                  ? `Estimated on Cerebras: descriptions with ${DEFAULT_AI_MODELS.cerebras}, photos with ${CEREBRAS_VISION_MODEL}.`
+                  : 'Photos need a model that can see images, such as Claude or GPT-4o.'}
               </Text>
             )}
 

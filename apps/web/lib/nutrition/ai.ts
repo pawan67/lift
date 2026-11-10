@@ -20,6 +20,7 @@
 import {
   DEFAULT_AI_MODELS,
   buildFoodEstimateRequest,
+  estimateProgress,
   buildRequest,
   createSseDecoder,
   parseFoodEstimate,
@@ -98,6 +99,8 @@ export async function estimateFood(input: {
   image: AiImage | null;
   customNutrients: readonly CustomNutrient[];
   signal?: AbortSignal;
+  /** Foods started so far, as the reply streams in. A long meal takes a while. */
+  onProgress?: (found: number) => void;
 }): Promise<FoodEstimate> {
   const config = configOf(useAiSetup.getState());
   if (!config) throw new EstimateError("Set up AI first: pick a provider and paste your key.");
@@ -118,11 +121,14 @@ export async function estimateFood(input: {
   }
   if (!response.body) throw new EstimateError("The provider sent no answer.");
 
-  const text = await readAll(config, response.body, input.signal);
+  const text = await readAll(config, response.body, input.signal, input.onProgress);
   try {
     return parseFoodEstimate(text, input.customNutrients);
   } catch (cause) {
-    throw new EstimateError(cause instanceof Error ? cause.message : "The answer could not be read.");
+    const message = cause instanceof Error ? cause.message : "The answer could not be read.";
+    throw new EstimateError(
+      /cut off/.test(message) ? `${message} Try a shorter description, or one meal at a time.` : message,
+    );
   }
 }
 
@@ -131,15 +137,26 @@ export async function estimateFood(input: {
  * only useful whole, but asking for a stream keeps one code path with the
  * phone and lets a slow model's reply arrive without a proxy timing it out.
  */
-async function readAll(config: AiConfig, body: ReadableStream<Uint8Array>, signal?: AbortSignal): Promise<string> {
+async function readAll(
+  config: AiConfig,
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+  onProgress?: (found: number) => void,
+): Promise<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const sse = createSseDecoder(config);
   let answer = "";
+  let found = 0;
 
   const apply = (event: SseEvent): boolean => {
     if (event.kind === "delta") {
       answer += event.text;
+      const now = estimateProgress(answer);
+      if (now !== found) {
+        found = now;
+        onProgress?.(found);
+      }
       return false;
     }
     if (event.kind === "error") throw new EstimateError(event.message || "The provider stopped with an error.");

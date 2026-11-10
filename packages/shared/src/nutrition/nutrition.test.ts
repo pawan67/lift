@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { buildRequest } from '../ai/providers.ts';
 
-import { buildFoodEstimateRequest, parseFoodEstimate } from './ai.ts';
+import { buildFoodEstimateRequest, estimateProgress, parseFoodEstimate } from './ai.ts';
 import { groupByMeal, macroEnergySplit, macroGramsFromPercent, sumNutrients, totalsOf } from './math.ts';
 import { copyEntriesSchema, createEntriesSchema, type FoodEntry } from './types.ts';
 
@@ -127,5 +127,32 @@ describe('AI estimate', () => {
     assert.throws(() =>
       parseFoodEstimate('{"items":[{"name":"Tea","nutrients":{"calories":30}}]}', []),
     );
+  });
+
+  it('keeps the finished foods from a reply cut off by the output limit', () => {
+    const food = (name: string) =>
+      `{"name":"${name}","servingLabel":"1 bowl {big}","quantity":1,"confidence":0.7,"nutrients":{"calories":200,"protein":5,"carbs":30,"fat":6}}`;
+    const reply = `{"items":[${food('Dal')},${food('Rice \\"jeera\\"')},{"name":"Raita","servingLabel":"1 bo`;
+    const estimate = parseFoodEstimate(reply, []);
+    assert.deepEqual(
+      estimate.items.map((item) => item.name),
+      ['Dal', 'Rice "jeera"'],
+    );
+    assert.match(estimate.note ?? '', /cut short/);
+  });
+
+  it('says so when a cut-off reply finished no food at all', () => {
+    assert.throws(() => parseFoodEstimate('{"items":[{"name":"Dal","nutri', []), /cut off/);
+    assert.throws(() => parseFoodEstimate('Sorry, I cannot help with that.', []), /did not reply/);
+  });
+
+  it('counts the foods a streaming reply has started', () => {
+    assert.equal(estimateProgress(''), 0);
+    assert.equal(estimateProgress('{"items":[{"name":"Dal","nutrients":{}},{"name" : "Ri'), 2);
+  });
+
+  it('leaves room for a long list', () => {
+    const request = buildFoodEstimateRequest({ description: 'a lot', customNutrients: [] });
+    assert.ok(request.maxOutputTokens >= 8000);
   });
 });

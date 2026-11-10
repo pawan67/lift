@@ -64,6 +64,8 @@ import { describeError, invalidateFoods, useCreateEntries, useNutritionProfile }
 import { useSettings } from '@/store/settings';
 import { radius, spacing, stroke, useColors } from '@/theme';
 
+/** Room for a whole day's eating in one go; the model's reply now has room for the list it makes. */
+const MAX_DESCRIPTION = 2000;
 const QUANTITY_STEP = 0.5;
 const QUANTITY_MIN = 0.25;
 
@@ -94,7 +96,11 @@ function errorText(error: unknown): string {
   if (error instanceof AiError) {
     // The parser's sentence is more useful than the generic one for this
     // screen: it says the model did not find food, which suggests rewording.
-    if (error.kind === 'bad-response' && error.detail) return `${error.detail} Try describing it differently.`;
+    if (error.kind === 'bad-response' && error.detail) {
+      return /cut off/.test(error.detail)
+        ? `${error.detail} Try a shorter description, or one meal at a time.`
+        : `${error.detail} Try describing it differently.`;
+    }
     return error.message;
   }
   return describeError(error);
@@ -126,10 +132,11 @@ export default function EstimateScreen() {
   }, []);
 
   const [description, setDescription] = useState(() =>
-    typeof params.description === 'string' ? params.description.slice(0, 600) : '',
+    typeof params.description === 'string' ? params.description.slice(0, MAX_DESCRIPTION) : '',
   );
   const [image, setImage] = useState<AiImage | null>(null);
   const [estimating, setEstimating] = useState(false);
+  const [found, setFound] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -161,9 +168,18 @@ export default function EstimateScreen() {
     const controller = new AbortController();
     abort.current = controller;
     setEstimating(true);
+    setFound(0);
     setError(null);
     try {
-      const result = await estimateFood({ description, image, customNutrients, signal: controller.signal });
+      const result = await estimateFood({
+        description,
+        image,
+        customNutrients,
+        signal: controller.signal,
+        onProgress: (count) => {
+          if (abort.current === controller) setFound(count);
+        },
+      });
       setNote(result.note);
       setRows(result.items.map((item) => ({ key: nextKey.current++, item, draft: null })));
       haptics.added();
@@ -263,7 +279,7 @@ export default function EstimateScreen() {
               placeholder="2 rotis, dal, a bowl of rice"
               multiline
               style={styles.description}
-              maxLength={600}
+              maxLength={MAX_DESCRIPTION}
             />
 
             {image ? (
@@ -322,6 +338,12 @@ export default function EstimateScreen() {
               fullWidth
               onPress={() => void estimate()}
             />
+
+            {estimating ? (
+              <Text variant="caption" color="textSecondary" accessibilityLiveRegion="polite">
+                {found > 0 ? `Found ${found} ${found === 1 ? 'food' : 'foods'} so far…` : 'Reading the meal…'}
+              </Text>
+            ) : null}
 
             {error ? (
               <Text variant="body" color="danger" accessibilityLiveRegion="polite">

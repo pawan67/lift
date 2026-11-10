@@ -128,12 +128,16 @@ export function useMyFoods() {
 export function useFoodSearch(q: string) {
   const { signedIn } = useSignedIn();
   const trimmed = q.trim();
+  // Past the server's 100 characters this is a meal being described for the
+  // AI estimate, not a food name; searching for it is a 400 shown as an error.
+  const searchable = trimmed.length >= 2 && trimmed.length <= 100;
   return useQuery({
     queryKey: nutritionKeys.search(trimmed.toLowerCase()),
     queryFn: () => nutritionApi.search(trimmed),
-    enabled: signedIn && trimmed.length >= 2,
+    enabled: signedIn && searchable,
     staleTime: 5 * 60_000,
-    placeholderData: keepPreviousData,
+    // A description is not kept showing the results of the words before it.
+    placeholderData: searchable ? keepPreviousData : undefined,
   });
 }
 

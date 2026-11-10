@@ -10,6 +10,7 @@
 
 import {
   buildFoodEstimateRequest,
+  estimateProgress,
   parseFoodEstimate,
   type AiImage,
   type CustomNutrient,
@@ -26,14 +27,16 @@ export interface EstimateFoodInput {
   image: AiImage | null;
   customNutrients: readonly CustomNutrient[];
   signal?: AbortSignal;
+  /** Foods started so far, called as the reply streams in. A long meal takes a while. */
+  onProgress?: (found: number) => void;
 }
 
 /**
  * Asks the configured model what was eaten and parses its answer.
  *
- * Streamed only because that is the one transport the client has; nothing is
- * shown until the whole reply is in, since half a JSON object is not something
- * a person can review. A reply the parser cannot use becomes `bad-response`
+ * Nothing is shown until the whole reply is in, since half a JSON object is
+ * not something a person can review, but the stream does feed a count of foods
+ * found so far, so a long description reads as progress rather than a hang. A reply the parser cannot use becomes `bad-response`
  * with the parser's own sentence as the detail, so the screen can say "try
  * describing it differently" rather than showing a stack trace.
  */
@@ -45,7 +48,19 @@ export async function estimateFood(input: EstimateFoodInput): Promise<FoodEstima
     customNutrients: input.customNutrients,
   });
 
-  const text = await streamCompletion(config, request, { onDelta: () => {}, signal: input.signal });
+  let partial = '';
+  let found = 0;
+  const text = await streamCompletion(config, request, {
+    onDelta: (delta) => {
+      partial += delta;
+      const now = estimateProgress(partial);
+      if (now !== found) {
+        found = now;
+        input.onProgress?.(found);
+      }
+    },
+    signal: input.signal,
+  });
 
   try {
     return parseFoodEstimate(text, input.customNutrients);

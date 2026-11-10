@@ -223,6 +223,7 @@ function Estimator({
   const [image, setImage] = useState<{ ai: AiImage; preview: string } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -270,9 +271,18 @@ function Estimator({
     const next = new AbortController();
     controller.current = next;
     setBusy(true);
+    setFound(0);
     setError(null);
     try {
-      const estimate = await estimateFood({ description, image: image?.ai ?? null, customNutrients, signal: next.signal });
+      const estimate = await estimateFood({
+        description,
+        image: image?.ai ?? null,
+        customNutrients,
+        signal: next.signal,
+        onProgress: (count) => {
+          if (controller.current === next) setFound(count);
+        },
+      });
       setItems(toReview(estimate.items));
       setNote(estimate.note);
     } catch (cause) {
@@ -352,6 +362,7 @@ function Estimator({
               onChange={(event) => setDescription(event.target.value)}
               placeholder="2 rotis, a bowl of dal and some rice"
               rows={3}
+              maxLength={2000}
               data-autofocus
               onKeyDown={(event) => {
                 if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void run();
@@ -415,7 +426,13 @@ function Estimator({
             ) : null}
             <Button variant={items ? "secondary" : "primary"} onClick={() => void run()} disabled={busy}>
               <Sparkles size={15} className={busy ? "animate-pulse" : undefined} />
-              {busy ? "Estimating" : items ? "Estimate again" : "Estimate"}
+              {busy
+                ? found > 0
+                  ? `Estimating · ${found} ${found === 1 ? "food" : "foods"}`
+                  : "Estimating"
+                : items
+                  ? "Estimate again"
+                  : "Estimate"}
             </Button>
           </div>
         </div>

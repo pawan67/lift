@@ -19,14 +19,20 @@ import {
   MEAL_LABELS,
   MEALS,
   confidenceLabel,
+  convertQuantity,
   formatCalories,
   formatQuantity,
+  isGramServing,
   itemTotals,
+  servingAt,
+  servingOptions,
   totalsOf,
   type AiImage,
   type EntryItem,
   type EstimatedItem,
   type Meal,
+  type Serving,
+  toClockTime,
 } from '@lift/shared';
 import { Image } from 'expo-image';
 import { Stack, router, useLocalSearchParams, type Href } from 'expo-router';
@@ -57,6 +63,7 @@ import {
   toNutrientDraft,
   type NutrientDraft,
 } from '@/features/nutrition/components/nutrient-fields';
+import { ServingPicker } from '@/features/nutrition/components/serving-picker';
 import { macroColors } from '@/features/nutrition/components/summary';
 import { todayIso } from '@/features/nutrition/dates';
 import { estimateFood, pickMealPhoto } from '@/features/nutrition/estimate';
@@ -69,11 +76,59 @@ const MAX_DESCRIPTION = 2000;
 const QUANTITY_STEP = 0.5;
 const QUANTITY_MIN = 0.25;
 
-/** One reviewed item. `draft` is non-null while its nutrients are open for editing. */
+/** A gram size counts in tens; anything else in half servings. */
+function stepOf(row: { item: { servingLabel: string } }): { step: number; min: number } {
+  return isGramServing({ label: row.item.servingLabel }) ? { step: 10, min: 1 } : { step: QUANTITY_STEP, min: QUANTITY_MIN };
+}
+
+/**
+ * One reviewed item. `draft` is non-null while its nutrients are open for
+ * editing; `sizing` while its serving size is.
+ */
 interface Row {
   key: number;
   item: EstimatedItem;
   draft: NutrientDraft | null;
+  sizing: boolean;
+}
+
+/** The item's size as a serving, with any open nutrient edits applied. */
+function currentServing(row: Row): Serving {
+  return { id: 'current', label: row.item.servingLabel, grams: row.item.servingGrams, nutrients: finalItem(row).nutrients };
+}
+
+/**
+ * The item at another size.
+ *
+ * `keepWeight` is switching to another unit: the count converts so the same
+ * amount is eaten (2 eggs to 100 of "1 g"), and the unit left behind joins the
+ * alternatives so it can be picked again. Without it the unit itself was
+ * corrected (the egg weighs 60 g, not 50), so the count stays and the figures
+ * follow the new weight.
+ */
+function resized(row: Row, next: Serving, keepWeight: boolean): Row {
+  const current = currentServing(row);
+  let alternatives = row.item.servingOptions;
+  if (keepWeight) {
+    alternatives = [
+      ...(current.grams && !isGramServing(current) ? [{ label: current.label, grams: current.grams }] : []),
+      ...alternatives,
+    ]
+      .filter((size) => size.label !== next.label)
+      .slice(0, 4);
+  }
+  return {
+    ...row,
+    draft: null,
+    item: {
+      ...row.item,
+      servingLabel: next.label,
+      servingGrams: next.grams,
+      nutrients: next.nutrients,
+      quantity: keepWeight ? convertQuantity(row.item.quantity, current, next) : row.item.quantity,
+      servingOptions: alternatives,
+    },
+  };
 }
 
 function isMeal(value: unknown): value is Meal {
@@ -84,10 +139,11 @@ function isIsoDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-/** The item as it will be logged: open nutrient edits applied, confidence dropped. */
+/** The item as it will be logged: open nutrient edits applied, review-only fields dropped. */
 function finalItem(row: Row): EntryItem {
-  const { confidence: _confidence, ...item } = row.item;
+  const { confidence: _confidence, servingOptions: _sizes, ...item } = row.item;
   void _confidence;
+  void _sizes;
   if (!row.draft) return item;
   return { ...item, nutrients: { ...item.nutrients, ...parseNutrientDraft(row.draft) } };
 }
@@ -181,7 +237,7 @@ export default function EstimateScreen() {
         },
       });
       setNote(result.note);
-      setRows(result.items.map((item) => ({ key: nextKey.current++, item, draft: null })));
+      setRows(result.items.map((item) => ({ key: nextKey.current++, item, draft: null, sizing: false })));
       haptics.added();
     } catch (cause) {
       if (cause instanceof AiError && cause.kind === 'aborted') return;
@@ -221,18 +277,25 @@ export default function EstimateScreen() {
         // Saved one at a time so a failure part-way leaves the ones already
         // saved, which the user can find under My foods, rather than nothing.
         toLog = [];
-        for (const item of items) {
+        for (const row of rows) {
+          const item = finalItem(row);
+          const main: Serving = { id: 'ai', label: item.servingLabel, grams: item.servingGrams, nutrients: item.nutrients };
           const food = await nutritionApi.createFood({
             name: item.name,
             brand: item.brand,
             source: 'ai',
-            servings: [{ id: 'ai', label: item.servingLabel, grams: item.servingGrams, nutrients: item.nutrients }],
+            // The other sizes the model suggested go with it, so "1 dozen" is
+            // there next time; 100 g and 1 g are offered for any food anyway.
+            servings: servingOptions([main], row.item.servingOptions).filter((size) => !size.id.startsWith('g:')),
           });
           toLog.push({ ...item, foodId: food.id });
         }
         void invalidateFoods();
       }
-      await createEntries.mutateAsync({ date, meal, items: toLog });
+      // Logged to today, it was eaten about now; another day's time is not known.
+      const now = new Date();
+      const time = date === todayIso() ? toClockTime({ hour: now.getHours(), minute: now.getMinutes() }) : null;
+      await createEntries.mutateAsync({ date, meal, time, items: toLog });
       haptics.logged();
       router.dismissTo('/food' as Href);
     } catch (cause) {
@@ -389,14 +452,42 @@ export default function EstimateScreen() {
                         label={`${confidence[0]!.toUpperCase()}${confidence.slice(1)} confidence`}
                         tone={confidence === 'low' ? 'warning' : confidence === 'high' ? 'success' : 'neutral'}
                       />
-                      <Text variant="caption" color="textSecondary" numberOfLines={1} style={styles.flex}>
-                        {row.item.servingLabel}
-                      </Text>
+                      <View style={styles.flex} />
                     </View>
+
+                    <Pressable
+                      onPress={() => update(row.key, (r) => ({ ...r, sizing: !r.sizing }))}
+                      style={[styles.sizeRow, { backgroundColor: colors.surfaceMuted }]}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: row.sizing }}
+                      accessibilityLabel={`Serving size, ${row.item.servingLabel}. ${row.sizing ? 'Close' : 'Change'}`}
+                    >
+                      <View style={styles.flex}>
+                        <Text variant="caption" color="textTertiary">
+                          Serving size
+                        </Text>
+                        <Text variant="body" numberOfLines={2}>
+                          {row.item.servingLabel}
+                        </Text>
+                      </View>
+                      <Text variant="label" color="accent">
+                        {row.sizing ? 'Done' : 'Change'}
+                      </Text>
+                    </Pressable>
+
+                    {row.sizing ? (
+                      <ServingPicker
+                        options={servingOptions([currentServing(row)], row.item.servingOptions)}
+                        selectedId="current"
+                        onSelect={(option) => update(row.key, (r) => resized(r, option, true))}
+                        onResize={(size) => update(row.key, (r) => resized(r, servingAt(currentServing(r), size), false))}
+                        onAdd={(size) => update(row.key, (r) => resized(r, servingAt(currentServing(r), size), true))}
+                      />
+                    ) : null}
 
                     <View style={styles.quantityRow}>
                       <Text variant="label" color="textSecondary" style={styles.flex}>
-                        Servings
+                        {isGramServing({ label: row.item.servingLabel }) ? 'Grams' : 'Servings'}
                       </Text>
                       <IconButton
                         name="remove"
@@ -405,7 +496,7 @@ export default function EstimateScreen() {
                         onPress={() =>
                           update(row.key, (r) => ({
                             ...r,
-                            item: { ...r.item, quantity: Math.max(QUANTITY_MIN, r.item.quantity - QUANTITY_STEP) },
+                            item: { ...r.item, quantity: Math.max(stepOf(r).min, r.item.quantity - stepOf(r).step) },
                           }))
                         }
                       />
@@ -428,7 +519,7 @@ export default function EstimateScreen() {
                         onPress={() =>
                           update(row.key, (r) => ({
                             ...r,
-                            item: { ...r.item, quantity: r.item.quantity + QUANTITY_STEP },
+                            item: { ...r.item, quantity: r.item.quantity + stepOf(r).step },
                           }))
                         }
                       />
@@ -546,6 +637,14 @@ const styles = StyleSheet.create({
   itemHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   quantityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
   quantityField: { width: 64 },
   figures: {
     flexDirection: 'row',

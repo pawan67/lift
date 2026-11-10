@@ -3,10 +3,15 @@
  *
  * `PortionEditor` is the step itself, shared by three callers: the add dialog
  * (a food about to be logged or picked for a template), `EntryDialog` (a diary
- * entry being changed) and `EditItemDialog` (a template item). The amount is a
- * number of servings or, when the serving's weight is known, grams; every
- * figure follows it as it changes, so the cost of a second helping is visible
- * before it is logged. Same behaviour as the phone's amount screen.
+ * entry being changed) and `EditItemDialog` (a template item).
+ *
+ * It shows the calories as a ring split by macro, the meal and the time it was
+ * eaten, the serving size and the number of servings. Sizes are the food's
+ * own plus 100 g and 1 g whenever a weight is known (see `servingOptions`), and
+ * any size can be corrected by hand, an AI estimate's included, or a new one
+ * added; figures scale by weight. Every figure follows the amount as it
+ * changes, so the cost of a second helping is visible before it is logged.
+ * Same behaviour as the phone's amount screen.
  */
 
 "use client";
@@ -14,32 +19,43 @@
 import {
   MEALS,
   MEAL_LABELS,
+  convertQuantity,
   formatCalories,
   formatNutrientValue,
   formatQuantity,
+  isGramServing,
+  macroEnergySplit,
   nutrientDefinitions,
   scaleNutrients,
+  servingAt,
+  servingOptions,
+  splitServingLabel,
+  withGrams,
   type CustomNutrient,
   type EntryItem,
   type Food,
   type FoodCandidate,
   type FoodEntry,
   type Meal,
+  type NutrientValues,
   type Serving,
+  type ServingSize,
 } from "@lift/shared";
-import { ChevronDown, Minus, Plus, Sparkles, Star, Trash2 } from "lucide-react";
+import { ChevronDown, Minus, PenLine, Plus, Sparkles, Star, Trash2 } from "lucide-react";
 import { Collapsible } from "radix-ui";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
+import { fieldClass } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
+import { TimeField } from "@/components/ui/time-field";
 import { cn } from "@/lib/cn";
 
 import { NutrientFields, parseNutrientDraft, toNutrientDraft, type NutrientDraft } from "./nutrient-fields";
-import { MACROS, MACRO_BG } from "./summary";
+import { MACROS, MACRO_BG, type MacroKey } from "./summary";
 
 export const SOURCE_LABELS: Record<string, string> = {
   usda: "USDA",
@@ -89,12 +105,169 @@ export function subjectFromItem(item: EntryItem | FoodEntry): PortionSubject {
 }
 
 const QUICK_AMOUNTS = [0.5, 1, 1.5, 2];
+const QUICK_GRAMS = [50, 100, 150, 200];
+
+/** Macro colours as CSS variables, for SVG strokes: the same tokens as `MACRO_BG`. */
+const MACRO_STROKE: Record<MacroKey, string> = { protein: "var(--volt)", carbs: "var(--record)", fat: "var(--warn)" };
+
+/**
+ * Calories as a ring split by where they come from: protein, carbs and fat by
+ * their share of energy. Grey when the food has no macros to split.
+ */
+export function MacroRing({ values, size = 120 }: { values: NutrientValues; size?: number }) {
+  const stroke = 12;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const split = macroEnergySplit(values);
+  // A hair of gap between segments, so three touching colours still read as three.
+  const gap = split ? Math.min(3, circumference * 0.01) : 0;
+  let offset = 0;
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-surface-3" />
+        {split
+          ? MACROS.map((macro) => {
+              const length = split[macro.key] * circumference;
+              const dash = Math.max(length - gap, 0);
+              const segment = (
+                <circle
+                  key={macro.key}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={r}
+                  fill="none"
+                  strokeWidth={stroke}
+                  stroke={MACRO_STROKE[macro.key]}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={-offset}
+                  className="transition-[stroke-dasharray,stroke-dashoffset] duration-300 ease-out"
+                />
+              );
+              offset += length;
+              return segment;
+            })
+          : null}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="tabular text-[26px] leading-none font-semibold tracking-[-0.02em] text-fg">{formatCalories(values.calories)}</span>
+        <span className="mt-1 text-xs text-fg-3">kcal</span>
+      </div>
+    </div>
+  );
+}
+
+/** The ring and a legend: grams of each macro and its share of the calories. */
+function MacroCard({ values }: { values: NutrientValues }) {
+  const split = macroEnergySplit(values);
+  return (
+    <div className="flex items-center gap-6 rounded-xl border border-line bg-surface-2 px-5 py-4">
+      <MacroRing values={values} />
+      <ul className="flex-1 space-y-2.5" aria-label="Macros">
+        {MACROS.map((macro) => (
+          <li key={macro.key} className="flex items-center gap-2.5">
+            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", MACRO_BG[macro.key])} aria-hidden />
+            <span className="flex-1 text-sm text-fg-2">{macro.label}</span>
+            <span className="tabular text-sm font-semibold text-fg">
+              {values[macro.key] === undefined ? "–" : formatNutrientValue(macro.key, values[macro.key]!)}
+              <span className="ml-0.5 text-xs font-normal text-fg-3">g</span>
+            </span>
+            <span className="tabular w-10 text-right text-xs text-fg-3">{split ? `${Math.round(split[macro.key] * 100)}%` : ""}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A serving size's name and weight, typed. Used to correct the size in use
+ * (the AI's guess included) and to add one of the user's own.
+ */
+export function SizeForm({
+  initial,
+  submitLabel,
+  needsGrams,
+  onSubmit,
+  onCancel,
+}: {
+  initial: ServingSize;
+  submitLabel: string;
+  /** A new size is only worth anything with a weight to scale the figures by. */
+  needsGrams: boolean;
+  onSubmit: (size: ServingSize) => void;
+  onCancel: () => void;
+}) {
+  const parts = splitServingLabel(initial.label);
+  const [name, setName] = useState(parts.name);
+  const [gramsText, setGramsText] = useState(initial.grams ? formatQuantity(initial.grams) : parts.grams ? formatQuantity(parts.grams) : "");
+  const grams = Number(gramsText.replace(",", "."));
+  const gramsValid = gramsText.trim() !== "" && Number.isFinite(grams) && grams > 0 && grams <= 100_000;
+  const valid = (name.trim() !== "" || gramsValid) && (gramsValid || (!needsGrams && gramsText.trim() === ""));
+
+  function submit() {
+    if (!valid) return;
+    const weight = gramsValid ? grams : null;
+    onSubmit({ label: withGrams(name.trim() || (weight ? "" : "1 serving"), weight), grams: weight });
+  }
+
+  return (
+    <div
+      className="space-y-3 rounded-lg border border-line bg-surface-2 p-3"
+      onKeyDown={(event) => {
+        // Enter here belongs to this form, not to the dialog's submit.
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        }
+      }}
+    >
+      <div className="grid grid-cols-[1fr_7rem] gap-2">
+        <label className="space-y-1">
+          <span className="text-xs text-fg-3">Name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="1 large egg"
+            maxLength={60}
+            className={fieldClass({ className: "h-9 px-3" })}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-fg-3">Weight</span>
+          <span className="relative block">
+            <input
+              value={gramsText}
+              onChange={(event) => setGramsText(event.target.value.replace(/[^0-9.,]/g, ""))}
+              inputMode="decimal"
+              placeholder={needsGrams ? "50" : "Optional"}
+              aria-label="Weight in grams"
+              className={fieldClass({ className: "tabular h-9 pr-7 pl-3" })}
+            />
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-fg-3">g</span>
+          </span>
+        </label>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="sm" disabled={!valid} onClick={submit}>
+          {submitLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function PortionEditor({
   subject,
   customNutrients,
   meal,
   onMealChange,
+  time,
+  onTimeChange,
   submitLabel,
   onSubmit,
   secondary,
@@ -105,6 +278,9 @@ export function PortionEditor({
   /** Shown as a meal picker when set. */
   meal?: Meal;
   onMealChange?: (meal: Meal) => void;
+  /** When it was eaten, `HH:mm` or null. Shown as a time field when `onTimeChange` is set. */
+  time?: string | null;
+  onTimeChange?: (time: string | null) => void;
   submitLabel: (meal: Meal | undefined) => string;
   /** Throws to stay open; the message is shown under the button. */
   onSubmit: (item: EntryItem) => Promise<void> | void;
@@ -112,39 +288,61 @@ export function PortionEditor({
   secondary?: ReactNode;
   favorite?: { on: boolean; toggle: () => void };
 }) {
+  // The food's own servings, plus any size corrected or added here. Every other
+  // size on offer (100 g, 1 g) is worked out from these.
+  const [own, setOwn] = useState<Serving[]>(subject.servings);
+  const options = useMemo(() => servingOptions(own), [own]);
   const [servingId, setServingId] = useState(subject.initialServingId);
-  const serving = subject.servings.find((s) => s.id === servingId) ?? subject.servings[0]!;
-  const [inGrams, setInGrams] = useState(false);
+  const serving = options.find((s) => s.id === servingId) ?? options[0]!;
+  const [sizeForm, setSizeForm] = useState<"edit" | "add" | null>(null);
   const [amountText, setAmountText] = useState(formatQuantity(subject.initialQuantity));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<NutrientDraft>(() => toNutrientDraft(serving.nutrients));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const grams = isGramServing(serving);
   const typed = Number(amountText.replace(",", "."));
   const valid = amountText.trim() !== "" && Number.isFinite(typed) && typed > 0;
-  const quantity = valid ? (inGrams && serving.grams ? typed / serving.grams : typed) : 0;
+  const quantity = valid ? typed : 0;
   const perServing = editing ? parseNutrientDraft(draft) : serving.nutrients;
   const totals = scaleNutrients(perServing, quantity);
+  const totalGrams = serving.grams ? quantity * serving.grams : null;
   const definitions = nutrientDefinitions(customNutrients).filter((d) => totals[d.key] !== undefined && !["calories", "protein", "carbs", "fat"].includes(d.key));
+  const weightKnown = options.some((option) => option.grams);
 
-  function selectServing(next: Serving) {
-    // Keep the weight across a serving change when both know it.
-    if (!inGrams && serving.grams && next.grams && valid) setAmountText(formatQuantity((typed * serving.grams) / next.grams));
+  function select(next: Serving) {
+    // Keep the weight eaten across a size change when both know it, so 2 eggs
+    // switched to "1 g" reads 100.
+    if (valid) setAmountText(formatQuantity(convertQuantity(typed, serving, next)));
     setServingId(next.id);
     setDraft(toNutrientDraft(next.nutrients));
-    setInGrams(false);
+    setSizeForm(null);
   }
 
-  function toggleGrams() {
-    if (!serving.grams) return;
-    if (valid) setAmountText(formatQuantity(inGrams ? typed / serving.grams : typed * serving.grams));
-    setInGrams(!inGrams);
+  /** A size corrected by hand. Figures scale with the weight when both weights are known. */
+  function editSize(size: ServingSize) {
+    const base = editing ? { ...serving, nutrients: perServing } : serving;
+    const isOwn = own.some((s) => s.id === serving.id);
+    const next = servingAt(base, size, isOwn ? serving.id : `custom:${own.length}`);
+    setOwn((list) => (isOwn ? list.map((s) => (s.id === serving.id ? next : s)) : [...list, next]));
+    setServingId(next.id);
+    setDraft(toNutrientDraft(next.nutrients));
+    setSizeForm(null);
+  }
+
+  /** A new size, worked out by weight from one whose weight is known. */
+  function addSize(size: ServingSize) {
+    const current = editing ? { ...serving, nutrients: perServing } : serving;
+    const base = current.grams ? current : options.find((option) => option.grams)!;
+    const next = servingAt(base, size, `custom:${own.length}`);
+    setOwn((list) => [...list, next]);
+    select(next);
   }
 
   function step(direction: 1 | -1) {
     const base = valid ? typed : 0;
-    const size = inGrams ? (base >= 100 ? 25 : 10) : 0.5;
+    const size = grams ? (base >= 100 ? 25 : 10) : 0.5;
     setAmountText(formatQuantity(Math.max(size, Math.round((base + direction * size) / size) * size)));
   }
 
@@ -170,6 +368,8 @@ export function PortionEditor({
       setBusy(false);
     }
   }
+
+  const sectionTitle = "mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase";
 
   return (
     <form
@@ -199,45 +399,62 @@ export function PortionEditor({
         </div>
 
         {/* Figures for the amount as typed */}
-        <div className="flex items-center gap-6 rounded-xl border border-line bg-surface-2 px-5 py-4">
-          <div className="text-center">
-            <div className="tabular text-[30px] leading-none font-semibold tracking-[-0.02em] text-fg">{formatCalories(totals.calories)}</div>
-            <div className="mt-1 text-xs text-fg-3">kcal</div>
-          </div>
-          <div className="grid flex-1 grid-cols-3 gap-3">
-            {MACROS.map((macro) => (
-              <div key={macro.key}>
-                <div className={cn("mb-1.5 h-0.5 w-5 rounded-full", MACRO_BG[macro.key])} />
-                <div className="tabular text-base font-semibold text-fg">
-                  {totals[macro.key] === undefined ? "–" : formatNutrientValue(macro.key, totals[macro.key]!)}
-                  <span className="ml-0.5 text-xs font-normal text-fg-3">g</span>
-                </div>
-                <div className="text-xs text-fg-3">{macro.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <MacroCard values={totals} />
 
-        {subject.servings.length > 1 || serving.grams ? (
+        {meal && onMealChange ? (
           <section>
-            <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Serving</h4>
-            <div className="flex flex-wrap gap-2">
-              {subject.servings.map((option) => (
-                <Chip key={option.id} selected={option.id === serving.id && !inGrams} onClick={() => (inGrams && option.id === serving.id ? toggleGrams() : selectServing(option))}>
-                  {option.label}
-                </Chip>
-              ))}
-              {serving.grams ? (
-                <Chip selected={inGrams} onClick={toggleGrams}>
-                  Grams
-                </Chip>
-              ) : null}
-            </div>
+            <h4 className={sectionTitle}>Meal</h4>
+            <Segmented value={meal} onChange={onMealChange} options={MEALS.map((m) => ({ value: m, label: MEAL_LABELS[m] }))} aria-label="Meal" />
+          </section>
+        ) : null}
+
+        {onTimeChange ? (
+          <section>
+            <h4 className={sectionTitle}>Time eaten</h4>
+            <TimeField value={time ?? null} onChange={onTimeChange} aria-label="Time eaten" />
           </section>
         ) : null}
 
         <section>
-          <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">{inGrams ? "Grams" : `Servings · ${serving.label}`}</h4>
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Serving size</h4>
+            {sizeForm === null ? (
+              <button type="button" onClick={() => setSizeForm("edit")} className="press inline-flex items-center gap-1 text-[13px] font-medium text-volt hover:underline">
+                <PenLine size={13} /> Edit size
+              </button>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {options.map((option) => (
+              <Chip key={option.id} selected={option.id === serving.id} onClick={() => (option.id === serving.id ? undefined : select(option))}>
+                {option.label}
+              </Chip>
+            ))}
+            {weightKnown ? (
+              <Chip selected={sizeForm === "add"} onClick={() => setSizeForm((open) => (open === "add" ? null : "add"))}>
+                <Plus size={13} /> Custom size
+              </Chip>
+            ) : null}
+          </div>
+          {sizeForm ? (
+            <div className="mt-3">
+              <SizeForm
+                key={sizeForm + serving.id}
+                initial={sizeForm === "edit" ? { label: serving.label, grams: serving.grams } : { label: "", grams: null }}
+                submitLabel={sizeForm === "edit" ? "Update size" : "Add size"}
+                needsGrams={sizeForm === "add"}
+                onSubmit={sizeForm === "edit" ? editSize : addSize}
+                onCancel={() => setSizeForm(null)}
+              />
+              {sizeForm === "edit" && serving.grams ? (
+                <p className="mt-1.5 text-xs text-fg-3">Changing the weight scales the figures with it.</p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        <section>
+          <h4 className={sectionTitle}>{grams ? "Amount in grams" : "Number of servings"}</h4>
           <div className="flex items-center gap-2">
             <IconButton label="Less" onClick={() => step(-1)} className="h-11 w-11 border border-line bg-surface">
               <Minus size={18} />
@@ -248,36 +465,24 @@ export function PortionEditor({
                 onChange={(event) => setAmountText(event.target.value.replace(/[^0-9.,]/g, ""))}
                 inputMode="decimal"
                 data-autofocus
-                aria-label={inGrams ? "Amount in grams" : "Number of servings"}
+                aria-label={grams ? "Amount in grams" : "Number of servings"}
                 className="tabular w-24 bg-transparent text-right text-xl font-semibold text-fg outline-none"
               />
-              <span className="w-24 text-sm text-fg-3">{inGrams ? "g" : "×"}</span>
+              <span className="w-24 truncate text-sm text-fg-3">{grams ? "g" : `× ${serving.label}`}</span>
             </label>
             <IconButton label="More" onClick={() => step(1)} className="h-11 w-11 border border-line bg-surface">
               <Plus size={18} />
             </IconButton>
           </div>
-          {!inGrams ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {QUICK_AMOUNTS.map((amount) => (
-                <Chip key={amount} selected={valid && typed === amount} onClick={() => setAmountText(formatQuantity(amount))}>
-                  {amount === 0.5 ? "½" : amount === 1.5 ? "1½" : String(amount)}
-                </Chip>
-              ))}
-            </div>
-          ) : (
-            <p className="tabular mt-2 text-xs text-fg-3">
-              {formatQuantity(quantity)} × {serving.label}
-            </p>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {(grams ? QUICK_GRAMS : QUICK_AMOUNTS).map((amount) => (
+              <Chip key={amount} selected={valid && typed === amount} onClick={() => setAmountText(formatQuantity(amount))}>
+                {grams ? `${amount} g` : amount === 0.5 ? "½" : amount === 1.5 ? "1½" : String(amount)}
+              </Chip>
+            ))}
+            {totalGrams !== null && !grams ? <span className="tabular ml-auto text-xs text-fg-3">= {formatQuantity(Math.round(totalGrams * 10) / 10)} g</span> : null}
+          </div>
         </section>
-
-        {meal && onMealChange ? (
-          <section>
-            <h4 className="mb-2 text-[11px] font-semibold tracking-wider text-fg-3 uppercase">Meal</h4>
-            <Segmented value={meal} onChange={onMealChange} options={MEALS.map((m) => ({ value: m, label: MEAL_LABELS[m] }))} aria-label="Meal" />
-          </section>
-        ) : null}
 
         <Collapsible.Root>
           <div className="flex items-center justify-between">
@@ -323,7 +528,7 @@ export function PortionEditor({
   );
 }
 
-/** Changing a diary entry: its amount, its meal, or its figures. */
+/** Changing a diary entry: its amount, size, meal, time, or its figures. */
 export function EntryDialog({
   entry,
   onClose,
@@ -334,14 +539,16 @@ export function EntryDialog({
   entry: FoodEntry | null;
   onClose: () => void;
   customNutrients: readonly CustomNutrient[];
-  onSave: (entry: FoodEntry, item: EntryItem, meal: Meal) => Promise<void>;
+  onSave: (entry: FoodEntry, item: EntryItem, meal: Meal, time: string | null) => Promise<void>;
   onDelete: (entry: FoodEntry) => void;
 }) {
   const [meal, setMeal] = useState<Meal>(entry?.meal ?? "snacks");
+  const [time, setTime] = useState<string | null>(entry?.time ?? null);
   const [shown, setShown] = useState(entry);
   if (entry && entry !== shown) {
     setShown(entry);
     setMeal(entry.meal);
+    setTime(entry.time ?? null);
   }
 
   return (
@@ -353,8 +560,10 @@ export function EntryDialog({
           customNutrients={customNutrients}
           meal={meal}
           onMealChange={setMeal}
+          time={time}
+          onTimeChange={setTime}
           submitLabel={() => "Save"}
-          onSubmit={(item) => onSave(shown, item, meal)}
+          onSubmit={(item) => onSave(shown, item, meal, time)}
           secondary={
             <Button variant="danger" onClick={() => onDelete(shown)}>
               <Trash2 size={15} /> Delete

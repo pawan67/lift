@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { AiImage, AiRequest } from '../ai/messages.ts';
 
 import { BUILT_IN_NUTRIENTS, CORE_NUTRIENT_KEYS, type CustomNutrient, type NutrientValues } from './nutrients.ts';
+import { withGrams, type ServingSize } from './servings.ts';
 import type { EntryItem } from './types.ts';
 
 export interface FoodEstimateInput {
@@ -27,6 +28,12 @@ export interface FoodEstimateInput {
 export interface EstimatedItem extends EntryItem {
   /** 0 to 1. Shown as low / medium / high so nobody reads 0.73 as precise. */
   confidence: number;
+  /**
+   * Other common sizes of the same food ("1 dozen (600 g)", "100 g"), offered
+   * beside the logged one so the size can be switched without retyping
+   * figures. Each has its weight; figures follow from the logged serving's.
+   */
+  servingOptions: ServingSize[];
 }
 
 export interface FoodEstimate {
@@ -49,7 +56,10 @@ Split the meal into its separate foods, one item per food, and estimate each one
 Rules:
 - Use realistic portion sizes. If the person gives an amount, use it exactly. If they do not, assume a typical single portion for the cuisine and say so in "note".
 - Prefer common reference values (USDA, IFCT for Indian food, food labels for branded products).
-- "nutrients" are for ONE serving as described by "servingLabel". "quantity" is how many of those servings were eaten.
+- "servingLabel" is ONE natural unit of the food with its weight in brackets: "1 large egg (50 g)", "1 medium chapati (40 g)", "1 katori (150 g)", "1 cup (240 g)". Never put the whole amount eaten in it.
+- "quantity" is how many of those units were eaten. "3 eggs" is servingLabel "1 large egg (50 g)" with quantity 3, not "3 eggs" with quantity 1. "200 g chicken" is servingLabel "100 g" with quantity 2. "Half a pizza" is the pizza's unit with quantity 0.5.
+- "nutrients" are for ONE serving as described by "servingLabel", so the total is nutrients times quantity. Check that the figures match the serving's grams.
+- "servings" lists up to 3 other common sizes of the same food, each with its weight in grams, for example for eggs [{"label":"1 dozen (600 g)","grams":600},{"label":"1 medium egg (44 g)","grams":44}]. Do not repeat "servingLabel" there, and leave it [] when nothing else is common.
 - Always include calories, protein, carbs and fat. Add fiber, sugar, saturated fat and sodium when you can estimate them, and any other nutrient below only when this food is a meaningful source of it. Leave out what you cannot estimate; never write 0 for unknown.
 - "servingGrams" is the weight of one serving in grams, or null if it truly cannot be estimated.
 - "confidence" is 0 to 1: how sure you are of the identification and portion.
@@ -60,7 +70,7 @@ Nutrient keys (use these exact keys):
 ${nutrientList(input.customNutrients)}
 
 Reply with ONLY a compact JSON object on one line, no prose, no code fence, no extra spaces:
-{"items":[{"name":"Chapati","servingLabel":"1 medium (40 g)","servingGrams":40,"quantity":2,"confidence":0.8,"nutrients":{"calories":120,"protein":3.1,"carbs":18,"fat":3.7,"fiber":2.7}}],"note":"Assumed ghee on the chapatis."}`;
+{"items":[{"name":"Chapati","servingLabel":"1 medium chapati (40 g)","servingGrams":40,"quantity":2,"confidence":0.8,"nutrients":{"calories":120,"protein":3.1,"carbs":18,"fat":3.7,"fiber":2.7},"servings":[{"label":"1 large chapati (60 g)","grams":60}]}],"note":"Assumed ghee on the chapatis."}`;
 
   const text = input.description.trim()
     ? `What I ate: ${input.description.trim()}`
@@ -90,7 +100,25 @@ const rawItemSchema = z.object({
   quantity: looseNumber(z.number().finite().positive()).catch(1),
   confidence: looseNumber(z.number().finite().min(0).max(1)).catch(0.5),
   nutrients: z.record(z.string(), z.unknown()),
+  servings: z.array(z.unknown()).catch([]).optional(),
 });
+
+const rawSizeSchema = z.object({
+  label: z.string().trim().min(1),
+  grams: looseNumber(z.number().finite().positive().max(100_000)),
+});
+
+/** The alternative sizes that are usable: a label and a weight, at most three. */
+function cleanSizes(raw: readonly unknown[] | undefined): ServingSize[] {
+  const sizes: ServingSize[] = [];
+  for (const entry of raw ?? []) {
+    const size = rawSizeSchema.safeParse(entry);
+    if (!size.success) continue;
+    sizes.push({ label: withGrams(size.data.label, size.data.grams).slice(0, 80), grams: size.data.grams });
+    if (sizes.length === 3) break;
+  }
+  return sizes;
+}
 
 const rawEstimateSchema = z.object({
   items: z.array(z.unknown()),
@@ -200,12 +228,15 @@ export function parseFoodEstimate(text: string, customNutrients: readonly Custom
       foodId: null,
       name: item.data.name.slice(0, 160),
       brand: null,
-      servingLabel: item.data.servingLabel.slice(0, 80),
+      // The weight goes in the label when the model left it out, so the size
+      // reads the same here as everywhere else it is offered.
+      servingLabel: withGrams(item.data.servingLabel, item.data.servingGrams).slice(0, 80),
       servingGrams: item.data.servingGrams,
       quantity: item.data.quantity,
       nutrients,
       source: 'ai',
       confidence: item.data.confidence,
+      servingOptions: cleanSizes(item.data.servings),
     });
   }
 

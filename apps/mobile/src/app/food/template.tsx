@@ -16,7 +16,7 @@ import {
   MEALS,
   MEAL_LABELS,
   formatCalories,
-  formatQuantity,
+  describeAmount,
   itemTotals,
   totalsOf,
   type EntryItem,
@@ -263,7 +263,7 @@ export default function TemplateEditorScreen() {
                   {index > 0 && <Divider inset={spacing.lg} />}
                   <FoodRow
                     name={item.name}
-                    detail={`${formatQuantity(item.quantity)} × ${item.servingLabel}`}
+                    detail={describeAmount(item)}
                     nutrients={itemTotals(item)}
                     onPress={() => editItem(item, index)}
                     accessibilityHint="Change the amount"

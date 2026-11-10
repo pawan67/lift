@@ -24,7 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   MEALS,
   MEAL_LABELS,
-  formatQuantity,
+  describeAmount,
   itemTotals,
   matchRecents,
   mealForTime,
@@ -111,7 +111,7 @@ function recentItem(item: RecentItem): EntryItem {
 }
 
 function recentDetail(item: RecentItem): string {
-  const amount = item.quantity === 1 ? item.servingLabel : `${formatQuantity(item.quantity)} × ${item.servingLabel}`;
+  const amount = describeAmount(item);
   return `${amount}${item.timesLogged > 1 ? ` · ${item.timesLogged}×` : ''}`;
 }
 

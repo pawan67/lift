@@ -20,7 +20,8 @@ import {
   MEAL_LABELS,
   formatCalories,
   formatNutrientValue,
-  formatQuantity,
+  describeAmount,
+  formatClockTime,
   groupByMeal,
   itemTotals,
   mealForTime,
@@ -71,8 +72,8 @@ const MEAL_ICONS: Record<Meal, keyof typeof Ionicons.glyphMap> = {
 };
 
 function entryDetail(entry: FoodEntry): string {
-  const amount = entry.quantity === 1 ? entry.servingLabel : `${formatQuantity(entry.quantity)} × ${entry.servingLabel}`;
-  return entry.brand ? `${entry.brand} · ${amount}` : amount;
+  const parts = [entry.time ? formatClockTime(entry.time) : null, entry.brand, describeAmount(entry)];
+  return parts.filter(Boolean).join(' · ');
 }
 
 export default function FoodScreen() {

@@ -16,8 +16,9 @@ import {
   MEALS,
   MEAL_LABELS,
   formatCalories,
+  describeAmount,
+  formatClockTime,
   formatNutrientValue,
-  formatQuantity,
   groupByMeal,
   itemTotals,
   nutrientDefinitions,
@@ -55,8 +56,7 @@ import { useCopyEntries, useDeleteEntries, useDiaryDay, useNutritionProfile, use
 const MEAL_ICONS: Record<Meal, typeof Sun> = { breakfast: Sun, lunch: UtensilsCrossed, dinner: Moon, snacks: Coffee };
 
 function entryDetail(entry: FoodEntry): string {
-  const amount = entry.quantity === 1 ? entry.servingLabel : `${formatQuantity(entry.quantity)} × ${entry.servingLabel}`;
-  return entry.brand ? `${entry.brand} · ${amount}` : amount;
+  return [entry.time ? formatClockTime(entry.time) : null, entry.brand, describeAmount(entry)].filter(Boolean).join(" · ");
 }
 
 export default function FoodPage() {
@@ -112,7 +112,7 @@ export default function FoodPage() {
       <ActionMenu
         label={`${entry.name} actions`}
         items={[
-          { label: "Edit amount", onSelect: () => setEditing(entry) },
+          { label: "Edit entry", onSelect: () => setEditing(entry) },
           { label: `Copy to ${describeDayInline(copyTarget)}`, icon: <Copy size={15} />, onSelect: () => void copyTo({ ids: [entry.id], to: { date: copyTarget } }, "Copied") },
           ...MEALS.filter((meal) => meal !== entry.meal).map((meal) => ({
             label: `Copy to ${MEAL_LABELS[meal].toLowerCase()}`,
@@ -349,10 +349,18 @@ export default function FoodPage() {
         entry={editing}
         onClose={() => setEditing(null)}
         customNutrients={customNutrients}
-        onSave={async (entry, item, meal) => {
+        onSave={async (entry, item, meal, time) => {
           await update.mutateAsync({
             id: entry.id,
-            patch: { quantity: item.quantity, meal, ...(item.nutrients !== entry.nutrients ? { nutrients: item.nutrients } : {}) },
+            patch: {
+              quantity: item.quantity,
+              meal,
+              time,
+              ...(item.servingLabel !== entry.servingLabel || item.servingGrams !== entry.servingGrams
+                ? { servingLabel: item.servingLabel, servingGrams: item.servingGrams }
+                : {}),
+              ...(item.nutrients !== entry.nutrients ? { nutrients: item.nutrients } : {}),
+            },
           });
           toast(`${entry.name} updated`);
           setEditing(null);

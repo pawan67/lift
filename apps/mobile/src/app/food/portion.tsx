@@ -19,23 +19,29 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   MEALS,
   MEAL_LABELS,
-  formatCalories,
+  convertQuantity,
+  formatClockTime,
   formatNutrientValue,
   formatQuantity,
+  isGramServing,
   nutrientDefinitions,
   scaleNutrients,
+  servingAt,
+  servingOptions,
+  toClockTime,
   type EntryItem,
   type Food,
   type FoodCandidate,
   type Meal,
   type Serving,
+  type ServingSize,
 } from '@lift/shared';
 import { Stack, router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Badge, Button, Card, Chip, Divider, EmptyState, IconButton, Screen, Text } from '@/components/ui';
+import { Badge, Button, Card, Chip, Divider, EmptyState, IconButton, Screen, Text, TimePickerModal } from '@/components/ui';
 import { haptics } from '@/features/feedback/haptics';
 import { ensureSaved, nutritionApi } from '@/features/nutrition/api';
 import {
@@ -44,8 +50,9 @@ import {
   toNutrientDraft,
   type NutrientDraft,
 } from '@/features/nutrition/components/nutrient-fields';
-import { macroColors } from '@/features/nutrition/components/summary';
-import { describeDay } from '@/features/nutrition/dates';
+import { MacroRing } from '@/features/nutrition/components/macro-ring';
+import { ServingPicker } from '@/features/nutrition/components/serving-picker';
+import { describeDay, todayIso } from '@/features/nutrition/dates';
 import { useFoodDraft, type PortionDraft } from '@/features/nutrition/draft';
 import {
   describeError,
@@ -56,7 +63,7 @@ import {
   useUpdateEntry,
 } from '@/features/nutrition/queries';
 import { showConfirm } from '@/store/dialog';
-import { font, fontSize, radius, spacing, stroke, useColors } from '@/theme';
+import { HIT_SLOP, font, fontSize, radius, spacing, stroke, useColors } from '@/theme';
 
 const SOURCE_LABELS: Record<string, string> = {
   usda: 'USDA',
@@ -66,6 +73,13 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const QUICK_AMOUNTS = [0.5, 1, 1.5, 2];
+/** For a gram size ("1 g"), where the amount is a weight. */
+const QUICK_GRAMS = [50, 100, 150, 200];
+
+function nowClock(): string {
+  const now = new Date();
+  return toClockTime({ hour: now.getHours(), minute: now.getMinutes() });
+}
 
 /** What the screen edits, reduced to one shape whatever the caller was. */
 interface Subject {
@@ -136,13 +150,21 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
   const profile = useNutritionProfile();
   const customNutrients = profile.data?.customNutrients ?? [];
 
+  // Every size on offer, as an editable list: the food's own, then 100 g and
+  // 1 g, then whatever is added here. Edits replace a size in place.
+  const [servings, setServings] = useState<Serving[]>(() => servingOptions(subject.servings));
   const [servingId, setServingId] = useState(subject.initialServingId);
-  const serving = subject.servings.find((s) => s.id === servingId) ?? subject.servings[0]!;
-  const [inGrams, setInGrams] = useState(false);
+  const serving = servings.find((s) => s.id === servingId) ?? servings[0]!;
+  const inGrams = isGramServing(serving);
   const [amountText, setAmountText] = useState(formatQuantity(subject.initialQuantity));
   const [meal, setMeal] = useState<Meal>(
     draft.kind === 'food' ? draft.target.meal : draft.kind === 'entry' ? draft.entry.meal : 'snacks',
   );
+  // Now, when logging to today; left out for another day, where "now" is not when it was eaten.
+  const [time, setTime] = useState<string | null>(() =>
+    draft.kind === 'entry' ? (draft.entry.time ?? null) : draft.kind === 'food' && draft.target.date === todayIso() ? nowClock() : null,
+  );
+  const [pickingTime, setPickingTime] = useState(false);
   const [favorite, setFavorite] = useState(subject.food?.isFavorite ?? false);
   const [editNutrients, setEditNutrients] = useState(false);
   const [nutrientDraft, setNutrientDraft] = useState<NutrientDraft>(() => toNutrientDraft(serving.nutrients));
@@ -156,38 +178,39 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
 
   const typed = Number(amountText.replace(',', '.'));
   const amountValid = amountText.trim() !== '' && Number.isFinite(typed) && typed > 0;
-  /** Always in servings, whatever the field shows. */
-  const quantity = amountValid ? (inGrams && serving.grams ? typed / serving.grams : typed) : 0;
+  /** How many of the selected size. For a gram size, that is the weight. */
+  const quantity = amountValid ? typed : 0;
 
   const perServing = editNutrients ? parseNutrientDraft(nutrientDraft) : serving.nutrients;
   const totals = scaleNutrients(perServing, quantity);
-  const tint = macroColors(colors);
 
+  // Keep the weight the same across a size change when both know it, so 2 of
+  // "1 large egg (50 g)" switched to "1 g" reads 100.
   const selectServing = (next: Serving) => {
-    haptics.selection();
-    // Keep the weight the same across a serving change when both know it, so
-    // switching from "100 g" to "1 cup (240 g)" with 240 typed reads as 1 cup.
-    if (!inGrams && serving.grams && next.grams && amountValid) {
-      setAmountText(formatQuantity((typed * serving.grams) / next.grams));
-    }
+    if (amountValid) setAmountText(formatQuantity(convertQuantity(typed, serving, next)));
     setServingId(next.id);
     setNutrientDraft(toNutrientDraft(next.nutrients));
-    if (!next.grams) setInGrams(false);
   };
 
-  const toggleGrams = () => {
-    if (!serving.grams) return;
-    haptics.selection();
-    if (amountValid) {
-      setAmountText(formatQuantity(inGrams ? typed / serving.grams : typed * serving.grams));
-    }
-    setInGrams(!inGrams);
+  // The selected size renamed or reweighed: the count stays, the figures follow the weight.
+  const resizeServing = (size: ServingSize) => {
+    const next = servingAt({ ...serving, nutrients: perServing }, size);
+    setServings((list) => list.map((s) => (s.id === serving.id ? next : s)));
+    setNutrientDraft(toNutrientDraft(next.nutrients));
+  };
+
+  const addServing = (size: ServingSize) => {
+    const base = serving.grams ? { ...serving, nutrients: perServing } : servings.find((s) => s.grams);
+    if (!base) return;
+    const next = servingAt(base, size, `custom:${Date.now()}`);
+    setServings((list) => [...list, next]);
+    selectServing(next);
   };
 
   const step = (direction: 1 | -1) => {
     haptics.selection();
     const base = amountValid ? typed : 0;
-    const size = inGrams ? (base >= 100 ? 25 : 10) : 0.5;
+    const size = inGrams ? (base >= 100 ? 25 : 10) : base < 1 ? 0.25 : 0.5;
     const next = Math.max(size, Math.round((base + direction * size) / size) * size);
     setAmountText(formatQuantity(next));
   };
@@ -238,7 +261,10 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
           patch: {
             quantity,
             meal,
-            ...(editNutrients ? { nutrients: perServing } : {}),
+            time,
+            servingLabel: serving.label,
+            servingGrams: serving.grams,
+            nutrients: perServing,
           },
         });
         haptics.logged();
@@ -271,7 +297,7 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
         next = { ...next, foodId: saved.id };
         void invalidateFoods();
       }
-      const created = await create.mutateAsync({ date: draft.target.date, meal, items: [next] });
+      const created = await create.mutateAsync({ date: draft.target.date, meal, time, items: [next] });
       haptics.logged();
       useFoodDraft.getState().noteAdded(`${subject.name} to ${MEAL_LABELS[meal]}`, {
         date: draft.target.date,
@@ -342,61 +368,26 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
             </View>
           </View>
 
-          {/* Figures for the amount as typed */}
-          <Card style={styles.figures}>
-            <View style={styles.kcalBlock}>
-              <Text variant="numericLarge" style={styles.kcal}>
-                {formatCalories(totals.calories)}
-              </Text>
-              <Text variant="caption" color="textSecondary">
-                kcal
-              </Text>
-            </View>
-            <View style={styles.macroRow}>
-              {(['protein', 'carbs', 'fat'] as const).map((key) => (
-                <View key={key} style={styles.macroCell}>
-                  <View style={[styles.macroBar, { backgroundColor: tint[key] }]} />
-                  <Text variant="numeric">
-                    {totals[key] === undefined ? '–' : formatNutrientValue(key, totals[key])}
-                    <Text variant="caption" color="textTertiary">
-                      {' g'}
-                    </Text>
-                  </Text>
-                  <Text variant="caption" color="textSecondary">
-                    {key === 'protein' ? 'Protein' : key === 'carbs' ? 'Carbs' : 'Fat'}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </Card>
+          <MacroRing totals={totals} />
 
-          {/* Serving */}
-          {subject.servings.length > 1 || serving.grams ? (
-            <View style={styles.block}>
-              <Text variant="overline" color="textTertiary">
-                Serving
-              </Text>
-              <View style={styles.chips}>
-                {subject.servings.map((option) => (
-                  <Chip
-                    key={option.id}
-                    label={option.label}
-                    selected={option.id === serving.id && !inGrams}
-                    onPress={() => {
-                      if (inGrams && option.id === serving.id) toggleGrams();
-                      else selectServing(option);
-                    }}
-                  />
-                ))}
-                {serving.grams ? <Chip label="Grams" selected={inGrams} onPress={toggleGrams} /> : null}
-              </View>
-            </View>
-          ) : null}
+          {/* Serving size */}
+          <View style={styles.block}>
+            <Text variant="overline" color="textTertiary">
+              Serving size
+            </Text>
+            <ServingPicker
+              options={servings}
+              selectedId={serving.id}
+              onSelect={selectServing}
+              onResize={resizeServing}
+              onAdd={addServing}
+            />
+          </View>
 
           {/* Amount */}
           <View style={styles.block}>
             <Text variant="overline" color="textTertiary">
-              {inGrams ? 'Grams' : `Servings · ${serving.label}`}
+              {inGrams ? 'Amount in grams' : 'Number of servings'}
             </Text>
             <View style={styles.amountRow}>
               <StepButton icon="remove" label="Less" onPress={() => step(-1)} />
@@ -415,28 +406,28 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
               </View>
               <StepButton icon="add" label="More" onPress={() => step(1)} />
             </View>
+            <View style={styles.chips}>
+              {(inGrams ? QUICK_GRAMS : QUICK_AMOUNTS).map((amount) => (
+                <Chip
+                  key={amount}
+                  label={inGrams ? `${amount} g` : amount === 0.5 ? '½' : amount === 1.5 ? '1½' : String(amount)}
+                  selected={amountValid && typed === amount}
+                  onPress={() => {
+                    haptics.selection();
+                    setAmountText(formatQuantity(amount));
+                  }}
+                />
+              ))}
+            </View>
             {!inGrams ? (
-              <View style={styles.chips}>
-                {QUICK_AMOUNTS.map((amount) => (
-                  <Chip
-                    key={amount}
-                    label={amount === 0.5 ? '½' : amount === 1.5 ? '1½' : String(amount)}
-                    selected={amountValid && typed === amount}
-                    onPress={() => {
-                      haptics.selection();
-                      setAmountText(formatQuantity(amount));
-                    }}
-                  />
-                ))}
-              </View>
-            ) : serving.grams ? (
               <Text variant="caption" color="textTertiary">
                 {formatQuantity(quantity)} × {serving.label}
+                {serving.grams ? ` = ${formatQuantity(quantity * serving.grams)} g` : ''}
               </Text>
             ) : null}
           </View>
 
-          {/* Meal */}
+          {/* Meal and time */}
           {draft.kind !== 'template-item' ? (
             <View style={styles.block}>
               <Text variant="overline" color="textTertiary">
@@ -454,6 +445,35 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
                     }}
                   />
                 ))}
+              </View>
+              <View style={[styles.timeRow, { backgroundColor: colors.surfaceMuted }]}>
+                <Pressable
+                  onPress={() => setPickingTime(true)}
+                  style={styles.timeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={time ? `Time eaten, ${formatClockTime(time)}. Change` : 'Add the time it was eaten'}
+                >
+                  <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
+                  <Text variant="body" style={styles.flex}>
+                    {time ? formatClockTime(time) : 'Add time'}
+                  </Text>
+                  <Text variant="label" color="accent">
+                    {time ? 'Change' : 'Set'}
+                  </Text>
+                </Pressable>
+                {time ? (
+                  <Pressable
+                    onPress={() => {
+                      haptics.selection();
+                      setTime(null);
+                    }}
+                    hitSlop={HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear the time"
+                  >
+                    <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           ) : null}
@@ -526,6 +546,18 @@ function PortionEditor({ draft }: { draft: PortionDraft }) {
           />
         </View>
       </KeyboardAvoidingView>
+
+      <TimePickerModal
+        visible={pickingTime}
+        title="Time eaten"
+        value={time ?? nowClock()}
+        confirmLabel="Set time"
+        onCancel={() => setPickingTime(false)}
+        onConfirm={(value) => {
+          setPickingTime(false);
+          setTime(value);
+        }}
+      />
     </Screen>
   );
 }
@@ -552,12 +584,14 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.huge },
   head: { gap: spacing.sm },
   headMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
-  figures: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl },
-  kcalBlock: { alignItems: 'center', minWidth: 76 },
-  kcal: { fontSize: fontSize.xxxl, ...font('bold') },
-  macroRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
-  macroCell: { gap: 2 },
-  macroBar: { width: 18, height: 3, borderRadius: 2, marginBottom: spacing.xs },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+  },
+  timeButton: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   block: { gap: spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

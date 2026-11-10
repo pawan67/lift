@@ -73,6 +73,7 @@ function toEntry(row: EntryRow): FoodEntry {
     id: row.id,
     date: row.date,
     meal: row.meal as Meal,
+    time: row.time,
     position: row.position,
     quantity: row.quantity,
     foodId: row.foodId,
@@ -296,6 +297,7 @@ export class NutritionService {
     date: string,
     meal: Meal,
     items: readonly EntryItem[],
+    time: string | null = null,
   ): Promise<FoodEntry[]> {
     const foodIds = [...new Set(items.map((i) => i.foodId).filter((id): id is string => !!id))];
     const owned = foodIds.length
@@ -316,6 +318,7 @@ export class NutritionService {
       userId,
       date,
       meal,
+      time,
       position: start + index,
       quantity: item.quantity,
       foodId: item.foodId && owned.has(item.foodId) ? item.foodId : null,
@@ -333,7 +336,7 @@ export class NutritionService {
   }
 
   async createEntries(userId: string, input: CreateEntriesInput & { items: EntryItem[] }): Promise<FoodEntry[]> {
-    return db.transaction((tx) => this.insertItems(tx, userId, input.date, input.meal, input.items));
+    return db.transaction((tx) => this.insertItems(tx, userId, input.date, input.meal, input.items, input.time ?? null));
   }
 
   async updateEntry(userId: string, id: string, patch: EntryPatch): Promise<FoodEntry> {

@@ -19,21 +19,27 @@ import {
   DEFAULT_BASE_URLS,
   MEAL_LABELS,
   confidenceLabel,
+  convertQuantity,
   formatCalories,
   formatQuantity,
+  isGramServing,
   itemTotals,
+  servingAt,
+  servingOptions,
   totalsOf,
   type AiImage,
   type AiProvider,
   type EstimatedItem,
   type Meal,
+  type Serving,
 } from "@lift/shared";
-import { Check, ImagePlus, Minus, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { Check, ImagePlus, Minus, PenLine, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
 import { Checkbox } from "radix-ui";
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Textarea, fieldClass } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -44,6 +50,7 @@ import { EstimateError, estimateFood, fileToAiImage, useAiSetup, type AiSetup } 
 import { describeError, invalidateFoods, useCreateEntries, useNutritionProfile } from "@/lib/nutrition/queries";
 
 import { NutrientFields, parseNutrientDraft, toNutrientDraft, type NutrientDraft } from "./nutrient-fields";
+import { SizeForm } from "./portion";
 import { MacroLine } from "./summary";
 
 const CONFIDENCE_TONES: Record<"low" | "medium" | "high", BadgeTone> = { low: "warn", medium: "neutral", high: "signal" };
@@ -181,6 +188,8 @@ interface ReviewItem extends EstimatedItem {
   key: string;
   quantityText: string;
   editing: boolean;
+  /** The serving size editor is open. */
+  sizing: boolean;
   draft: NutrientDraft;
 }
 
@@ -190,6 +199,7 @@ function toReview(items: EstimatedItem[]): ReviewItem[] {
     key: `${index}-${item.name}`,
     quantityText: formatQuantity(item.quantity),
     editing: false,
+    sizing: false,
     draft: toNutrientDraft(item.nutrients),
   }));
 }
@@ -331,11 +341,15 @@ function Estimator({
       }));
       if (saveFoods) {
         entryItems = await Promise.all(
-          entryItems.map(async (item) => {
+          entryItems.map(async (item, index) => {
+            // The alternative sizes are saved with the food, so "1 dozen" is
+            // still on offer the next time it is logged.
+            const main: Serving = { id: "ai", label: item.servingLabel, grams: item.servingGrams, nutrients: item.nutrients };
+            const extra = main.grams ? finalItems[index]!.servingOptions.filter((size) => size.grams).map((size, i) => servingAt(main, size, `ai-${i}`)) : [];
             const food = await nutritionApi.createFood({
               name: item.name,
               source: "ai",
-              servings: [{ id: "ai", label: item.servingLabel, grams: item.servingGrams, nutrients: item.nutrients }],
+              servings: [main, ...extra],
             });
             return { ...item, foodId: food.id };
           }),
@@ -500,10 +514,31 @@ function ItemCard({
   const typed = Number(item.quantityText.replace(",", "."));
   const valid = Number.isFinite(typed) && typed > 0;
 
+  const grams = isGramServing({ label: item.servingLabel });
+  // The size in use, with any figures being corrected, and the others it can switch to.
+  const serving: Serving = { id: "current", label: item.servingLabel, grams: item.servingGrams, nutrients: current.nutrients };
+  const options = servingOptions([serving], item.servingOptions);
+
   const step = (direction: 1 | -1) => {
     const base = valid ? typed : item.quantity;
-    const next = Math.max(0.25, Math.round((base + direction * 0.5) * 4) / 4);
+    const size = grams ? (base >= 100 ? 25 : 10) : 0.5;
+    const next = Math.max(grams ? size : 0.25, Math.round((base + direction * size) / size) * size);
     onChange({ quantityText: formatQuantity(next) });
+  };
+
+  /** Another size: same weight eaten, figures scaled, and the old size kept on offer. */
+  const switchTo = (next: Serving) => {
+    const others = item.servingOptions.filter((size) => size.label !== next.label);
+    onChange({
+      servingLabel: next.label,
+      servingGrams: next.grams,
+      nutrients: next.nutrients,
+      quantityText: formatQuantity(convertQuantity(valid ? typed : item.quantity, serving, next)),
+      servingOptions: serving.grams && !isGramServing(serving) ? [{ label: serving.label, grams: serving.grams }, ...others] : others,
+      editing: false,
+      sizing: false,
+      draft: toNutrientDraft(next.nutrients),
+    });
   };
 
   return (
@@ -516,7 +551,6 @@ function ItemCard({
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <Badge tone={CONFIDENCE_TONES[level]}>{level === "high" ? "High" : level === "medium" ? "Medium" : "Low"} confidence</Badge>
-        <span className="text-xs text-fg-3">{item.servingLabel}</span>
         <div className="ml-auto flex items-center gap-1">
           <Button variant="outline" size="sm" className="w-8 px-0" aria-label="Less" onClick={() => step(-1)}>
             <Minus size={14} />
@@ -525,14 +559,45 @@ function ItemCard({
             value={item.quantityText}
             onChange={(event) => onChange({ quantityText: event.target.value.replace(/[^0-9.,]/g, "") })}
             inputMode="decimal"
-            aria-label={`Servings of ${item.servingLabel}`}
+            aria-label={grams ? "Grams" : `Servings of ${item.servingLabel}`}
             className={fieldClass({ className: cn("tabular h-8 w-16 px-2 text-center", !valid && "border-alarm/60") })}
           />
           <Button variant="outline" size="sm" className="w-8 px-0" aria-label="More" onClick={() => step(1)}>
             <Plus size={14} />
           </Button>
-          <span className="ml-1 text-xs text-fg-3">servings</span>
+          <span className="ml-1 text-xs text-fg-3">{grams ? "g" : "servings"}</span>
         </div>
+      </div>
+      <div className="mt-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-fg-3">Size</span>
+          {options.map((option) => (
+            <Chip key={option.id} selected={option.id === "current"} onClick={() => (option.id === "current" ? undefined : switchTo(option))} className="h-7 px-2.5">
+              {option.label}
+            </Chip>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange({ sizing: !item.sizing })}
+            className="press ml-1 inline-flex items-center gap-1 text-[13px] font-medium text-volt hover:underline"
+          >
+            <PenLine size={12} /> {item.sizing ? "Cancel" : "Edit size"}
+          </button>
+        </div>
+        {item.sizing ? (
+          <div className="mt-2">
+            <SizeForm
+              initial={{ label: item.servingLabel, grams: item.servingGrams }}
+              submitLabel="Update size"
+              needsGrams={false}
+              onSubmit={(size) => {
+                const next = servingAt(serving, size);
+                onChange({ servingLabel: next.label, servingGrams: next.grams, nutrients: next.nutrients, editing: false, sizing: false, draft: toNutrientDraft(next.nutrients) });
+              }}
+              onCancel={() => onChange({ sizing: false })}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="tabular text-sm font-semibold text-fg">

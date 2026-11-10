@@ -22,7 +22,7 @@
 import {
   MEALS,
   MEAL_LABELS,
-  formatQuantity,
+  describeAmount,
   itemTotals,
   matchRecents,
   recentKey,
@@ -47,10 +47,11 @@ import { ActionMenu } from "@/components/ui/dropdown-menu";
 import { EmptyState, Skeleton } from "@/components/ui/empty-state";
 import { fieldClass } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
+import { nowClock } from "@/components/ui/time-field";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { describeError, ensureSaved, nutritionApi } from "@/lib/nutrition/api";
-import { describeDay } from "@/lib/nutrition/dates";
+import { describeDay, todayIso } from "@/lib/nutrition/dates";
 import {
   invalidateFoods,
   useCreateEntries,
@@ -82,7 +83,7 @@ function foodDetail(food: Food | FoodCandidate): string {
 }
 
 function amountDetail(item: Pick<EntryItem, "quantity" | "servingLabel">): string {
-  return item.quantity === 1 ? item.servingLabel : `${formatQuantity(item.quantity)} × ${item.servingLabel}`;
+  return describeAmount(item);
 }
 
 /** A saved food as a diary item: one of its first serving, the amount it opens with. */
@@ -128,6 +129,8 @@ export function AddFoodDialog({ open, onClose, mode }: { open: boolean; onClose:
 
 function AddFood({ mode }: { mode: AddFoodMode }) {
   const [meal, setMeal] = useState<Meal>(mode.kind === "log" ? mode.meal : "snacks");
+  // Logging today defaults to now; a past or future day has no time until one is given.
+  const [time, setTime] = useState<string | null>(() => (mode.kind === "log" && mode.date === todayIso() ? nowClock() : null));
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [tab, setTab] = useState<Tab>("recent");
@@ -198,9 +201,9 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
     if (key) setAdded((prev) => new Set(prev).add(key));
   }
 
-  async function logItems(items: EntryItem[], label: string, key?: string) {
+  async function logItems(items: EntryItem[], label: string, key?: string, at: string | null = null) {
     if (mode.kind !== "log") return;
-    const created = await create.mutateAsync({ date: mode.date, meal, items });
+    const created = await create.mutateAsync({ date: mode.date, meal, items, ...(at ? { time: at } : {}) });
     announce(
       label,
       created.map((entry) => entry.id),
@@ -222,7 +225,7 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
       mode.onPicked(next);
       toast(`Added ${next.name} to the template`);
     } else {
-      await logItems([next], next.name);
+      await logItems([next], next.name, undefined, time);
     }
     setPortion(null);
   }
@@ -346,6 +349,8 @@ function AddFood({ mode }: { mode: AddFoodMode }) {
           customNutrients={customNutrients}
           meal={mode.kind === "log" ? meal : undefined}
           onMealChange={setMeal}
+          time={time}
+          onTimeChange={mode.kind === "log" ? setTime : undefined}
           submitLabel={(m) => (mode.kind === "pick" ? "Add to template" : `Add to ${MEAL_LABELS[m ?? meal]}`)}
           onSubmit={submitPortion}
           secondary={

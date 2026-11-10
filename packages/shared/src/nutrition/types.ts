@@ -49,6 +49,9 @@ export const nutrientValuesSchema = z
 
 export const mealSchema = z.enum(MEALS);
 
+/** A time of day on a 24-hour clock, `HH:mm`, local to whoever ate. */
+export const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm.');
+
 export const servingSchema = z.object({
   id: z.string().min(1).max(64),
   /** "1 cup", "100 g", "1 roti". */
@@ -138,6 +141,11 @@ export interface FoodEntry extends Portion {
   date: string;
   meal: Meal;
   quantity: number;
+  /**
+   * When it was eaten, `HH:mm` local time, or null when not given. Optional
+   * because entries from before the field (and an older server) have none.
+   */
+  time?: string | null;
   /** Order within the meal. */
   position: number;
   createdAt: number;
@@ -150,6 +158,8 @@ export type EntryItem = z.infer<typeof entryItemSchema>;
 export const createEntriesSchema = z.object({
   date: isoDate,
   meal: mealSchema,
+  /** When the meal was eaten. Applies to every item; omitted means not given. */
+  time: clockTimeSchema.nullable().optional(),
   items: z.array(entryItemSchema).min(1).max(100),
 });
 export type CreateEntriesInput = z.input<typeof createEntriesSchema>;
@@ -159,6 +169,7 @@ export const entryPatchSchema = z
   .object({
     date: isoDate,
     meal: mealSchema,
+    time: clockTimeSchema.nullable(),
     quantity: quantitySchema,
     name: z.string().trim().min(1).max(160),
     servingLabel: z.string().trim().min(1).max(80),

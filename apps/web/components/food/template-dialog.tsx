@@ -11,7 +11,7 @@
 
 "use client";
 
-import { MEALS, MEAL_LABELS, formatCalories, formatQuantity, itemTotals, totalsOf, type EntryItem, type Meal, type MealTemplate } from "@lift/shared";
+import { MEALS, MEAL_LABELS, describeAmount, formatCalories, itemTotals, totalsOf, type EntryItem, type Meal, type MealTemplate } from "@lift/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -39,7 +39,7 @@ const MEAL_OPTIONS: { value: MealChoice; label: string }[] = [
 ];
 
 export function itemDetail(item: EntryItem): string {
-  const amount = item.quantity === 1 ? item.servingLabel : `${formatQuantity(item.quantity)} × ${item.servingLabel}`;
+  const amount = describeAmount(item);
   return item.brand ? `${item.brand} · ${amount}` : amount;
 }
 

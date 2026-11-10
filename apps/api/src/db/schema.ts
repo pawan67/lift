@@ -497,6 +497,8 @@ export const foodEntries = pgTable(
     /** Local calendar date, `YYYY-MM-DD`, in the zone the user logged it in. */
     date: text('date').notNull(),
     meal: text('meal').notNull(),
+    /** When it was eaten, `HH:mm` local time. Null when not given. */
+    time: text('time'),
     position: integer('position').notNull().default(0),
     quantity: doublePrecision('quantity').notNull(),
     foodId: text('food_id').references(() => foods.id, { onDelete: 'set null' }),

@@ -251,3 +251,33 @@ describe('the log in a turn', () => {
     assert.match(coachChatBrief('kg', { withLog: false }), /has not been attached/);
   });
 });
+
+describe('food in the coach', () => {
+  const card = (json: string) => parseCoachReply(['```lift', json, '```'].join('\n'))[0];
+
+  it('reads the nutrition card, clamping its window', () => {
+    assert.deepEqual(card('{"card":"nutrition","days":14}'), { kind: 'card', card: { card: 'nutrition', days: 14 } });
+    assert.deepEqual(card('{"card":"nutrition","days":400}'), { kind: 'card', card: { card: 'nutrition', days: 90 } });
+    assert.deepEqual(card('{"card":"nutrition"}'), { kind: 'card', card: { card: 'nutrition', days: 7 } });
+  });
+
+  it('reads the food day card, dropping a date it cannot use', () => {
+    assert.deepEqual(card('{"card":"food_day","date":"2026-11-10"}'), {
+      kind: 'card',
+      card: { card: 'food_day', date: '2026-11-10' },
+    });
+    assert.deepEqual(card('{"card":"food_day","date":"yesterday"}'), { kind: 'card', card: { card: 'food_day', date: null } });
+  });
+
+  it('tells the model the date and that the food diary exists', () => {
+    const brief = coachChatBrief('kg', { today: '2026-11-10' });
+    assert.match(brief, /Today is 2026-11-10/);
+    assert.match(brief, /food_summary/);
+    assert.doesNotMatch(coachChatBrief('kg'), /Today is/);
+  });
+
+  it('describes the food lookups', () => {
+    assert.equal(describeToolCall({ id: '1', name: 'food_summary', input: { days: 30 } }), 'Read your food diary for 30 days');
+    assert.equal(describeToolCall({ id: '2', name: 'food_day', input: {} }), "Opened today's food diary");
+  });
+});

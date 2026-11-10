@@ -390,6 +390,11 @@ function AppNavigator() {
             }}
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Drawn over the chat it belongs to, header and all, like a drawer. */}
+            <Stack.Screen
+              name="coach/history"
+              options={{ presentation: 'transparentModal', animation: 'fade', headerShown: false }}
+            />
           </Stack>
         </View>
       </View>

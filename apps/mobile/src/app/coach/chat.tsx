@@ -6,7 +6,6 @@ import {
   COACH_TOOLS,
   coachChatBrief,
   coachTurnText,
-  describeElapsed,
   isSmallTalk,
   parseCoachReply,
   withCoachLog,
@@ -18,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
-  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -48,10 +46,8 @@ import {
   appendMessage,
   createThread,
   deleteMessagesFrom,
-  listThreads,
   readMessages,
   renameThread,
-  type CoachThread,
 } from '@/features/ai/threads';
 import { STAT_RANGES, type StatRange } from '@/features/analytics/windows';
 import { AssistantMessage, UserMessage } from '@/features/coach/chat-message';
@@ -61,7 +57,9 @@ import { ThinkingIndicator } from '@/features/coach/thinking-indicator';
 import { runCoachTool } from '@/features/coach/tools';
 import { useKeyboardInset } from '@/features/coach/use-keyboard-inset';
 import { haptics } from '@/features/feedback/haptics';
+import { todayIso } from '@/features/nutrition/dates';
 import { useSession } from '@/features/sync/auth-client';
+import { useCoachHistory } from '@/store/coach-history';
 import { showDialog } from '@/store/dialog';
 import { useSettings } from '@/store/settings';
 import { duration, radius, spacing, stroke, useColors } from '@/theme';
@@ -84,9 +82,6 @@ const MAX_OUTPUT_TOKENS = 6144;
  * tools, so it can only answer.
  */
 const MAX_LOOKUP_ROUNDS = 4;
-
-/** Earlier conversations shown on the landing. The rest are on the coach screen. */
-const RECENT_THREADS = 6;
 
 /** How long a stored title may run before it is cut. */
 const TITLE_LENGTH = 80;
@@ -169,9 +164,6 @@ export default function CoachChatScreen() {
   const [question, setQuestion] = useState('');
   const [range, setRange] = useState<StatRange>(isRange(params.range) ? params.range : '30d');
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [threads, setThreads] = useState<CoachThread[]>([]);
-  /** When the thread list was read, so "3 days ago" is stable across renders. */
-  const [listedAt, setListedAt] = useState(0);
   /** Turns from this index on rise in as they arrive. A reopened thread's are already there. */
   const [animateFrom, setAnimateFrom] = useState(0);
   const [showJump, setShowJump] = useState(false);
@@ -224,10 +216,6 @@ export default function CoachChatScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadAiConfig().then((config) => setConfigured(config !== null));
-      void listThreads('review').then((rows) => {
-        setThreads(rows);
-        setListedAt(Date.now());
-      });
     }, []),
   );
 
@@ -489,11 +477,45 @@ export default function CoachChatScreen() {
     setAnimateFrom(0);
     setShowJump(false);
     scroller.current?.scrollTo({ y: 0, animated: false });
-    void listThreads('review').then((rows) => {
-      setThreads(rows);
-      setListedAt(Date.now());
-    });
   }, []);
+
+  /**
+   * Another stored conversation, in place, from the history panel.
+   *
+   * The same reset as "New chat" first, so an answer still streaming into the
+   * conversation being left cannot land in the one being opened, then the
+   * stored turns exactly as `params.thread` would have read them.
+   */
+  const openThread = useCallback(
+    (id: string) => {
+      if (id === threadId.current) return;
+      startOver();
+      threadId.current = id;
+      const mine = epoch.current;
+      void readMessages(id).then((stored) => {
+        if (epoch.current !== mine) return;
+        const restored = answerDangling(stored);
+        titledByGreeting.current = !restored.some(isLogTurn);
+        setAnimateFrom(restored.length);
+        setMessages(restored);
+      });
+    },
+    [startOver],
+  );
+
+  // What the history panel asks for. Subscribed rather than read in render: the
+  // panel posts while this screen sits under it, and each post is one act.
+  useEffect(
+    () =>
+      useCoachHistory.subscribe((state, previous) => {
+        if (!state.last || state.last.seq === previous.last?.seq) return;
+        const { event } = state.last;
+        if (event.kind === 'open') openThread(event.threadId);
+        else if (event.kind === 'new') startOver();
+        else if (threadId.current && event.threadIds.includes(threadId.current)) startOver();
+      }),
+    [openThread, startOver],
+  );
 
   // The rows take stable callbacks, so a streaming token re-renders the one
   // row it lands in and not every answer above it. These forward to whatever
@@ -587,7 +609,7 @@ export default function CoachChatScreen() {
       onStop={stop}
       pending={pending}
       disabled={configured === false}
-      placeholder={started ? 'Ask a follow-up' : 'Ask about your training, a lift, or your plan'}
+      placeholder={started ? 'Ask a follow-up' : 'Ask about your training, your food, or your plan'}
       context={rangeLabel}
       // Fixed once the log has gone out: the answers above were built on it.
       onContextPress={hasLog ? undefined : () => void chooseRange()}
@@ -628,9 +650,14 @@ export default function CoachChatScreen() {
                 <HeaderAction label="New chat" icon="create-outline" onPress={startOver} />
               )}
               <HeaderAction
-                label="What the coach reads, and exporting it"
-                icon="options-outline"
-                onPress={() => router.push('/coach')}
+                label="Chat history"
+                icon="time-outline"
+                onPress={() =>
+                  router.push({
+                    pathname: '/coach/history',
+                    params: threadId.current ? { current: threadId.current } : {},
+                  })
+                }
               />
             </View>
           ),
@@ -712,7 +739,7 @@ export default function CoachChatScreen() {
                     {greeting(session?.user?.name)}
                   </Text>
                   <Text variant="body" color="textSecondary" align="center">
-                    I read your log before I answer. Where should we start?
+                    I read your training and your food diary before I answer. Where should we start?
                   </Text>
                 </Reveal>
 
@@ -749,36 +776,6 @@ export default function CoachChatScreen() {
 
                 {errorCard}
 
-                {threads.length > 0 && (
-                  <Reveal index={4} style={styles.previous}>
-                    <Text variant="label" color="textSecondary">
-                      Previous chats
-                    </Text>
-                    {threads.slice(0, RECENT_THREADS).map((thread) => (
-                      <Pressable
-                        key={thread.id}
-                        onPress={() => router.push({ pathname: '/coach/chat', params: { thread: thread.id } })}
-                        style={({ pressed }) => [
-                          styles.thread,
-                          {
-                            borderColor: colors.border,
-                            backgroundColor: pressed ? colors.surfacePressed : colors.surface,
-                          },
-                        ]}
-                      >
-                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.textTertiary} />
-                        <View style={styles.flex}>
-                          <Text variant="body" numberOfLines={1}>
-                            {thread.title}
-                          </Text>
-                          <Text variant="caption" color="textTertiary">
-                            {describeElapsed(thread.updatedAt, listedAt)}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </Reveal>
-                )}
               </>
             )}
           </ScrollView>
@@ -835,7 +832,7 @@ function ask(
   return streamTurn(
     config,
     {
-      system: coachChatBrief(unit, { withLog: logAt !== -1 }),
+      system: coachChatBrief(unit, { withLog: logAt !== -1, today: todayIso() }),
       messages: withCurrentReasoning(conversation),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       // The turn carrying the training document is re-sent with every
@@ -939,16 +936,6 @@ const styles = StyleSheet.create({
   setup: { gap: spacing.sm },
   setupActions: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.xs },
   starters: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm },
-  previous: { gap: spacing.sm, paddingTop: spacing.lg },
-  thread: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: stroke.outline,
-  },
   error: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg },
   errorHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   errorActions: { flexDirection: 'row', paddingTop: spacing.xs },

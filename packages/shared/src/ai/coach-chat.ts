@@ -37,13 +37,14 @@ import type { AiTool, AiToolCall } from './messages.ts';
  * American who taps "Save as routine" gets bench targets two and a fifth times
  * lighter than they meant.
  */
-export function coachChatBrief(unit: 'kg' | 'lb', options: { withLog?: boolean } = {}): string {
+export function coachChatBrief(unit: 'kg' | 'lb', options: { withLog?: boolean; today?: string } = {}): string {
   const opening =
     options.withLog === false
-      ? `You are Lift's coach: an experienced strength and hypertrophy coach talking with a client inside their workout app. The client has only made small talk so far, so their training export has not been attached yet. Reply in one or two warm sentences and offer where to start. If they do ask about their training, read what you need with the tools provided rather than guessing.`
-      : `You are Lift's coach: an experienced strength and hypertrophy coach talking with a client inside their workout app. One of the client's messages carries a real export of their training, between <training_log> tags. You can read more of their log with the tools provided.`;
+      ? `You are Lift's coach: an experienced strength, hypertrophy and nutrition coach talking with a client inside their workout and food-tracking app. The client has only made small talk so far, so their training export has not been attached yet. Reply in one or two warm sentences and offer where to start. If they do ask about their training or their eating, read what you need with the tools provided rather than guessing.`
+      : `You are Lift's coach: an experienced strength, hypertrophy and nutrition coach talking with a client inside their workout and food-tracking app. One of the client's messages carries a real export of their training, between <training_log> tags. You can read more of their log, and their food diary, with the tools provided.`;
+  const today = options.today ? `\n\nToday is ${options.today} on the client's calendar.` : '';
 
-  return `${opening}
+  return `${opening}${today}
 
 How you talk:
 
@@ -63,6 +64,8 @@ The cards:
 - {"card":"exercise","exercise":"<name>"}: that lift's trend, best estimated max and recent sessions. Use it whenever you discuss how a specific lift is moving.
 - {"card":"muscles"}: weekly working sets per muscle over the last four weeks against their targets. Use it when discussing balance or volume.
 - {"card":"plan","title":"<short name>","routine":"<existing routine name>","notes":"<one line>","exercises":[{"exercise":"<name>","sets":3,"reps":"8-10","weight":60,"rpe":8,"rest":120,"note":"<cue>"}]}: a workout the client can save as a routine with one tap. Include "routine" only when the plan is a revised version of one of their existing routines, using its exact name; the app then offers to update it after showing what changes. "weight" is in ${unit} and "rest" in seconds; leave out any field you do not want to prescribe. "reps" is a number or a range like "8-10". One plan card per workout day.
+- {"card":"nutrition","days":7}: calories a day against their goal over the last N days (1 to 90), with average protein, carbs and fat against their targets. Use it whenever you discuss how their eating has gone over a stretch of days.
+- {"card":"food_day","date":"YYYY-MM-DD"}: one day of the food diary: calories and macros against the goals, and every food by meal. Use it when you discuss a specific day's eating.
 - {"card":"choices","question":"<optional short question>","options":["<option>","<option>"]}: tap-to-send replies.
 
 Exercise names in cards must be exact: as they appear in the export, or as find_exercises returned them. If you are not sure an exercise exists by that name, call find_exercises first.
@@ -72,6 +75,8 @@ Every reply ends with exactly one choices card, as its last line: two to four op
 When asked for a check-in, give a check-in, not a review: two to four sentences on what stands out most in this window, the biggest thing going well and the biggest thing holding them back, each tied to a lift or a muscle. Show at most two cards that prove it. End with choices, one of which is "Full review". Anything else, answer directly and briefly.
 
 When asked for a full review, cover in order, briefly, with a bold label for each: what this block was, what is working, what is holding them back, which lifts moved and which stalled, fixes to their routines as plan cards, and what you could not tell from the data.
+
+Food: the client logs what they eat in the app's food diary, which is not in the training export. For any question about calories, protein, macros, meals, diet or bodyweight change, read it with food_summary (a stretch of days) or food_day (one day) before answering, then show a nutrition or food_day card rather than reciting the numbers. Tie nutrition advice to their training where it matters: protein against their training load, a surplus or deficit against their goal. If the diary is empty or they are not signed in, say so and answer from general principles.
 
 Tools: the export already covers its window, so do not look up what is in front of you. Use exercise_history for anything older or longer than the window, workout_detail to read one session in full, find_exercises to check names, and the rest as named. Look things up before you answer, not after.`;
 }
@@ -177,6 +182,7 @@ export const COACH_STARTERS: readonly { label: string; icon: string; question: s
   { label: 'Stalled lifts', icon: 'trending-up-outline', question: 'Which of my lifts have stalled, and what should I change?' },
   { label: 'Plan my week', icon: 'calendar-outline', question: 'Build my training plan for next week.' },
   { label: 'Weak points', icon: 'body-outline', question: 'Which muscles am I under-training, and how do I fix that in my routines?' },
+  { label: 'My eating', icon: 'nutrition-outline', question: 'How has my eating been this week? Am I hitting my calories and protein?' },
   { label: 'Full review', icon: 'document-text-outline', question: 'Give me a full review of my training.' },
 ];
 
@@ -192,6 +198,8 @@ export const COACH_TOOL_NAMES = [
   'personal_records',
   'muscle_volume',
   'routines',
+  'food_summary',
+  'food_day',
 ] as const;
 export type CoachToolName = (typeof COACH_TOOL_NAMES)[number];
 
@@ -269,6 +277,25 @@ export const COACH_TOOLS: AiTool[] = [
     description: "The client's saved routines with every exercise and its set targets.",
     parameters: { type: 'object', properties: {} },
   },
+  {
+    name: 'food_summary',
+    description:
+      "The food diary over a stretch of days ending today: every logged day's calories, protein, carbs and fat, the client's daily goals, averages per logged day, days on target, the meal split and the foods eaten most. Days with nothing logged are untracked, not fasting.",
+    parameters: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 365, description: 'How many days back, today included. Default 7.' },
+      },
+    },
+  },
+  {
+    name: 'food_day',
+    description: 'One day of the food diary in full: every food logged, by meal, with its amount, calories and macros, and the day against the goals.',
+    parameters: {
+      type: 'object',
+      properties: { date: { type: 'string', description: 'The day, as YYYY-MM-DD. Default today.' } },
+    },
+  },
 ];
 
 /**
@@ -298,6 +325,12 @@ export function describeToolCall(call: AiToolCall): string {
       return 'Counted your sets per muscle';
     case 'routines':
       return 'Read your routines';
+    case 'food_summary': {
+      const days = call.input.days;
+      return typeof days === 'number' && days === 1 ? "Read today's food" : `Read your food diary${typeof days === 'number' ? ` for ${days} days` : ''}`;
+    }
+    case 'food_day':
+      return text('date') ? `Opened your food diary for ${text('date')}` : "Opened today's food diary";
     default:
       return 'Looked something up';
   }
@@ -331,6 +364,8 @@ export interface CoachPlan {
 export type CoachCard =
   | { card: 'exercise'; exercise: string }
   | { card: 'muscles' }
+  | { card: 'nutrition'; days: number }
+  | { card: 'food_day'; date: string | null }
   | { card: 'plan'; plan: CoachPlan }
   | { card: 'choices'; question: string | null; options: string[] };
 
@@ -435,6 +470,12 @@ function readCard(json: string): CoachCard | null {
     }
     case 'muscles':
       return { card: 'muscles' };
+    case 'nutrition':
+      return { card: 'nutrition', days: clampInt(num(object.days), 1, 90) ?? 7 };
+    case 'food_day': {
+      const date = str(object.date);
+      return { card: 'food_day', date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null };
+    }
     case 'choices': {
       const options = Array.isArray(object.options)
         ? object.options.map(str).filter((option): option is string => option !== null).slice(0, 4)

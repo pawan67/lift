@@ -42,6 +42,7 @@ import { addDays, startOfDay } from '@/features/analytics/windows';
 import { useSettings } from '@/store/settings';
 
 import { resolveExercise, searchExercises } from './exercise-lookup';
+import { foodDay, foodSummary } from './food-tools';
 import { loadCoachRecords, loadCoachRoutines, loadCoachSessions } from './report';
 
 /**
@@ -81,6 +82,10 @@ export async function runCoachTool(call: AiToolCall): Promise<AiToolResult> {
         return answer(await muscleVolume(call.input));
       case 'routines':
         return answer(await routineList(units));
+      case 'food_summary':
+        return answer(...(await foodSummary(call.input)));
+      case 'food_day':
+        return answer(...(await foodDay(call.input)));
       default:
         return answer(`There is no lookup called ${call.name}.`, true);
     }

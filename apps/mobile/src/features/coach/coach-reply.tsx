@@ -16,6 +16,7 @@ import { Chip, Reveal, Text } from '@/components/ui';
 import { spacing } from '@/theme';
 
 import { ExerciseCard } from './cards/exercise-card';
+import { FoodDayCard, NutritionCard } from './cards/food-cards';
 import { MusclesCard } from './cards/muscles-card';
 import { PlanCard } from './cards/plan-card';
 import { RichText } from './rich-text';
@@ -77,6 +78,11 @@ function Segment({
       return <ExerciseCard name={card.exercise} />;
     case 'muscles':
       return <MusclesCard />;
+    case 'nutrition':
+      // One day is better drawn as the day itself than as a chart of one bar.
+      return card.days === 1 ? <FoodDayCard date={null} /> : <NutritionCard days={card.days} />;
+    case 'food_day':
+      return <FoodDayCard date={card.date} />;
     case 'plan':
       return <PlanCard plan={card.plan} />;
     case 'choices':
@@ -110,6 +116,10 @@ function keyOf(segment: CoachSegment, index: number): string {
       return `exercise-${card.exercise}-${index}`;
     case 'plan':
       return `plan-${card.plan.title}-${index}`;
+    case 'nutrition':
+      return `nutrition-${card.days}-${index}`;
+    case 'food_day':
+      return `food-day-${card.date ?? 'today'}-${index}`;
     default:
       return `${card.card}-${index}`;
   }

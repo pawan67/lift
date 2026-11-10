@@ -8,6 +8,15 @@ run. To change an entry, reword the commit; to change the shape of the file,
 change the script. Releases before v0.8.0 predate the commit convention and
 appear under "Other changes".
 
+## [0.31.0](https://github.com/pawan67/lift/compare/v0.30.0...v0.31.0) - 2026-11-10
+
+### Features
+
+- **web:** track food in the web app ([649d929](https://github.com/pawan67/lift/commit/649d929bce8c2fab7af4871a2db9eae92c2ab205))
+- **mobile:** track food, with AI calorie and macro estimates ([b0d9c6e](https://github.com/pawan67/lift/commit/b0d9c6e2aadf7a496c00e096f3ccf94ad4f71afe))
+- **web:** build the web app's design system on Radix UI ([4ff05ba](https://github.com/pawan67/lift/commit/4ff05babadd31034d44141e1e278442903325280))
+- **api:** add the food tracker's server side ([43f3c36](https://github.com/pawan67/lift/commit/43f3c3602172784a701140302d8850f33911201d))
+
 ## [0.30.0](https://github.com/pawan67/lift/compare/v0.29.3...v0.30.0) - 2026-11-09
 
 ### Features
